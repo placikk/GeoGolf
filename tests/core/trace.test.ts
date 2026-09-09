@@ -14,6 +14,7 @@ describe("śledzenie toru", () => {
     let seed = 12345;
     const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
 
+    let ran = 0;
     for (let i = 0; i < 300; i++) {
       const f1 = vec(rnd() * 1.2 - 0.6, rnd() * 1.2 - 0.6);
       const f2 = vec(rnd() * 1.2 - 0.6, rnd() * 1.2 - 0.6);
@@ -26,7 +27,9 @@ describe("śledzenie toru", () => {
       expect(r.path.length).toBeGreaterThanOrEqual(2);
       const hit = r.path[1];
       expect(dist(f1, hit) + dist(hit, f2)).toBeCloseTo(2 * a, 9);
+      ran++;
     }
+    expect(ran).toBeGreaterThan(250);
   });
 
   it("wpada do dołka, gdy tor przechodzi w promieniu tolerancji", () => {
