@@ -35,6 +35,13 @@ export function ellipseFromFoci(f1: Vec2, f2: Vec2, a: number): Conic {
   };
 }
 
+export const circleConic = (center: Vec2, radius: number): Conic => ({
+  A: 1, B: 0, C: 1,
+  D: -2 * center.x,
+  E: -2 * center.y,
+  F: center.x * center.x + center.y * center.y - radius * radius,
+});
+
 export function lineThrough(p: Vec2, dir: Vec2): Conic {
   const n = { x: -dir.y, y: dir.x };
   return { A: 0, B: 0, C: 0, D: n.x, E: n.y, F: -(n.x * p.x + n.y * p.y) };
