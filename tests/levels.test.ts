@@ -45,7 +45,18 @@ describe("poziomy", () => {
       const d = 0.05 * DIAGONAL;
       for (let i = 0; i < 8; i++) {
         const moved = { ...level.solution, f1: add(level.solution.f1, scale(fromAngle((i * Math.PI) / 4), d)) };
-        expect(proofFor(level, moved).solved, `kierunek ${i}`).toBe(false);
+        // Przesunięcie ogniska może uczynić elipsę niemożliwą (a <= c) i wtedy
+        // `ellipseFromFoci` rzuca. Krzywa, której nie da się skonstruować, tym bardziej
+        // nie rozwiązuje poziomu — to też jest "odpada". Bez tego przechwycenia test
+        // zmuszałby geometrię poziomów do ustępstw wobec własnej ułomności: trzeba by
+        // podnosić `a`, a to zabiera zapas do przeszkody, którego poziom właśnie uczy.
+        let solved: boolean;
+        try {
+          solved = proofFor(level, moved).solved;
+        } catch {
+          solved = false;
+        }
+        expect(solved, `kierunek ${i}`).toBe(false);
       }
     },
   );

@@ -77,7 +77,7 @@ export const LEVELS: Level[] = [
       { center: vec(0, -0.42), radius: 0.12 },
     ],
     start: { f1: vec(-0.45, 0), f2: vec(0.45, 0), a: 0.8 },
-    solution: { f1: vec(-0.45, 0), f2: vec(0.45, 0), a: 0.53 },  // pasmo a ∈ (0.45, 0.54)
+    solution: { f1: vec(-0.45, 0), f2: vec(0.45, 0), a: 0.50 },  // pasmo a ∈ (0.45, 0.54)
     test: t,
   },
   {
@@ -87,7 +87,7 @@ export const LEVELS: Level[] = [
     ball: vec(-0.6, -0.55), hole: vec(0.55, 0.6),
     locked: [], obstacles: [{ center: vec(0.42, -0.42), radius: 0.2 }],
     start: { f1: vec(-0.2, 0.2), f2: vec(0.2, -0.2), a: 0.7 },
-    solution: { f1: vec(-0.6, -0.55), f2: vec(0.55, 0.6), a: 0.89 },  // pasmo a ∈ (0.82, 0.92)
+    solution: { f1: vec(-0.6, -0.55), f2: vec(0.55, 0.6), a: 0.86 },  // pasmo a ∈ (0.82, 0.92)
     test: t,
   },
 ];
