@@ -7,7 +7,7 @@ export const BALL_COUNT = 8;
 export function launchAngles(aimCurve: Conic, count: number = BALL_COUNT): number[] {
   const base = classify(aimCurve) === "elipsa" ? ellipseGeometry(aimCurve).angle : 0;
   const step = (2 * Math.PI) / count;
-  return Array.from({ length: count }, (_, i) => base + (i + 0.5) * step);
+  return Array.from({ length: count }, (_, i) => base + (i + 0.25) * step);
 }
 
 export interface ProofInput {
@@ -42,5 +42,5 @@ export function runProof(input: ProofInput): Proof {
   const solved = balls.every((b) => b.holed);
   const lengths = balls.filter((b) => b.holed).map((b) => b.length);
   const spread = lengths.length > 0 ? Math.max(...lengths) - Math.min(...lengths) : Infinity;
-  return { balls, solved, spread, simultaneous: spread < 1e-6 };
+  return { balls, solved, spread, simultaneous: solved && spread < 1e-6 };
 }
