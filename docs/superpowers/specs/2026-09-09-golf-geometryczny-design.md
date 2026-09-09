@@ -170,7 +170,8 @@ tego samego modelu, dlatego etap 4 jest tani.
   piłka: [x, y],
   dołek: [x, y],
   narzędzia: ["elipsa"],           // co gracz może postawić
-  zablokowane: ["obrót"],           // stopnie swobody wyłączone na tym poziomie
+  zablokowane: ["rozmiar"],         // uchwyty wyłączone na tym poziomie
+                                    // dozwolone: "ognisko1", "ognisko2", "rozmiar"
   przeszkody: [],                   // krzywe stałe, nieedytowalne
   test: {
     piłek: 8,
@@ -193,7 +194,7 @@ kalibruje się w trakcie implementacji, ale liczba i tematyka są ustalone.
 | 4 | Piłka i dołek bardzo blisko siebie | mimośród dąży do zera, elipsa dąży do okręgu |
 | 5 | Dołek blisko piłki | duża mimośrodowość, wąska elipsa |
 | 6 | Przeszkoda w środku planszy | rozmiar **zaczyna** mieć znaczenie |
-| 7 | Obrót zablokowany | rozwiązanie przez przesunięcie, nie obrót |
+| 7 | Dwie przeszkody, góra i dół | pasmo dopuszczalnych rozmiarów zwęża się |
 | 8 | Zwieńczenie: narożniki, przeszkoda, wszystko odblokowane | złożenie obrotu, rozmiaru i omijania |
 
 Poziom 2 jest celowo "tym samym co 1" — gracz ma odkryć niezmienniczość rozmiaru
@@ -309,6 +310,13 @@ o ograniczonej długości, bez alokacji pamięci w pętli klatki.
 
 Manipulacja **bezpośrednia**: gracz ciągnie ognisko palcem, nie kręci suwakiem.
 Suwaki są ostatecznością dla parametrów, których nie da się chwycić.
+
+Elipsa ma dokładnie **trzy uchwyty**: dwa ogniska i jeden punkt na krzywej
+ustalający rozmiar. To komplet — obrót, mimośród i położenie wynikają z pozycji
+ognisk, więc nie są osobnymi stopniami swobody i nie da się ich blokować
+niezależnie. Pole `zablokowane` w modelu poziomu wyłącza **uchwyty**: poziom 1
+przybija rozmiar, żeby gracz skupił się na ogniskach, a poziom 2 go zwalnia,
+odsłaniając niezmienniczość rozmiaru.
 
 Trzy problemy dotyku i ich rozwiązania:
 
