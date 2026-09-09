@@ -208,9 +208,17 @@ wypowiada.
 ### Przebieg
 
 Osiem piłek startuje **jednocześnie, z tą samą prędkością**, w kierunkach równo
-rozłożonych co `2π/8`. Pierwszy kierunek jest przesunięty o pół kroku względem osi
-wielkiej krzywej, żeby żadna piłka nie biegła dokładnie wzdłuż osi — taki tor
-wraca po własnym śladzie i jest wizualnie mylący.
+rozłożonych co `2π/n`. Pierwszy kierunek jest przesunięty o **ćwierć kroku**
+względem osi wielkiej krzywej, żeby żadna piłka nie biegła dokładnie wzdłuż osi —
+taki tor wraca po własnym śladzie i jest wizualnie mylący.
+
+Ćwierć, a nie pół, z dwóch powodów. Po pierwsze, przesunięcie o pół kroku chroni
+przed osią tylko dla parzystej liczby piłek: przy nieparzystej zawsze istnieje
+piłka lądująca dokładnie na osi, a przy jednej piłce jest nią ta jedyna. Po drugie
+i ważniejsze — przy podglądzie dwupiłkowym pół kroku daje dwa kierunki będące
+swoimi lustrzanymi odbiciami względem osi wielkiej, więc oba tory są identyczne
+z dokładnością do odbicia i gracz widzi połowę informacji, za którą płaci. Ćwierć
+kroku łamie tę symetrię i daje dwa naprawdę różne tory.
 
 Sprawdzenie jest **deterministyczne**: ten sam układ zawsze daje ten sam wynik.
 To dowód, nie symulacja. Żadnej losowości, żadnej zależności od liczby klatek.

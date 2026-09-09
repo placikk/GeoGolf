@@ -857,11 +857,19 @@ git commit -m "feat(core): sledzenie toru przez wiele odbic + test twierdzenia 2
   - `interface Proof { balls: TraceResult[]; solved: boolean; simultaneous: boolean; spread: number }`
   - `runProof(input: ProofInput): Proof`
   - `solved` = wszystkie piłki wpadły. `spread` = różnica między najdłuższą
-    a najkrótszą drogą. `simultaneous` = `spread < 1e-6`.
+    a najkrótszą drogą **wśród piłek, które wpadły**. `simultaneous` =
+    `solved && spread < 1e-6` — bez warunku na `solved` pole kłamałoby przy
+    pojedynczym trafieniu.
 
-Kierunki startu są przesunięte o **pół kroku** względem osi wielkiej, żeby żadna
+Kierunki startu są przesunięte o **ćwierć kroku** względem osi wielkiej, żeby żadna
 piłka nie biegła dokładnie wzdłuż osi — taki tor wraca po własnym śladzie i jest
 wizualnie mylący. Gdy krzywa celowania nie jest elipsą, bazą jest kąt zero.
+
+Ćwierć, a nie pół, z dwóch powodów. Pół kroku chroni przed osią tylko przy parzystej
+liczbie piłek — przy nieparzystej indeks `(count-1)/2` ląduje dokładnie na osi. Ważniejsze:
+przy `count = 2` odbicie względem osi wielkiej odwzorowuje `θ` na `2·base − θ`, więc
+`base + 0.5·krok` przechodzi w `base + 1.5·krok` — dokładnie drugi kierunek. Oba tory
+podglądu byłyby swoimi lustrzanymi odbiciami, a gracz widziałby połowę informacji.
 
 - [ ] **Krok 1: Napisz test, który musi paść**
 
@@ -928,7 +936,7 @@ export const BALL_COUNT = 8;
 export function launchAngles(aimCurve: Conic, count: number = BALL_COUNT): number[] {
   const base = classify(aimCurve) === "elipsa" ? ellipseGeometry(aimCurve).angle : 0;
   const step = (2 * Math.PI) / count;
-  return Array.from({ length: count }, (_, i) => base + (i + 0.5) * step);
+  return Array.from({ length: count }, (_, i) => base + (i + 0.25) * step);
 }
 
 export interface ProofInput {
@@ -963,7 +971,9 @@ export function runProof(input: ProofInput): Proof {
   const solved = balls.every((b) => b.holed);
   const lengths = balls.filter((b) => b.holed).map((b) => b.length);
   const spread = lengths.length > 0 ? Math.max(...lengths) - Math.min(...lengths) : Infinity;
-  return { balls, solved, spread, simultaneous: spread < 1e-6 };
+  // `simultaneous` musi zależeć od `solved`: gdy wpadnie jedna piłka, spread wynosi 0,
+  // a pole meldowałoby "przybyły razem" o poziomie nierozwiązanym.
+  return { balls, solved, spread, simultaneous: solved && spread < 1e-6 };
 }
 ```
 
