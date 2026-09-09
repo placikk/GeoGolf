@@ -21,6 +21,10 @@ describe("stożkowa", () => {
     expect(classify(ellipseFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.8))).toBe("elipsa");
     expect(classify(ellipseFromFoci(vec(-0.3, -0.3), vec(0.3, 0.3), 0.9))).toBe("elipsa");
     expect(classify(lineThrough(vec(0, 0), vec(1, 0)))).toBe("prosta");
+    // hiperbola x² - y² = 1, disc = 0 - 4(1)(-1) = 4 > 0
+    expect(classify({ A: 1, B: 0, C: -1, D: 0, E: 0, F: -1 })).toBe("hiperbola");
+    // parabola x² - y = 0, disc = 0 - 4(1)(0) = 0
+    expect(classify({ A: 1, B: 0, C: 0, D: 0, E: -1, F: 0 })).toBe("parabola");
   });
 
   it("odzyskuje geometrię elipsy ze współczynników", () => {
