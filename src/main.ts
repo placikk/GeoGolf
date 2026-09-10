@@ -1,3 +1,8 @@
+import { mount } from "./ui/screens";
+
 const canvas = document.getElementById("plansza") as HTMLCanvasElement;
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+mount(canvas);
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
