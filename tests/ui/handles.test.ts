@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
 import { EllipseState, SNAP_RADIUS } from "../../src/levels/types";
 import { applyDrag, handlePositions, pickHandle, snapTo } from "../../src/ui/handles";
+import { ellipseFromFoci } from "../../src/core/conic";
 
 const state: EllipseState = { f1: vec(-0.5, 0), f2: vec(0.5, 0), a: 0.8 };
 
@@ -36,5 +37,44 @@ describe("uchwyty", () => {
     const expected = (dist(vec(0, 0.6), state.f1) + dist(vec(0, 0.6), state.f2)) / 2;
     expect(next.a).toBeCloseTo(expected, 9);
     expect(next.f1).toEqual(state.f1);
+  });
+
+  it("uchwyt rozmiaru przeciągnięty między ogniska nie tworzy niemożliwej elipsy", () => {
+    // punkt DOKŁADNIE na odcinku między ogniskami: (d1 + d2) / 2 === c, więc bez zacisku
+    // wyszłoby a === c i `ellipseFromFoci` rzuciłoby pod palcem gracza
+    const next = applyDrag(state, "rozmiar", vec(0, 0));
+    expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
+    expect(() => ellipseFromFoci(next.f1, next.f2, next.a)).not.toThrow();
+  });
+
+  it("przyskakiwanie łapie punkt dokładnie na granicy promienia", () => {
+    // Wartości dobrane tak, żeby odległość wyszła DOKŁADNIE równa promieniowi.
+    // Nie wolno tu pisać `0.5 + SNAP_RADIUS`: dodanie 0.5 przesuwa liczbę w grubszy
+    // zakres wykładnika, zaokrąglenie idzie w górę i po odjęciu wychodzi wartość
+    // większa od SNAP_RADIUS o ~2.8e-17 — punkt naprawdę leży poza promieniem,
+    // a test sprawdzałby coś innego, niż zamierzał. 0.25 jest potęgą dwójki,
+    // więc reprezentowane bez błędu.
+    const origin = vec(0, 0);
+    expect(snapTo(vec(0.25, 0), [origin], 0.25)).toEqual(origin);
+    const justOutside = vec(0.26, 0);
+    expect(snapTo(justOutside, [origin], 0.25)).toEqual(justOutside);
+  });
+
+  it("gdy dwa uchwyty są w zasięgu, wygrywa bliższy", () => {
+    // ognisko2 w (0.5,0), uchwyt rozmiaru w (0.8,0); promień 0.4 obejmuje oba naraz
+    expect(pickHandle(vec(0.55, 0), state, [], 0.4)).toBe("ognisko2");
+    expect(pickHandle(vec(0.75, 0), state, [], 0.4)).toBe("rozmiar");
+  });
+
+  it("nietknięte ognisko zachowuje TOŻSAMOŚĆ obiektu, nie tylko wartość", () => {
+    const next = applyDrag(state, "ognisko1", vec(-0.9, 0));
+    expect(next.f2).toBe(state.f2);
+  });
+
+  it("środek liczy się jako średnia ognisk, nie ich suma", () => {
+    // fixture symetryczny wokół zera maskuje zgubione dzielenie przez 2 — ten nie maskuje
+    const asym: EllipseState = { f1: vec(0.1, 0.2), f2: vec(0.5, 0.6), a: 0.6 };
+    const hs = handlePositions(asym);
+    expect(dist(hs[2].pos, vec(0.3, 0.4))).toBeCloseTo(asym.a, 12);
   });
 });
