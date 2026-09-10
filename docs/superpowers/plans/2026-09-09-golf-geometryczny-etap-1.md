@@ -1917,13 +1917,36 @@ describe("stan gry", () => {
     expect(g.phase).toBe("porazka");
   });
 
-  it("prędkość jest dosłowna: faza zmienia się dokładnie po długość / prędkość", () => {
+  it("prędkość jest dosłowna: ta sama stała przy dwóch różnych długościach toru", () => {
+    // Otoczenie jednego punktu przejścia z obu stron NIE dowodzi liniowości — dowolna
+    // rosnąca krzywa wygładzająca o tym samym czasie całkowitym przechodzi taki test.
+    // Dlatego mierzymy przy DWÓCH różnych długościach toru: poziom "rozmiar" rozwiązuje
+    // każde `a`, więc a=0.75 daje tor 1.5, a a=1.0 daje 2.0. Jeśli faza zmienia się
+    // dokładnie po `długość / BALL_SPEED` w obu przypadkach, stała prędkości jest ta sama
+    // na obu dystansach — czyli odwzorowanie jest wprost proporcjonalne, a nie wygładzone.
+    const free = LEVELS[1];
+    for (const a of [0.75, 1.0]) {
+      let g = startProof({ ...newGame(free), ellipse: { ...free.solution, a } });
+      expect(g.proof!.solved, `a=${a}`).toBe(true);
+      const longest = Math.max(...g.proof!.balls.map((b) => pathLength(b.path)));
+      g = advance(g, longest / BALL_SPEED - 1e-6);
+      expect(g.phase, `a=${a}`).toBe("dowod");
+      g = advance(g, 2e-6);
+      expect(g.phase, `a=${a}`).toBe("wygrana");
+    }
+  });
+
+  it("advance jest bezczynne poza fazą dowodu i zwraca TEN SAM obiekt", () => {
+    // Zadanie 13 woła `advance` co klatkę niezależnie od fazy — także na ekranie wygranej
+    // i podczas edycji, czyli przez większość czasu życia gry. Świeży obiekt co klatkę
+    // to śmiecenie w pętli renderu.
+    const editing = newGame(level);
+    expect(advance(editing, 1 / 60)).toBe(editing);
+
     let g = startProof({ ...newGame(level), ellipse: level.solution });
-    const longest = Math.max(...g.proof!.balls.map((b) => pathLength(b.path)));
-    g = advance(g, longest / BALL_SPEED - 1e-6);
-    expect(g.phase).toBe("dowod");
-    g = advance(g, 2e-6);
+    for (let i = 0; i < 600 && g.phase === "dowod"; i++) g = advance(g, 1 / 60);
     expect(g.phase).toBe("wygrana");
+    expect(advance(g, 1 / 60)).toBe(g);
   });
 });
 ```
