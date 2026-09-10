@@ -1641,14 +1641,18 @@ export function positionAt(path: Vec2[], s: number): Vec2 {
 }
 
 export function trailSegment(path: Vec2[], s: number, trailLength: number): Vec2[] {
+  // `s` przycinamy do długości toru. Bez tego, gdy piłka już dobiegła i siedzi w dołku
+  // (a zadanie 12 woła tę funkcję dalej, co klatkę), pętla dopchnęłaby ostatni wierzchołek,
+  // po czym `positionAt` zwróciłby ten sam punkt jeszcze raz — duplikat i odcinek zerowy.
+  const end = Math.min(s, pathLength(path));
   const from = Math.max(0, s - trailLength);
   const out: Vec2[] = [positionAt(path, from)];
   let acc = 0;
   for (let i = 1; i < path.length; i++) {
     acc += dist(path[i - 1], path[i]);
-    if (acc > from && acc < s) out.push(path[i]);
+    if (acc > from && acc < end) out.push(path[i]);
   }
-  out.push(positionAt(path, s));
+  out.push(positionAt(path, end));
   return out;
 }
 ```
