@@ -34,6 +34,23 @@ export function mount(canvas: HTMLCanvasElement): void {
     return cam().toWorld({ x: e.clientX - r.left, y: e.clientY - r.top });
   };
 
+  /** Zawija tekst po słowach. Wymaga ustawionego wcześniej `ctx.font`. */
+  const wrapByWords = (text: string, maxWidth: number): string[] => {
+    const lines: string[] = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      const candidate = line === "" ? word : `${line} ${word}`;
+      if (line !== "" && ctx.measureText(candidate).width > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line !== "") lines.push(line);
+    return lines;
+  };
+
   canvas.addEventListener("pointerdown", (e) => {
     if (game.phase !== "edycja") { game = newGame(game.level); return; }
     const w = toWorld(e);
@@ -53,12 +70,17 @@ export function mount(canvas: HTMLCanvasElement): void {
   });
 
   const endDrag = (): void => { dragging = null; pointer = null; };
-  canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
 
-  // Przycisk „Sprawdź”: dolna jedna piąta ekranu, gdy trwa edycja
+  // JEDEN listener, nie dwa. Osobny `endDrag` zarejestrowany wcześniej wyzerowałby
+  // `dragging`, ZANIM drugi listener zdążyłby sprawdzić, czy właśnie trwało przeciąganie
+  // — więc puszczenie uchwytu w dolnym pasie ekranu uruchamiałoby dowód wbrew graczowi
+  // i kasowało jego niedokończoną edycję. W pionie geometria kamery przypadkiem chroni
+  // przed tym (plansza nie sięga pasa przycisku), ale nic nie wymusza pionu.
   canvas.addEventListener("pointerup", (e) => {
-    if (game.phase !== "edycja") return;
+    const wasDragging = dragging !== null;
+    endDrag();
+    if (wasDragging || game.phase !== "edycja") return;
     const r = canvas.getBoundingClientRect();
     if (e.clientY - r.top > r.height * 0.86) game = startProof(game);
   });
@@ -129,8 +151,14 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.textAlign = "center";
       ctx.font = "600 18px system-ui, sans-serif";
       ctx.fillText(title, w / 2, 46);
+      // Podpowiedź ZAWIJAMY. Bez tego instrukcja poziomu urywa się na szerokości
+      // telefonu, a telefon jest celem podstawowym — gracz traci dokładnie to zdanie,
+      // które mówi mu, co ma zrobić. Dotyczy większości z ośmiu poziomów, nie tylko
+      // pierwszego: podpowiedzi mają 61-79 znaków przy 14 px na 390 px szerokości.
       ctx.font = "14px system-ui, sans-serif";
-      ctx.fillText(hint, w / 2, 70);
+      wrapByWords(hint, w - 32).forEach((line, i) => {
+        ctx.fillText(line, w / 2, 70 + i * 18);
+      });
       ctx.font = "600 16px system-ui, sans-serif";
       ctx.fillStyle = PALETTE.curve;
       ctx.fillText(action, w / 2, h * 0.93);
