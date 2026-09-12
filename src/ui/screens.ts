@@ -12,9 +12,11 @@ const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
 
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
-  let game: GameState = newGame(LEVELS[0]);
+  let levelIndex = 0;
+  let game: GameState = newGame(LEVELS[levelIndex]);
   let dragging: ReturnType<typeof pickHandle> = null;
   let pointer: Vec2 | null = null;
+  let consumedReset = false;
   let last = performance.now();
 
   const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
@@ -52,7 +54,13 @@ export function mount(canvas: HTMLCanvasElement): void {
   };
 
   canvas.addEventListener("pointerdown", (e) => {
-    if (game.phase !== "edycja") { game = newGame(game.level); return; }
+    if (game.phase !== "edycja") {
+      if (game.phase === "wygrana") levelIndex = (levelIndex + 1) % LEVELS.length;
+      game = newGame(LEVELS[levelIndex]);
+      consumedReset = true;
+      return;
+    }
+    consumedReset = false;
     const w = toWorld(e);
     dragging = pickHandle(w, game.ellipse, game.level.locked, (HANDLE_PX * 1.5) / cam().scale);
     pointer = w;
@@ -79,8 +87,10 @@ export function mount(canvas: HTMLCanvasElement): void {
   // przed tym (plansza nie sięga pasa przycisku), ale nic nie wymusza pionu.
   canvas.addEventListener("pointerup", (e) => {
     const wasDragging = dragging !== null;
+    const afterReset = consumedReset;
+    consumedReset = false;
     endDrag();
-    if (wasDragging || game.phase !== "edycja") return;
+    if (wasDragging || afterReset || game.phase !== "edycja") return;
     const r = canvas.getBoundingClientRect();
     if (e.clientY - r.top > r.height * 0.86) game = startProof(game);
   });
@@ -137,7 +147,7 @@ export function mount(canvas: HTMLCanvasElement): void {
         for (const b of game.proof.balls) {
           glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
         }
-        banner("Wpadły wszystkie", "Osiem torów, jedno miejsce, ta sama chwila.", "Jeszcze raz");
+        banner("Wpadły wszystkie", "Osiem torów, jedno miejsce, ta sama chwila.", "Następny");
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
         banner("Nie wszystkie", `Chybiło ${missed} z ${game.proof.balls.length}. Zobacz, którędy.`, "Jeszcze raz");
