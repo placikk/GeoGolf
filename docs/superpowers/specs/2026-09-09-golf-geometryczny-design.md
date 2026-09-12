@@ -40,7 +40,6 @@ jest błędem projektu — jest puentą.
 - Silnik geometryczny na ogólnej formie kwadratowej (obsługuje wszystkie stożkowe
   i proste)
 - Krzywe: elipsa, okrąg, odcinki prostych (ściany)
-- Łuki (zakres parametru na krzywej) — w architekturze od początku
 - Wiele krzywych na scenie jednocześnie
 - Około 8 poziomów
 - Mechanika dowodu ósemką z pełną warstwą animacji
@@ -49,6 +48,19 @@ jest błędem projektu — jest puentą.
 - PWA: działa w przeglądarce i instaluje się na telefonie
 
 ### Poza zakresem v1 (kolejne etapy)
+
+- **Łuki** (zakres parametru na krzywej). Pierwotnie zapisane jako „w architekturze
+  od początku", ale v1 ich nie ma: `Conic` to sześć liczb bez zakresu, `rayConic` zwraca
+  najbliższe trafienie na CAŁEJ krzywej, a ściany proste są nieskończone. Wycena etapu 2
+  poprawiona z „mały" na „średni", bo dodanie zakresu dotyka czterech z sześciu modułów
+  rdzenia i renderu. Lepiej mieć uczciwą wycenę niż miłą.
+- **Dwa z czterech taktów animacji** z sekcji 7: błysk w punkcie odbicia z chwilowo
+  widoczną normalną, oraz rozbłysk dołka w chwili wspólnego przybycia. Zaimplementowane
+  są takty „ciągnięcie" i „start"; te dwa czekają. To nie jest polerka — normalna przy
+  odbiciu jest w tej specyfikacji wprost nazwana elementem uczącym — więc stoją tu jako
+  dług do spłacenia, a nie jako rzecz porzucona.
+- **Nakładka diagnostyczna** z sekcji 9 (normalne, punkty odbicia, wartości parametrów),
+  która miała zastępować automatyczne testy warstwy wizualnej.
 
 - Parabola i hiperbola (etap 3)
 - Edytor plansz i dzielenie poziomami przez link (etap 4)
@@ -400,7 +412,7 @@ Każdy etap to osobna specyfikacja i osobny plan implementacji.
 | Etap | Zawartość | Koszt |
 |---|---|---|
 | **1 — v1** | silnik kwadratowy, elipsa i okrąg, ~8 poziomów, dowód ósemką, pełna warstwa wizualna | rdzeń projektu |
-| **2** | poziomy wykorzystujące łuki i kompozycje krzywych: kaskady, krzywe współogniskowe | mały — silnik gotowy, dochodzą same dane |
+| **2** | łuki (zakres parametru na krzywej) + poziomy je wykorzystujące: kaskady, krzywe współogniskowe | **średni** — łuki dotykają `Conic`, `rayConic`, `trace` i `conicPolyline` |
 | **3** | parabola i hiperbola | mały — same dane i warunki zwycięstwa |
 | **4** | edytor plansz, dzielenie linkiem | średni — nowy interfejs, ten sam model |
 | **5** | czarne dziury | **duży — nowy silnik**, tory krzywe, całkowanie numeryczne |
