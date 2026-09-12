@@ -21,6 +21,22 @@ export interface TraceResult {
 
 const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
 
+/** margines poza planszą [-1,1]²: tor, który go opuszcza, przepadł i nie wraca */
+const BOUNDS = 2;
+
+/** odległość wzdłuż `d` od `p`, przy której tor opuszcza [-BOUNDS, BOUNDS]², albo null */
+function boundsExit(p: Vec2, d: Vec2): number | null {
+  let t: number | null = null;
+  const consider = (candidate: number) => {
+    if (candidate > 1e-9 && (t === null || candidate < t)) t = candidate;
+  };
+  if (d.x > 0) consider((BOUNDS - p.x) / d.x);
+  else if (d.x < 0) consider((-BOUNDS - p.x) / d.x);
+  if (d.y > 0) consider((BOUNDS - p.y) / d.y);
+  else if (d.y < 0) consider((-BOUNDS - p.y) / d.y);
+  return t;
+}
+
 export function trace(start: Vec2, dir: Vec2, opt: TraceOptions): TraceResult {
   let p = start;
   let d = norm(dir);
@@ -36,7 +52,11 @@ export function trace(start: Vec2, dir: Vec2, opt: TraceOptions): TraceResult {
     }
 
     const remaining = opt.maxLength - length;
-    const limit = best === null ? remaining : Math.min(best, remaining);
+    // piłka, która opuszcza planszę bez trafienia w nic, przepadła — nie ma sensu
+    // śledzić ją dalej aż do `maxLength`, który zostaje bezpiecznikiem ostatniej szansy
+    const exit = boundsExit(p, d);
+    const boundary = exit === null ? remaining : Math.min(exit, remaining);
+    const limit = best === null ? boundary : Math.min(best, boundary);
 
     // dołek sprawdzamy PRZED odbiciem: piłka może wpaść w locie do ściany
     const s = clamp(dot(sub(opt.hole, p), d), 0, limit);
@@ -46,7 +66,7 @@ export function trace(start: Vec2, dir: Vec2, opt: TraceOptions): TraceResult {
       return { path, holed: true, length: length + s };
     }
 
-    if (best === null || bestCurve === null || best > remaining) {
+    if (best === null || bestCurve === null || best > boundary) {
       path.push(add(p, scale(d, limit)));
       return { path, holed: false, length: length + limit };
     }
