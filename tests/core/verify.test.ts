@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { ellipseFromFoci, lineThrough } from "../../src/core/conic";
+import { ellipseFromFoci, ellipseGeometry, lineThrough } from "../../src/core/conic";
 import { BALL_COUNT, launchAngles, runProof } from "../../src/core/verify";
 
 const R = 0.02 * 2 * Math.SQRT2;
@@ -24,6 +24,18 @@ describe("dowód ósemką", () => {
     expect(p.solved).toBe(true);
     expect(p.simultaneous).toBe(true);
     expect(p.spread).toBeLessThan(1e-6);
+  });
+
+  it("kierunki są zakotwiczone w osi wielkiej także dla elipsy obróconej", () => {
+    // Elipsa testowa wcześniej miała ogniska na osi x, więc `ellipseGeometry(k).angle === 0`
+    // i składnik `base` w `launchAngles` nic nie wnosił — zamiana `base` na stałe 0
+    // przechodziła 91/91. Ta elipsa jest obrócona, więc `base` faktycznie coś sprawdza.
+    const k = ellipseFromFoci(vec(-0.3, -0.4), vec(0.4, 0.3), 0.8);
+    const base = ellipseGeometry(k).angle;
+    for (const t of launchAngles(k)) {
+      const rel = (((t - base) % Math.PI) + Math.PI) % Math.PI;
+      expect(Math.min(rel, Math.PI - rel)).toBeGreaterThan(0.1);
+    }
   });
 
   it("działa tak samo dla elipsy obróconej", () => {
