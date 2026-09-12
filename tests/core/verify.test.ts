@@ -30,7 +30,14 @@ describe("dowód ósemką", () => {
     // Elipsa testowa wcześniej miała ogniska na osi x, więc `ellipseGeometry(k).angle === 0`
     // i składnik `base` w `launchAngles` nic nie wnosił — zamiana `base` na stałe 0
     // przechodziła 91/91. Ta elipsa jest obrócona, więc `base` faktycznie coś sprawdza.
-    const k = ellipseFromFoci(vec(-0.3, -0.4), vec(0.4, 0.3), 0.8);
+    //
+    // UWAGA: oś ogniska (-0.3,-0.4)/(0.4,0.3) sugerowanego w brifie wypada dokładnie
+    // pod 45°, czyli DOKŁADNIE jednym krokiem siatki (360°/8 = 45°) — mutacja `base=0`
+    // wtedy tylko cyklicznie przestawia osiem kątów, dając ten sam ZBIÓR wartości, więc
+    // ten sam test przechodzi 8/8 nawet z wyzerowanym `base` (zweryfikowane mutacją w
+    // tymczasowym worktree). Ogniska niżej dają oś pod ~32°, niebędącą wielokrotnością
+    // kroku 45°, więc usunięcie `base` faktycznie przesuwa zbiór kątów i test już łapie.
+    const k = ellipseFromFoci(vec(-0.3, -0.4), vec(0.5, 0.1), 0.8);
     const base = ellipseGeometry(k).angle;
     for (const t of launchAngles(k)) {
       const rel = (((t - base) % Math.PI) + Math.PI) % Math.PI;
