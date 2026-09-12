@@ -1,7 +1,6 @@
 import { ellipseFromFoci } from "../core/conic";
 import { Proof, runProof } from "../core/verify";
 import { EllipseState, Level, levelCurves } from "../levels";
-import { pathLength } from "../render/trails";
 
 /** jednostek świata na sekundę — prędkość jest dosłowna, bez krzywych czasu */
 export const BALL_SPEED = 1.2;
@@ -42,7 +41,7 @@ export function advance(state: GameState, dt: number): GameState {
   if (state.phase !== "dowod" || state.proof === null) return state;
   const elapsed = state.elapsed + dt;
   const travelled = elapsed * BALL_SPEED;
-  const longest = Math.max(...state.proof.balls.map((b) => pathLength(b.path)));
+  const longest = Math.max(...state.proof.balls.map((b) => b.length));
   if (travelled < longest) return { ...state, elapsed };
   return { ...state, elapsed, phase: state.proof.solved ? "wygrana" : "porazka" };
 }
