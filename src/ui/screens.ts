@@ -147,7 +147,18 @@ export function mount(canvas: HTMLCanvasElement): void {
         for (const b of game.proof.balls) {
           glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
         }
-        banner("Wpadły wszystkie", "Osiem torów, jedno miejsce, ta sama chwila.", "Następny");
+        // Zdanie o jednoczesności wolno wypisać tylko wtedy, gdy faktycznie zaszła.
+        // Warunkiem zwycięstwa jest "wszystkie wpadły", nie "wpadły razem" — a istnieją
+        // rozwiązania, w których dołek leży na cięciwie zamiast w ognisku i piłki
+        // przybywają w odstępie kilku sekund. Chwalenie się wtedy "tą samą chwilą"
+        // byłoby kłamstwem gry wobec gracza.
+        banner(
+          "Wpadły wszystkie",
+          game.proof.simultaneous
+            ? "Osiem torów, jedno miejsce, ta sama chwila."
+            : "Osiem torów, jedno miejsce.",
+          "Następny",
+        );
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
         banner("Nie wszystkie", `Chybiło ${missed} z ${game.proof.balls.length}. Zobacz, którędy.`, "Jeszcze raz");
