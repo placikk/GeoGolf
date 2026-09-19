@@ -67,4 +67,25 @@ describe("stan gry", () => {
     expect(g.phase).toBe("wygrana");
     expect(advance(g, 1 / 60)).toBe(g);
   });
+
+  describe("stan gry etapu 2", () => {
+    it("podgląd na poziomie z wachlarzem strzela w wachlarz", () => {
+      const fan = LEVELS.find((l) => l.sector !== undefined)!;
+      const { center, width } = fan.sector!;
+      for (const b of preview(newGame(fan)).balls) {
+        const t = Math.atan2(b.path[1].y - b.path[0].y, b.path[1].x - b.path[0].x);
+        const off = Math.atan2(Math.sin(t - center), Math.cos(t - center));
+        expect(Math.abs(off)).toBeLessThan(width / 2);
+      }
+    });
+
+    it.each(LEVELS.slice(8).map((l) => [l.id, l] as const))(
+      "poziom %s: rozwiązanie kończy się wygraną w pętli gry",
+      (_id, lvl) => {
+        let g = startProof({ ...newGame(lvl), pieces: lvl.pieces.map((p) => p.solution) });
+        for (let i = 0; i < 1200 && g.phase === "dowod"; i++) g = advance(g, 1 / 60);
+        expect(g.phase).toBe("wygrana");
+      },
+    );
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
 import { MENU_BUTTON, Rect, hitRect, hitTile, menuLayout, winAction } from "../../src/ui/menu";
+import { LEVELS } from "../../src/levels";
 
 const center = (r: Rect) => vec(r.x + r.w / 2, r.y + r.h / 2);
 const overlap = (a: Rect, b: Rect) =>
@@ -62,4 +63,18 @@ describe("ekran wygranej", () => {
     expect(winAction(vec(50, h * 0.5), w, h)).toBeNull();
     expect(winAction(vec(340, h * 0.2), w, h)).toBeNull();
   });
+});
+
+describe("menu z poziomami etapu 2", () => {
+  // najniższy popularny telefon w pionie (iPhone SE: 375×667) i ten sam w poziomie
+  for (const [w, h] of [[375, 667], [667, 375], [390, 844]] as const) {
+    it(`${w}×${h}: wszystkie poziomy mieszczą się i są celami ≥ 44 px`, () => {
+      const tiles = menuLayout(w, h, LEVELS.length);
+      expect(tiles).toHaveLength(LEVELS.length);
+      for (const t of tiles) {
+        expect(Math.min(t.w, t.h)).toBeGreaterThanOrEqual(44);
+        expect(t.y + t.h).toBeLessThanOrEqual(h);
+      }
+    });
+  }
 });

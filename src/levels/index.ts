@@ -1,6 +1,7 @@
 import { vec } from "../core/vec";
 import { HOLE_RADIUS, Level } from "./types";
 import { circle, ellipse } from "./shape";
+import { STAGE_2 } from "./stage2";
 
 export * from "./types";
 export * from "./shape";
@@ -114,4 +115,4 @@ const STAGE_1: Level[] = [
   },
 ];
 
-export const LEVELS: Level[] = [...STAGE_1];
+export const LEVELS: Level[] = [...STAGE_1, ...STAGE_2];
