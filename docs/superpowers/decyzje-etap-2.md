@@ -446,3 +446,234 @@ mechaniczne i bez ryzyka dotykowego; przycięcie ogniska przy zablokowanym rozmi
 (punkt 2 checklisty) opiera się na tej samej matematyce co przyskok — rzeczywiste
 starcie palca z granicą `2a − 2·MIN_GAP` (a nie z samym uchwytem) zostaje do oceny na
 prawdziwym telefonie.
+
+---
+
+## Łuk opisany długością i miejsce na napisy (spec `2026-09-19-golf-luk-dlugoscia-i-uklad-design.md`)
+
+Plan `2026-09-19-golf-luk-dlugoscia-i-uklad` (branch `poprawki-etap-2`, start `197ec9c`),
+zadania 1–4: model łuku opisanego długością zamiast kątem (`ArcRange {mid, length}` w
+`src/levels/types.ts`, przeliczanie w `src/levels/arc.ts`), uchwyty końców łuku na
+długości (`src/ui/handles.ts`), kamera z pasem na napisy (`playArea` w `src/ui/menu.ts`,
+`makeCamera` w `src/render/camera.ts`) i to sprawdzenie w przeglądarce. Ten spec
+**zastępuje §6 specu poprawek etapu 2** — patrz rozstrzygnięcie 5 sekcji „Poprawki po
+etapie 2" wyżej („zablokowany rozmiar naprawdę stoi"): tamto rozstrzygnięcie już nie
+obowiązuje w tej formie, zobacz punkt 1 niżej.
+
+### Rozstrzygnięcia planu
+
+1. **Łuk opisany długością zamiast zakresem kąta — decyzja właściciela.** Pomiar przed
+   decyzją: z łukiem o stałej DŁUGOŚCI jedna elipsa przez piłkę i dołek nie wygrywa na
+   żadnym z poziomów 13–16 dla `a ∈ [0.56, 3]` (krok 0,04); z łukiem opisanym KĄTEM (stary
+   model) ta sama próba wygrywała na poziomach 13 i 15 dla `a ≈ 0,8–1,04`. To **zastępuje
+   punkt 5 sekcji „Poprawki po etapie 2"** („zablokowany rozmiar naprawdę stoi" — twardy
+   zacisk odległości ognisk `2a − 2·MIN_GAP`): ognisk znowu **nic nie ogranicza**
+   (`applyDrag` bez `sizeLocked`), rozmiar rośnie, gdy ogniska się rozjadą, także przy
+   zablokowanym uchwycie „rozmiar" — dokładnie jak w etapie 1 (rozstrzygnięcie 3
+   `decyzje-etap-1.md`, oznaczone tam jako **PRZYWRÓCONE**). Kaskad nie da się przejść
+   jedną dużą elipsą nie dlatego, że ogniska nie mogą się rozjechać, tylko dlatego, że
+   łuk o stałej długości obejmuje coraz mniejszy kawałek rosnącej elipsy. Koszt, jeśli
+   źle: gdyby jednak jakiś przyszły poziom kaskadowy dało się przejść jedną elipsą mimo
+   stałej długości łuku (np. przy bardzo dużym `a`, poza zmierzonym zakresem `[0,56; 3]`),
+   trzeba by albo skrócić łuk gracza, albo dodać osobne ograniczenie — zmierzone pasmo
+   pokrywa z dużym zapasem sensowne rozmiary elipsy na planszy `[-1,1]²` (przekątna
+   `2√2 ≈ 2,83`).
+2. **`mid` w `ArcRange` to parametr POŁOWY DŁUGOŚCI łuku**, licznony numerycznie (tablica
+   skumulowanej długości, 512 próbek na obwód — `src/levels/arc.ts`). Łuk dłuższy niż
+   `obwód − MIN_ARC_LENGTH` jest przy przeliczaniu przycinany, `MIN_ARC_LENGTH = 0,05`
+   jednostki świata (zastępuje dawne `MIN_ARC = 10°`) — dzięki temu zawsze zostaje
+   przerwa i końce łuku się nie zlewają, niezależnie od rozmiaru elipsy. Koszt, jeśli
+   źle: przy bardzo małej elipsie (mały obwód) przycięcie mogłoby być widoczne jako
+   nagła zmiana długości łuku przy skrajnym przeciąganiu rozmiaru — żaden obecny poziom
+   tego nie robi (sprawdzają to testy poziomów).
+3. **Poziom 12 „Współogniskowe": łuk gracza dostał 5° zakładki przy obu wierzchołkach**
+   (`Math.PI − deg(5)` do `2π + deg(5)`, zamiast dokładnie połowy elipsy) — bez zakładki
+   rozwiązanie nie znosiło testu odporności (skrócenie łuku o `0,02` z każdej strony).
+   Zmierzone pasmo rozmiaru (ze ścianami z planu poprawek etapu 2, krok `0,005`):
+   `a ∈ [0,455; 0,59]`, z wąską **dziurą przy `0,53–0,54`** — tam piłka odbita od
+   górnego stałego łuku przecina koniec łuku gracza; to prawdziwa geometria tej
+   wielkości elipsy, nie błąd pomiaru czy błąd gry. Nic nie wygrywa powyżej dziury aż do
+   `a = 3`. **Poziom 16 „Zwieńczenie kaskad"**: pasmo `a ∈ [0,375; 0,44]` z **pojedynczą
+   dziurą przy `0,385`** (ta sama przyczyna: kolizja z inną stałą krzywą przy tej
+   konkretnej wielkości), rozwiązanie `a = 0,41` daleko od dziury po obu stronach. Koszt,
+   jeśli źle: gracz trafiający uchwytem rozmiaru dokładnie w dziurę dostanie porażkę mimo
+   pozornie dobrego ustawienia — dziury są wąskie (setne części `a`) względem promienia
+   chwytu uchwytu (33 px), więc trafienie w nie przypadkiem jest mało prawdopodobne.
+4. **Test odporności na krawędź łuku skraca łuk o `0,02` jednostki DŁUGOŚCI z każdej
+   strony** (zamiast dawnego 1° parametru kąta — na elipsie `a ≈ 1` to było ok. 0,017
+   jednostki, więc nowa miara jest w tej samej skali, tylko teraz spójna z modelem
+   długości). Wszystkie 16 poziomów znosi to skrócenie. Koszt, jeśli źle: `0,02`
+   jednostki to inna wartość liczbowa niż stary 1° na różnych rozmiarach elipsy (na
+   bardzo małej elipsie względnie większy kawałek, na bardzo dużej względnie mniejszy)
+   — ale to i tak jest bardziej spójna miara „ile gracz może się pomylić", bo dotyczy
+   tego samego, co gracz faktycznie kontroluje (długość łuku), nie parametru
+   matematycznego, którego gracz nie widzi.
+5. **Plansza między banerem i przyciskami** (`makeCamera`/`playArea`): pas banera
+   `TOP_BAND = 112` px CSS (numer poziomu, tytuł, podpowiedź do trzech linii — 70, 88,
+   106 px — i przycisk menu), pas przycisków od `ACTION_BAND · h = 0,86 · h` (ten sam
+   próg co dotknięcie „Sprawdź"). Kwadrat planszy `[-1,1]²` jest dopasowany i
+   wyśrodkowany w pasie MIĘDZY nimi, z tym samym marginesem `0,06` co dotąd. W pionie na
+   telefonie plansza prawie się nie zmienia (pas i tak jest wąski względem szerokości);
+   w poziomie i na komputerze robi się mniejsza, ale nic jej nie przecina. Dotyk używa
+   TEJ SAMEJ kamery (`toWorld`), więc trafianie w uchwyty nie rozjeżdża się z tym, co
+   widać. Koszt, jeśli źle: przy bardzo niskim oknie (`area.bottom ≤ area.top`) kamera
+   nie ma ochrony i policzy ujemną/zerową skalę — zostaje jako `minor (deferred)` w
+   `progress.md`, żaden realny telefon/przeglądarka nie ma tak niskiego okna.
+
+### Wpis z ledgera kontrolera (`progress.md`) dotyczący tego sprawdzenia
+
+```
+Task 3: Ruling: ⚠️ „czy baner mieści się w TOP_BAND = 112 w prawdziwej przeglądarce” —
+  przenoszę do zadania 4 (Playwright) ze wskazaniem poziomu 15 (najdłuższa podpowiedź, do
+  3 linii na 375 px) — vitest działa w node bez metryk fontów — koszt, jeśli źle: trzecia
+  linia podpowiedzi styka się z ramką na wąskich telefonach
+```
+
+**Domknięte w zadaniu 4** (patrz pomiar niżej): przy pomiarze zadania 3 poziom 11 miał
+najdłuższą podpowiedź; w międzyczasie (przegląd poziomu 15 przy innym zadaniu) treść
+podpowiedzi poziomu 15 „Dwie elipsy" wydłużyła się do 94 znaków i to ONA jest teraz
+najdłuższa (poziom 11: 83 znaki) — kontroler zlecający zadanie 4 wskazał wprost poziom 15
+zamiast 11. Zmierzone (patrz niżej): podpowiedź poziomu 15 zawija się do **najwyżej 2
+linii** na wszystkich czterech sprawdzonych szerokościach (nigdy do 3), z odstępem od
+ramki co najmniej ok. 28 px nawet na najciaśniejszym z testowanych ekranów — obawa z
+zadania 3 się nie potwierdziła.
+
+### Wynik ręcznego sprawdzenia — zadanie 4 (Playwright)
+
+**Metoda:** `npm run build` (23,05 kB / 9,19 kB gzip — budżet < 100 kB, margines duży),
+`npx vite preview --port 4173 --strictPort`. Playwright 1.63 (Chromium z lokalnego
+cache'u `~/.cache/ms-playwright`), zainstalowany lokalnie w
+`.superpowers/sdd/2026-09-19-golf-luk-dlugoscia-i-uklad/e2e/` (katalog poza
+repozytorium, ignorowany przez `.superpowers/sdd/.gitignore`), bez zmian w
+`package.json` głównego projektu. Geometria uchwytów (dokąd i skąd przeciągać) jest
+liczona NIEZALEŻNIE od działającej gry — `e2e/gen-plan.ts` importuje wprost
+`src/levels` i `src/ui/handles` (te same funkcje co gra: `handlePositions`, `applyDrag`,
+`arcParams`…) i symuluje każde przeciągnięcie tymi samymi wzorami, sprawdzając, że
+symulacja trafia dokładnie w zapisane `solution`, zanim jakikolwiek krok trafi do
+przeglądarki. Kolejność przeciągania ognisk (albo — dla poziomu „Dwie elipsy" — 40
+naprzemiennych mikrokroków na ognisko) jest dobierana automatycznie tak, żeby po drodze
+nie napompować `a` ponad wartość rozwiązania (bo `a` już nigdy się samo nie kurczy — patrz
+rozstrzygnięcie 1 wyżej); bez tego naiwne przeciąganie „na wprost" psuje poziomy
+kaskadowe (13, 14, obie części 15), co potwierdziła pierwsza, odrzucona wersja skryptu.
+Serwer podglądu tylko na `localhost` (bez `--host`) — bez prawdziwego telefonu nie ma
+czego wpinać do sieci lokalnej.
+
+#### 1. Ramka planszy vs baner i napisy przycisków
+
+Sprawdzone na `375×667`, `390×664`, `664×390`, `1280×720`, poziom 15 „Dwie elipsy"
+(podpowiedź 94 znaki — dłuższa niż poziom 11, patrz wyżej) w edycji, plus ekran wygranej
+(poziom 1) na `390×664`, `664×390`, `1280×720`. Odstępy liczone DWIE niezależne drogi: (a)
+analitycznie z tych samych wzorów co gra (`TOP_BAND=112`, `ACTION_BAND=0,86`,
+`margin=0,06`) — górna krawędź ramki to `cy − scale`, dolna `cy + scale`; (b) empirycznie
+przez `ctx.measureText` NA PRAWDZIWYM `CanvasRenderingContext2D` strony (nie zgadywane) —
+ten sam algorytm zawijania co `wrapByWords` w `src/ui/screens.ts`, wywołany z prawdziwym
+`ctx.font` przeglądarki, żeby zmierzyć rzeczywisty dół ostatniej linii podpowiedzi
+(`actualBoundingBoxDescent`) i górę/dół tekstu przycisku.
+
+| ekran | linii podpowiedzi | dół podpowiedzi (px) | góra ramki (px) | odstęp góra (px) | góra przycisku (px) | dół ramki (px) | odstęp dół (px) |
+|---|---|---|---|---|---|---|---|
+| 375×667 | 2 | 92,0 | 177,8 | **85,8** | 607,3 | 507,8 | **99,5** |
+| 390×664 | 2 | 92,0 | 169,9 | **77,9** | 604,5 | 513,1 | **91,4** |
+| 664×390 | 2 | 92,0 | 125,4 | **33,4** | 349,7 | 322,0 | **27,7** |
+| 1280×720 | 1 | 74,0 | 142,4 | **68,4** | 656,6 | 588,8 | **67,8** |
+
+Wszystkie odstępy dodatnie (tekst nigdzie nie dotyka ramki), najciaśniej na `664×390`
+(pozioma orientacja telefonu — ekran niski, więc `ACTION_BAND · h` i `TOP_BAND` biorą
+proporcjonalnie większy kęs wysokości), ale wciąż z ok. 28–33 px zapasu. Podpowiedź
+zawija się najwyżej do 2 linii (na `1280×720` mieści się w 1 linii). Zrzuty pełne i
+przybliżone (kadr wokół górnej/dolnej krawędzi ramki, `deviceScaleFactor: 2` dla
+ostrości): `e2e/shots/frame-check-{375x667,390x664,664x390,1280x720}-{full,zoom-top,
+zoom-bottom}.png`. Ekran wygranej (baner „Wpadły wszystkie" + przyciski „Jeszcze
+raz"/„Następny"): `e2e/shots/win-check-{390x664,664x390,1280x720}-{full,zoom-top,
+zoom-bottom}.png` — wizualnie ramka wyraźnie oddzielona od obu pasów napisów na
+wszystkich trzech rozmiarach.
+
+#### 2. Poziom 13 „Kaskada": rozsunięcie ognisk i próba jednej elipsy
+
+Rozciągnięcie ogniska2 (start `(0,15; 0,55)`) w róg planszy `(0,95; 0,95)`: ognisko jedzie
+dokładnie za palcem, elipsa wyraźnie rośnie (widać na zrzucie „po" — oś przeciągnięta z
+widoku), a łuk gracza (widoczny teal) zostaje tej samej DŁUGOŚCI — obejmuje wizualnie
+mniejszy kawałek dużej elipsy, dokładnie jak przewiduje model. Zrzuty:
+`e2e/shots/level13-before-stretch.png`, `e2e/shots/level13-after-stretch.png`.
+
+Ustawienie obu ognisk wprost na piłce `(-0,6; 0,1)` i w dołku `(0,5; 0,1)` (przez
+przyskok, bez celowania co do piksela): **NIE wygrywa** — wynik dowodu „Nie wszystkie.
+Chybiło 7 z 8.”, `localStorage` bez `"kaskada"` w `solved`. Zrzuty:
+`e2e/shots/level13-foci-on-ball-hole-edit.png`,
+`e2e/shots/level13-foci-on-ball-hole-result.png`.
+
+#### 3. Poziom 11 „Przycinanie": koniec łuku ślizga się po okręgu, nie znika
+
+Niezależna symulacja (`e2e/debug4.ts`, też z prawdziwych `arcParams`/`applyDrag`) pokazuje
+zacisk: dociąganie „koniec” (start w parametrze 300°) wstecz w stronę „poczatek” (60°) w
+krokach `260° → 220° → 180° → 140° → 100° → 61° → 60° → 60°` skraca długość łuku
+`0,754 → 0,628 → 0,503 → 0,377 → 0,251 → 0,126 → 0,050 → 0,050 → 0,050` jednostki —
+zatrzymuje się DOKŁADNIE na `MIN_ARC_LENGTH = 0,05` i tam zostaje nawet gdy cel (`60°`,
+czyli pozycja drugiego końca) jest powtórzony. To samo przeciągnięcie wykonane w
+przeglądarce (nie tylko policzone): oba uchwyty końców łuku widać cały czas jako dwa
+osobne pierścienie, nigdy się nie zlewają w jeden ani nie znikają — na przybliżeniu
+(`e2e/shots/level11-clamp-zoom.png`) widać maleńki, ale WYRAŹNIE obecny łuk między nimi.
+Zrzuty pośrednich kroków ślizgu: `e2e/shots/level11-slide-step{1..8}.png`, stan startowy:
+`e2e/shots/level11-start.png`. (Osobno zmierzono też przeciwny kierunek — dociąganie
+„koniec” w stronę WYDŁUŻENIA łuku — i ten zaciska się analogicznie na górnej granicy
+`obwód − MIN_ARC_LENGTH = 1,081`, `e2e/debug3.ts` — nie jest to część checklisty, ale
+potwierdza, że oba zaciski z rozstrzygnięcia 2 wyżej rzeczywiście działają.)
+
+#### 4. Wszystkie 16 poziomów wygrane uchwytami od stanu startowego
+
+Jedna sesja przeglądarki, `390×664`, poziomy w kolejności 1→16, `localStorage` czytany
+PRZED i PO każdej próbie (sprawdzane, że dany identyfikator poziomu przybywa do
+`solved` dopiero teraz, nie wcześniej):
+
+| # | id | tytuł | uchwyty przeciągnięte | wygrana wg `localStorage` |
+|---|---|---|---|---|
+| 1 | ogniska | Dwa ogniska | ognisko1, ognisko2 | tak |
+| 2 | rozmiar | Rozmiar bez znaczenia | ognisko1, ognisko2, rozmiar | tak |
+| 3 | skos | Na ukos | ognisko1, ognisko2, rozmiar | tak |
+| 4 | blisko | Prawie okrąg | ognisko1, ognisko2, rozmiar | tak |
+| 5 | ciasna | Wąska jak igła | ognisko1, ognisko2, rozmiar | tak |
+| 6 | przeszkoda | Teraz rozmiar ma znaczenie | ognisko1, ognisko2, rozmiar | tak |
+| 7 | dwie-przeszkody | Z dwóch stron | ognisko1, ognisko2, rozmiar | tak |
+| 8 | zwienczenie | Zwieńczenie | ognisko1, ognisko2, rozmiar | tak |
+| 9 | polelipsa | Półelipsa | ognisko1, ognisko2 | tak |
+| 10 | bandy | Bandy | ognisko1, ognisko2, rozmiar | tak |
+| 11 | przycinanie | Przycinanie | koniec, poczatek | tak |
+| 12 | wspologniskowe | Współogniskowe | rozmiar | tak |
+| 13 | kaskada | Kaskada | ognisko2, ognisko1 | tak |
+| 14 | kaskada-od-konca | Kaskada od końca | ognisko1, ognisko2 | tak |
+| 15 | dwie-elipsy | Dwie elipsy | p0: ognisko2, ognisko1; p1: ognisko1↔ognisko2 (40 mikrokroków naprzemiennie) | tak |
+| 16 | zwienczenie-2 | Zwieńczenie kaskad | ognisko1, ognisko2, rozmiar | tak |
+
+**16/16.** Zrzuty stanu edycji i wyniku dla poziomów brzegowych/niestandardowych (1, 11,
+13, 15, 16): `e2e/shots/level-{01,11,13,15,16}-*-{edit-start,edit-solved,result}.png`.
+Surowe dane: `e2e/results.json`.
+
+### Emulacja kontra prawdziwy telefon
+
+**Sprawdzone emulacją (powyżej), z pewnością geometryczną** (bo droga przeciągnięcia jest
+niezależnie symulowana tymi samymi wzorami co gra, nie zgadywana z piksela): wszystkie 16
+poziomów rozwiązywalnych uchwytami; poziom 13 — rozciąganie ogniska i porażka przy
+ogniskach wprost na piłce/dołku; poziom 11 — zacisk długości łuku w obu kierunkach;
+ramka planszy nigdzie nie dotyka tekstu banera ani przycisków, na czterech rozmiarach
+ekranu i w obu fazach (edycja z najdłuższą podpowiedzią, wygrana).
+
+**Zostaje właścicielowi na prawdziwym telefonie** (te same ograniczenia co w zadaniach 12
+i 5 wyżej — Playwright na desktopowym Chromium, gesty myszy zamiast wieloetapowego
+dotyku `touchstart`/`touchmove`, serwer tylko na `localhost`, brak realnego GPU/SoC
+telefonu):
+- **Realna trudność poziomów dla żywego gracza bez podglądu `solution`** — zwłaszcza
+  poziomu 15 „Dwie elipsy" (wąskie pole manewru, ~17 z 1296 pozycji siatki, patrz
+  „Poprawki z końcowego przeglądu" wyżej) i przeciąganie zbieżnych ognisk dwóch
+  elementów jedną warstwą (element 1 pod spodem) na poziomie 15 — obie te sprawy są
+  już odnotowane wyżej jako czekające na ocenę właściciela.
+- **Rzeczywisty rozmiar opuszki palca** przy uchwytach blisko siebie — dotyczy zwłaszcza
+  poziomu 11 tuż po zaciśnięciu łuku na `MIN_ARC_LENGTH` (dwa uchwyty bardzo blisko
+  siebie, patrz zrzut `level11-clamp-zoom.png`) i poziomu 15 (zbieżne ogniska).
+- **Odstęp tekstu od ramki `27,7–99,5 px` w przeliczeniu CSS** — teoretycznie
+  wystarczający zapas, ale rzeczywista czcionka systemowa telefonu (`system-ui`) może
+  się nieznacznie różnić renderowaniem od czcionki Chromium na tej maszynie; różnica
+  rzędu pojedynczych pikseli nie zagraża najciaśniejszemu zmierzonemu odstępowi
+  (`27,7 px` na `664×390`), ale nie była mierzona na prawdziwym silniku renderowania
+  tekstu telefonu.
+- **Wydajność/płynność** na prawdziwym SoC telefonu (nie sprawdzana tu w ogóle — ten sam
+  zastrzeżenie co w zadaniach 12 i 5).
