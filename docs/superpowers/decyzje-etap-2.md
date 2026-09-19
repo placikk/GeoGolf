@@ -284,3 +284,140 @@ c. **Zostawione właścicielowi bez zmian kodu:**
      określony), nie z błędu; nie powoduje awarii ani złego rysowania łuku o w pełni
      zlanych ogniskach (okrąg ma osobną, umowną oś). Koszt, jeśli źle: kosmetyczne
      drgnięcie osi w rzadkim przypadku brzegowym, bez wpływu na rozgrywkę.
+
+---
+
+## Poprawki po etapie 2 (spec `2026-09-19-golf-etap-2-poprawki-design.md`)
+
+Pięć poprawek zgłoszonych przez właściciela po przejściu etapu 2 (zadania 1–4 planu
+`2026-09-19-golf-etap-2-poprawki`), sprawdzone ręcznie w zadaniu 5 tą samą metodą co
+zadanie 12 wyżej: Playwright (Chromium, emulacja `devices["iPhone 12"]`, dotyk włączony)
+na `npm run build` + `vite preview`, bez zmian w kodzie gry. Skrypty i zrzuty leżą w
+`.superpowers/sdd/2026-09-19-golf-etap-2-poprawki/e2e/` (katalog ignorowany przez git,
+poza repozytorium — ten dokument jest ich pisemnym podsumowaniem). Nowość względem
+zadania 12: dowód uruchamiany jest przez `page.clock` (fastForward w krokach ~1000 ms,
+każdy odpowiada jednej klatce `requestAnimationFrame` z `dt` przyciętym w `screens.ts`
+do 0,05 s) zamiast czekania w czasie rzeczywistym — 900 takich kroków daje 45 s
+symulowanego czasu w ułamku sekundy realnego, z zapasem ponad bezpiecznik
+`maxLength=40` z `core/trace.ts`.
+
+### Rozstrzygnięcia
+
+1. **Ściana stoi na brzegu planszy `[-1,1]²`, nie na brzegu ekranu** (decyzja
+   właściciela, §2 specu). Pomiar w zadaniu 5: wszystkich 16 poziomów nadal daje się
+   wygrać uchwytami od stanu startowego po dodaniu ścian — bez zmian względem stanu
+   sprzed poprawki.
+2. **„Jeszcze raz" zachowuje ustawienie elementów** po wygranej, po porażce i przy
+   dotknięciu ekranu w trakcie animacji dowodu — wraca do fazy edycji z `pieces` bez
+   zmian, nie do stanu startowego. Pełny reset zostaje tam, gdzie był: pod kafelkiem
+   tego samego poziomu w menu (`goTo` → `newGame`).
+3. **Ostatni poziom (16): prawy przycisk to „Menu" z podsumowaniem**, nie „Następny".
+   Zawijanie „Następny" z poziomu 16 z powrotem na poziom 1 zniknęło — na ostatnim
+   poziomie nie ma już żadnego przycisku, który cichcem zaczynałby od nowa.
+4. **Poziom 12: okrąg `(0, −0.5)`, promień `0.25`**, rozwiązanie `a = 0.52` (pasmo
+   zmierzone ze ścianami z §2: `a ∈ [0.455, 0.59]`, nic powyżej aż do `a = 3`). Stary
+   okrąg (`r = 0.1`) przepuszczał osiem piłek obok siebie i nie wymuszał rozmiaru.
+5. **Zablokowany rozmiar naprawdę stoi — odwołuje rozstrzygnięcie 3 z
+   `decyzje-etap-1.md`.** Tamto rozstrzygnięcie pozwalało `applyDrag` podnosić `a`
+   zawsze, gdy ogniska rozjadą się dalej niż `2a` (żeby elipsa dała się skonstruować).
+   Efekt uboczny: na poziomach z zablokowanym rozmiarem (13, 15) gracz mógł rozsunąć
+   ogniska szeroko, zsunąć je z powrotem na piłkę i dołek i zostać z dużą, w pełni
+   działającą elipsą — rozmiar był zablokowany tylko na pokaz. Teraz, gdy uchwyt
+   `rozmiar` jest zablokowany, `a` tego elementu nigdy się nie zmienia; przeciągane
+   ognisko zatrzymuje się na granicy `2a − 2·MIN_GAP` od drugiego ogniska. Poziomy 13
+   i 15 (piłka–dołek dalej niż `2a`) stają się przez to geometrycznie niemożliwe do
+   przejścia jedną elipsą, bez żadnych nowych przeszkód w danych.
+
+### Wynik ręcznego sprawdzenia — zadanie 5 (Playwright, poprawki po etapie 2)
+
+1. **Ramka planszy.** Widoczna na poziomie 1 i na poziomie 16 w stanie startowym —
+   cienki czerwony obrys kwadratu `[-1,1]²` wokół elementów gracza, spójny z kolorem
+   stałych kształtów. Na poziomie 8 podgląd (dwie blade piłki, faza edycji) pokazuje
+   tor odbity od dolnej krawędzi ramki (piłka startuje blisko `y = -1`, zygzak w
+   zrzucie to odbicie o ścianę, nie usterka renderowania).
+   Zrzuty: `e2e/shots/check1-level01-start-frame.png`,
+   `e2e/shots/check1-level16-start-frame.png`, `e2e/shots/check1-level08-start-preview.png`.
+2. **Poziom 13 „Kaskada": zablokowany rozmiar rzeczywiście ogranicza ognisko.**
+   Próba rozciągnięcia ogniska 2 w róg ekranu (dystans żądany ≈ 1,8 jednostki) kończy
+   się na granicy `2a − 2·MIN_GAP = 0,798` od ogniska 1 — łuk zostaje cienkim,
+   mocno wydłużonym sierpem zamiast urosnąć (zmierzone i potwierdzone wizualnie:
+   ognisko zatrzymuje się w punkcie `(0.264, 1.014)` zamiast w celu `(1.068, 1.819)`).
+   Osobno: nawet po ustawieniu ogniska 1 dokładnie na piłce, ognisko 2 ciągnięte w
+   stronę dołka (odległość piłka–dołek `1,1` > zasięg `0,798`) zatrzymuje się w
+   `(0.198, 0.1)`, wyraźnie przed dołkiem `(0.5, 0.1)` — próba kończy się porażką
+   (`localStorage` bez `"kaskada"` w `solved`).
+   Zrzuty: `e2e/shots/check2a-kaskada-before-stretch.png`,
+   `e2e/shots/check2a-kaskada-after-stretch.png`, `e2e/shots/check2b-2-f1-at-ball.png`,
+   `e2e/shots/check2b-3-f2-stopped-short-of-hole.png`.
+3. **Poziom 12: `a ≈ 0.9` przegrywa, `a = 0.52` wygrywa.** Stan startowy poziomu
+   (`a = 0.9`, uchwyty nietknięte) uruchomiony wprost przez „Sprawdź" daje porażkę
+   („Chybiło 2 z 8"). Po przeciągnięciu uchwytu rozmiaru do `a = 0.52` (rozwiązanie)
+   ten sam poziom wygrywa („Wpadły wszystkie"), potwierdzone przez `localStorage`.
+   Zrzuty: `e2e/shots/check3-a09-result.png`, `e2e/shots/check3-a052-result.png`.
+4. **„Jeszcze raz" zachowuje ustawienie — po wygranej i po porażce.** Poziom 2
+   „Rozmiar bez znaczenia" rozwiązany uchwytami, wygrany, potem „Jeszcze raz": ekran
+   edycji po powrocie jest pikselowo taki sam jak tuż przed „Sprawdź" (ta sama elipsa,
+   ten sam rozmiar) — nie stan startowy. Poziom 12 z celowo złym, rozpoznawalnym
+   rozmiarem (`a = 1.5`, różnym od startowego `a = 0.9`) przegrany, potem dotknięcie
+   ekranu (nie osobny przycisk — w fazie porażki każde dotknięcie poza przyciskiem
+   menu wraca do edycji): ten sam zły rozmiar `a = 1.5` zostaje, nie wraca do `a = 0.9`.
+   Zrzuty: `e2e/shots/check4a-win-before-edit.png` / `check4a-win-after-retry.png`,
+   `e2e/shots/check4b-lose-before-edit.png` / `check4b-lose-after-retry.png`.
+5. **Poziom 16 (ostatni): „Menu" i podsumowanie.** Ze świeżym postępem (tylko poziom
+   16 zaliczony po tej wygranej) baner ma dopisek „To był ostatni poziom.", prawy
+   przycisk „Menu"; dotknięcie „Menu" otwiera siatkę 16 kafelków z poziomem 16
+   podświetlonym i zaznaczonym „✓". Z postępem ustawionym tak, że pozostałych 15
+   poziomów jest już zaliczonych (`localStorage` przed wczytaniem), ta sama wygrana
+   daje dopisek „Wszystkie poziomy ukończone.".
+   Zrzuty: `e2e/shots/check5a-last-level-not-all-solved.png`,
+   `e2e/shots/check5a-menu-opened.png`, `e2e/shots/check5b-all-solved-banner.png`.
+6. **Wszystkie 16 poziomów nadal daje się wygrać uchwytami od stanu startowego**, ze
+   ścianami i z naprawioną blokadą rozmiaru — potwierdzone przez `localStorage`
+   (`golf-geometryczny/postep`), nie tylko wizualnie. Jedna usterka techniczna po
+   drodze (bez znaczenia dla gry): naiwny skrypt, który przeciąga oba ogniska
+   zablokowanego rozmiaru w jednym geście na sztywno wyliczone współrzędne
+   rozwiązania, może dla poziomu „Dwie elipsy" trafić w granicę `2a − 2·MIN_GAP`
+   opisaną w punkcie 5 wyżej (bo drugie ognisko tej samej pary jeszcze stoi w
+   pozycji startowej) i wylądować blisko, ale nie dokładnie na rozwiązaniu — poziom
+   ma wyjątkowo wąskie pasmo zwycięskie (~17 z 1296 pozycji siatki, patrz „Poprawki z
+   końcowego przeglądu" wyżej), więc „blisko" nie wystarcza. Naprawione w skrypcie
+   (naprzemienne rundy ognisko1/ognisko2, zbiega do dokładnego rozwiązania w 3
+   krokach) — to niedokładność narzędzia testowego, nie błąd gry; potwierdza to
+   test `tests/levels.test.ts` („poziom %s: zapisane rozwiązanie faktycznie
+   rozwiązuje"), który dla tego poziomu jest zielony przy pełnej precyzji silnika.
+   Wynik końcowy: 16/16 wygranych.
+
+   | # | id | tytuł | wygrana wg `localStorage` |
+   |---|---|---|---|
+   | 1 | ogniska | Dwa ogniska | tak |
+   | 2 | rozmiar | Rozmiar bez znaczenia | tak |
+   | 3 | skos | Na ukos | tak |
+   | 4 | blisko | Prawie okrąg | tak |
+   | 5 | ciasna | Wąska jak igła | tak |
+   | 6 | przeszkoda | Teraz rozmiar ma znaczenie | tak |
+   | 7 | dwie-przeszkody | Z dwóch stron | tak |
+   | 8 | zwienczenie | Zwieńczenie | tak |
+   | 9 | polelipsa | Półelipsa | tak |
+   | 10 | bandy | Bandy | tak |
+   | 11 | przycinanie | Przycinanie | tak |
+   | 12 | wspologniskowe | Współogniskowe | tak |
+   | 13 | kaskada | Kaskada | tak |
+   | 14 | kaskada-od-konca | Kaskada od końca | tak |
+   | 15 | dwie-elipsy | Dwie elipsy | tak |
+   | 16 | zwienczenie-2 | Zwieńczenie kaskad | tak |
+
+   Zrzuty stanu edycji tuż przed „Sprawdź" dla poziomów brzegowych (1 i 16):
+   `e2e/shots/check6-level-01-ogniska-edit-solved.png`,
+   `e2e/shots/check6-level-16-zwienczenie-2-edit-solved.png`. Surowy wynik:
+   `e2e/check6-results.json`.
+
+### Czego nie dało się sprawdzić emulacją (checklista właściciela)
+
+Te same ograniczenia co w zadaniu 12 wyżej (Playwright na desktopowym Chromium,
+gesty myszy zamiast wieloetapowego dotyku, serwer tylko na `localhost`) dotyczą też
+tego sprawdzenia — patrz sekcja „Czego NIE dało się sprawdzić emulacją" wyżej. Dodatkowo
+tutaj: usunięcie zawijania „Następny" na ostatnim poziomie i tekst podsumowania są
+mechaniczne i bez ryzyka dotykowego; przycięcie ogniska przy zablokowanym rozmiarze
+(punkt 2 checklisty) opiera się na tej samej matematyce co przyskok — rzeczywiste
+starcie palca z granicą `2a − 2·MIN_GAP` (a nie z samym uchwytem) zostaje do oceny na
+prawdziwym telefonie.
