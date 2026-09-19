@@ -11,6 +11,15 @@ export const circle = (center: Vec2, radius: number): EllipseShape => ellipse(ce
 
 export const segment = (from: Vec2, to: Vec2): SegmentShape => ({ kind: "odcinek", from, to });
 
+/** Brzeg planszy [-1, 1]² jest ścianą: cztery zwykłe odcinki przez narożniki. Ten sam
+ *  kwadrat na każdym ekranie, więc fizyka poziomu nie zależy od urządzenia. */
+export const BOARD_WALLS: SegmentShape[] = [
+  segment(vec(-1, -1), vec(1, -1)),
+  segment(vec(1, -1), vec(1, 1)),
+  segment(vec(1, 1), vec(-1, 1)),
+  segment(vec(-1, 1), vec(-1, -1)),
+];
+
 /** Czy elipsa jest okręgiem (ogniska zlane w jeden punkt). */
 export const isCircle = (s: EllipseShape): boolean => dist(s.f1, s.f2) < 1e-12;
 
@@ -59,8 +68,9 @@ export function shapeToPiece(s: Shape): Piece {
   };
 }
 
-/** Elementy gracza, potem przeszkody. */
+/** Elementy gracza, potem przeszkody, na końcu ściany brzegu planszy. */
 export const levelCurves = (level: Level, pieces: EllipseShape[]): Piece[] => [
   ...pieces.map(shapeToPiece),
   ...level.obstacles.map(shapeToPiece),
+  ...BOARD_WALLS.map(shapeToPiece),
 ];

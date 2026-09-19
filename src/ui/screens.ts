@@ -1,5 +1,5 @@
 import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
+import { BOARD_WALLS, LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge } from "../render/draw";
 import { SPAN } from "../render/shapes";
@@ -169,6 +169,11 @@ export function mount(canvas: HTMLCanvasElement): void {
     // gdzie lecą piłki" wyglądałby na błąd gry
     if (game.phase === "edycja" && level.sector !== undefined) {
       sectorWedge(ctx, c, level.ball, level.sector, SPAN, PALETTE.sector);
+    }
+
+    // brzeg planszy jest ścianą — cienka ramka w kolorze stałych kształtów
+    for (const w of BOARD_WALLS) {
+      drawPiece(ctx, c, shapeToPiece(w), PALETTE.obstacle, PALETTE.obstacleGlow, 1);
     }
 
     for (const o of level.obstacles) {
