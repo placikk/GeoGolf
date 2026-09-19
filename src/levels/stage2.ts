@@ -95,4 +95,47 @@ export const STAGE_2: Level[] = [
     sector: { center: deg(135), width: deg(60) },
     test: t,
   },
+  {
+    // Układ kaskady wzdłuż osi 3-4-5 (kierunek (0.6, 0.8)), żeby liczby zostały dziesiętne.
+    // M = (−0.25, −0.2) nie jest ogniskiem żadnej przeszkody, więc nie jest pokazane —
+    // gracz stawia oba ogniska, a drugie przyskakuje do pierwszego.
+    id: "dwie-elipsy", title: "Dwie elipsy",
+    hint: "Cała kaskada w twoich rękach. Punkt spotkania wybierasz sam.",
+    ball: vec(-0.55, -0.6), hole: vec(0.11, 0.28),
+    pieces: [
+      {
+        start: ellipse(vec(-0.6, 0.1), vec(-0.2, 0.4), 0.4, { start: deg(20), end: deg(120) }),
+        solution: ellipse(vec(-0.55, -0.6), vec(-0.25, -0.2), 0.4, { start: deg(20), end: deg(120) }),
+        locked: ["rozmiar", "poczatek", "koniec"],
+      },
+      {
+        start: ellipse(vec(0.3, -0.55), vec(0.65, -0.2), 0.4, { start: deg(-175), end: deg(-40) }),
+        solution: ellipse(vec(-0.25, -0.2), vec(0.11, 0.28), 0.4, { start: deg(-175), end: deg(-40) }),
+        locked: ["rozmiar", "poczatek", "koniec"],
+      },
+    ],
+    obstacles: [],
+    sector: { center: deg(45) + Math.atan2(4, 3), width: deg(60) },
+    test: t,
+  },
+  {
+    // Kaskada przy dolnej krawędzi. Gracz rusza drugim łukiem: ogniska i rozmiar.
+    // Banda pod spodem ogranicza rozmiar z góry, okrąg na osi M–dołek z dołu:
+    // pasmo a ∈ [0.38, 0.44], rozwiązanie w środku.
+    id: "zwienczenie-2", title: "Zwieńczenie kaskad",
+    hint: "Kaskada, bandy i przeszkoda naraz.",
+    ball: vec(-0.6, -0.4), hole: vec(0.5, -0.4),
+    pieces: [{
+      start: ellipse(vec(-0.2, 0.3), vec(0.3, 0.2), 0.7, { start: deg(-175), end: deg(-40) }),
+      solution: ellipse(vec(-0.1, -0.4), vec(0.5, -0.4), 0.41, { start: deg(-175), end: deg(-40) }),
+      locked: ["poczatek", "koniec"],
+    }],
+    obstacles: [
+      ellipse(vec(-0.6, -0.4), vec(-0.1, -0.4), 0.4, { start: deg(20), end: deg(120) }),
+      segment(vec(-0.5, -0.72), vec(0.8, -0.72)),
+      circle(vec(0.05, -0.4), 0.08),
+    ],
+    sector: { center: deg(45), width: deg(60) },
+    test: t,
+  },
 ];

@@ -69,6 +69,11 @@ describe("stan gry", () => {
   });
 
   describe("stan gry etapu 2", () => {
+    it("poziom z dwoma elementami startuje z oboma", () => {
+      const two = LEVELS.find((l) => l.pieces.length === 2)!;
+      expect(newGame(two).pieces).toEqual(two.pieces.map((p) => p.start));
+    });
+
     it("podgląd na poziomie z wachlarzem strzela w wachlarz", () => {
       const fan = LEVELS.find((l) => l.sector !== undefined)!;
       const { center, width } = fan.sector!;
