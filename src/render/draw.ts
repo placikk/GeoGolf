@@ -1,7 +1,9 @@
 import { Vec2 } from "../core/vec";
 import { Conic } from "../core/conic";
+import { Piece } from "../core/piece";
+import { Sector } from "../core/verify";
 import { Camera } from "./camera";
-import { conicPolyline } from "./shapes";
+import { conicPolyline, piecePolyline } from "./shapes";
 
 export const PALETTE = {
   bg: "#0b0f14",
@@ -24,6 +26,8 @@ export const PALETTE = {
   overlay: "rgba(11, 15, 20, 0.94)",
   tile: "rgba(94, 234, 212, 0.05)",
   tileEdge: "rgba(203, 213, 225, 0.22)",
+  fixedFocus: "rgba(248, 113, 113, 0.45)",
+  sector: "rgba(248, 250, 252, 0.05)",
 };
 
 type Ctx = CanvasRenderingContext2D;
@@ -113,4 +117,29 @@ export function drawConic(
 ): void {
   const pts = conicPolyline(k);
   glowPolyline(ctx, cam, pts, color, glow, width, pts.length > 2);
+}
+
+/** Kawałek krzywej. Zamknięty obrys tylko dla całej elipsy — łuk ma końce. */
+export function drawPiece(
+  ctx: Ctx, cam: Camera, piece: Piece, color: string, glow: string, width: number,
+): void {
+  const pts = piecePolyline(piece);
+  glowPolyline(ctx, cam, pts, color, glow, width, piece.arc === undefined && pts.length > 2);
+}
+
+/** Blady klin wachlarza od piłki. Samo wypełnienie, bez obrysu i bez poświaty. */
+export function sectorWedge(
+  ctx: Ctx, cam: Camera, apex: Vec2, sector: Sector, reach: number, fill: string,
+): void {
+  const s = cam.toScreen(apex);
+  const r = reach * cam.scale;
+  // oś Y ekranu jest odwrócona, więc kąty świata zmieniają znak
+  const from = -(sector.center + sector.width / 2);
+  const to = -(sector.center - sector.width / 2);
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.moveTo(s.x, s.y);
+  ctx.arc(s.x, s.y, r, from, to);
+  ctx.closePath();
+  ctx.fill();
 }

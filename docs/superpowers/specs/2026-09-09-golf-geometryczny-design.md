@@ -412,7 +412,7 @@ Każdy etap to osobna specyfikacja i osobny plan implementacji.
 | Etap | Zawartość | Koszt |
 |---|---|---|
 | **1 — v1** | silnik kwadratowy, elipsa i okrąg, ~8 poziomów, dowód ósemką, pełna warstwa wizualna | rdzeń projektu |
-| **2** | łuki (zakres parametru na krzywej) + poziomy je wykorzystujące: kaskady, krzywe współogniskowe | **średni** — łuki dotykają `Conic`, `rayConic`, `trace` i `conicPolyline` |
+| **2** | łuki i odcinki + poziomy je wykorzystujące: kaskady, krzywe współogniskowe — spec: `2026-09-19-golf-etap-2-luki-design.md` | **średni** — nowy typ `Piece` (krzywa + łuk), `rayConicAll`, `trace`, wachlarz dowodu, model poziomu z listą elementów |
 | **3** | parabola i hiperbola | mały — same dane i warunki zwycięstwa |
 | **4** | edytor plansz, dzielenie linkiem | średni — nowy interfejs, ten sam model |
 | **5** | czarne dziury | **duży — nowy silnik**, tory krzywe, całkowanie numeryczne |

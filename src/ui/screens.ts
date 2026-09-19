@@ -1,10 +1,10 @@
 import { Vec2, vec } from "../core/vec";
-import { circleConic, ellipseFromFoci } from "../core/conic";
-import { LEVELS, SNAP_RADIUS } from "../levels";
+import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
-import { PALETTE, drawConic, glowDot, glowPolyline, holeMark, ringHandle } from "../render/draw";
+import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge } from "../render/draw";
+import { SPAN } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
-import { applyDrag, handlePositions, pickHandle, snapTo } from "./handles";
+import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, startProof } from "./game";
 import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, winAction } from "./menu";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -19,7 +19,7 @@ export function mount(canvas: HTMLCanvasElement): void {
   let levelIndex = progress.last;
   let game: GameState = newGame(LEVELS[levelIndex]);
   let menuOpen = false;
-  let dragging: ReturnType<typeof pickHandle> = null;
+  let dragging: HandleRef | null = null;
   let pointer: Vec2 | null = null;
   let consumedReset = false;
   let last = performance.now();
@@ -54,7 +54,7 @@ export function mount(canvas: HTMLCanvasElement): void {
 
   function toggleMenu(): void {
     menuOpen = !menuOpen;
-    // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swojej elipsy.
+    // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
     if (menuOpen && game.phase === "dowod") game = { ...game, phase: "edycja", proof: null, elapsed: 0 };
   }
 
@@ -104,7 +104,9 @@ export function mount(canvas: HTMLCanvasElement): void {
     }
     consumedReset = false;
     const w = toWorld(e);
-    dragging = pickHandle(w, game.ellipse, game.level.locked, (HANDLE_PX * 1.5) / cam().scale);
+    dragging = pickHandle(
+      w, game.pieces, game.level.pieces.map((p) => p.locked), (HANDLE_PX * 1.5) / cam().scale,
+    );
     pointer = w;
     canvas.setPointerCapture(e.pointerId);
   });
@@ -113,10 +115,13 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (dragging === null) return;
     const w = toWorld(e);
     pointer = w;
-    const snapped = dragging === "rozmiar"
-      ? w
-      : snapTo(w, [game.level.ball, game.level.hole], SNAP_RADIUS);
-    game = { ...game, ellipse: applyDrag(game.ellipse, dragging, snapped) };
+    const { piece, id } = dragging;
+    // przyskakują tylko ogniska; rozmiar i końce łuku idą za palcem
+    const snapped = id === "ognisko1" || id === "ognisko2"
+      ? snapTo(w, snapTargets(game.level, game.pieces, piece), SNAP_RADIUS)
+      : w;
+    const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped) : s));
+    game = { ...game, pieces };
   });
 
   const endDrag = (): void => { dragging = null; pointer = null; };
@@ -159,12 +164,25 @@ export function mount(canvas: HTMLCanvasElement): void {
     ctx.fillStyle = PALETTE.bg;
     ctx.fillRect(0, 0, canvas.width / dpr(), canvas.height / dpr());
 
-    for (const o of level.obstacles) {
-      drawConic(ctx, c, circleConic(o.center, o.radius), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
+    // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
+    // gdzie lecą piłki" wyglądałby na błąd gry
+    if (game.phase === "edycja" && level.sector !== undefined) {
+      sectorWedge(ctx, c, level.ball, level.sector, SPAN, PALETTE.sector);
     }
 
-    const k = ellipseFromFoci(game.ellipse.f1, game.ellipse.f2, game.ellipse.a);
-    drawConic(ctx, c, k, PALETTE.curve, PALETTE.curveGlow, 2);
+    for (const o of level.obstacles) {
+      drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
+      // ogniska stałych elips blado — lekcje kaskad to „trafić ogniskiem w to ognisko";
+      // okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
+      if (o.kind === "elipsa" && !isCircle(o)) {
+        glowDot(ctx, c, o.f1, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+        glowDot(ctx, c, o.f2, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+      }
+    }
+
+    for (const s of game.pieces) {
+      drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
+    }
 
     // Stałe punkty są pełne (piłka) albo wyglądają jak otwór (dołek); wszystko, co da się
     // przeciągnąć, to pulsujący pusty pierścień w kolorze elipsy. Pierścienie rysujemy
@@ -173,11 +191,14 @@ export function mount(canvas: HTMLCanvasElement): void {
     glowDot(ctx, c, level.ball, PALETTE.ball, PALETTE.ballGlow, 6);
 
     if (game.phase === "edycja") {
-      for (const h of handlePositions(game.ellipse)) {
-        if (level.locked.includes(h.id)) continue;
-        const r = dragging === h.id ? 15 : 12 + 1.5 * Math.sin(time * 3.2);
-        ringHandle(ctx, c, h.pos, PALETTE.handle, PALETTE.handleGlow, r);
-      }
+      game.pieces.forEach((s, piece) => {
+        for (const h of handlePositions(s)) {
+          if (level.pieces[piece].locked.includes(h.id)) continue;
+          const active = dragging !== null && dragging.piece === piece && dragging.id === h.id;
+          const r = active ? 15 : 12 + 1.5 * Math.sin(time * 3.2);
+          ringHandle(ctx, c, h.pos, PALETTE.handle, PALETTE.handleGlow, r);
+        }
+      });
       // podgląd na żywo: dwie piłki, blade tory
       for (const b of preview(game).balls) {
         glowPolyline(ctx, c, b.path, "rgba(226,232,240,0.28)", "rgba(226,232,240,0.06)", 1);

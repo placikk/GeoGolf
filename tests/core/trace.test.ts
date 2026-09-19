@@ -2,9 +2,10 @@ import { describe, it, expect } from "vitest";
 import { vec, dist, fromAngle, norm } from "../../src/core/vec";
 import { Conic, ellipseFromFoci, lineThrough } from "../../src/core/conic";
 import { trace, TraceOptions } from "../../src/core/trace";
+import { Piece, whole } from "../../src/core/piece";
 
 const base = (curves: Conic[], hole = vec(9, 9), holeRadius = 0): TraceOptions => ({
-  curves, hole, holeRadius, maxBounces: 1, maxLength: 100,
+  curves: curves.map(whole), hole, holeRadius, maxBounces: 1, maxLength: 100,
 });
 
 describe("śledzenie toru", () => {
@@ -88,9 +89,48 @@ describe("śledzenie toru", () => {
     const k = ellipseFromFoci(vec(-0.2, 0), vec(0.2, 0), 0.3);
     // start daleko poza elipsą, kierunek w przeciwną stronę: nic nie trafi
     const r = trace(vec(-0.9, -0.9), norm(vec(-1, -1)), {
-      curves: [k], hole: vec(9, 9), holeRadius: 0, maxBounces: 4, maxLength: 40,
+      curves: [whole(k)], hole: vec(9, 9), holeRadius: 0, maxBounces: 4, maxLength: 40,
     });
     expect(r.holed).toBe(false);
     expect(r.length).toBeLessThan(5);   // nie 40
+  });
+
+  it("TWIERDZENIE NA ŁUKACH: strzał z ogniska w dowolny punkt łuku trafia ten punkt i leci do drugiego ogniska", () => {
+    // Losowe elipsy i losowe łuki; kierunek celuje w punkt WEWNĄTRZ łuku. Przycinanie,
+    // które odrzuca poprawne trafienia albo przepuszcza piłkę przez łuk, tu czerwienieje.
+    let seed = 424242;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+    let ran = 0;
+    for (let i = 0; i < 300; i++) {
+      const f1 = vec(rnd() * 1.2 - 0.6, rnd() * 1.2 - 0.6);
+      const f2 = vec(rnd() * 1.2 - 0.6, rnd() * 1.2 - 0.6);
+      const c = dist(f1, f2) / 2;
+      if (c < 0.05) continue;
+      const a = c + 0.05 + rnd() * 0.8;
+      const b = Math.sqrt(a * a - c * c);
+      const u = norm({ x: f2.x - f1.x, y: f2.y - f1.y });
+      const center = vec((f1.x + f2.x) / 2, (f1.y + f2.y) / 2);
+      const point = (t: number) => vec(
+        center.x + u.x * a * Math.cos(t) - u.y * b * Math.sin(t),
+        center.y + u.y * a * Math.cos(t) + u.x * b * Math.sin(t),
+      );
+      const start = rnd() * 2 * Math.PI;
+      const span = (60 + rnd() * 240) * (Math.PI / 180);
+      const piece: Piece = {
+        conic: ellipseFromFoci(f1, f2, a),
+        arc: { from: point(start), via: point(start + span / 2), to: point(start + span) },
+      };
+      const target = point(start + span * (0.1 + 0.8 * rnd()));
+      const dir = norm({ x: target.x - f1.x, y: target.y - f1.y });
+
+      const r = trace(f1, dir, { curves: [piece], hole: vec(9, 9), holeRadius: 0, maxBounces: 1, maxLength: 100 });
+      expect(r.path.length).toBeGreaterThanOrEqual(3);
+      expect(dist(r.path[1], target)).toBeCloseTo(0, 9);
+      expect(dist(f1, r.path[1]) + dist(r.path[1], f2)).toBeCloseTo(2 * a, 9);
+      expect(dist(r.path[1], f2) + dist(f2, r.path[2]) - dist(r.path[1], r.path[2])).toBeCloseTo(0, 9);
+      ran++;
+    }
+    expect(ran).toBeGreaterThan(250);
   });
 });

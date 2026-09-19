@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
 import { ellipseFromFoci, ellipseGeometry, lineThrough } from "../../src/core/conic";
 import { BALL_COUNT, launchAngles, runProof } from "../../src/core/verify";
+import { whole } from "../../src/core/piece";
 
 const R = 0.02 * 2 * Math.SQRT2;
 
@@ -19,7 +20,7 @@ describe("dowód ósemką", () => {
   it("poprawna elipsa: wszystkie osiem wpada i wpada RAZEM", () => {
     const ball = vec(-0.5, 0), hole = vec(0.5, 0);
     const k = ellipseFromFoci(ball, hole, 0.8);
-    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k });
+    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k });
     expect(p.balls).toHaveLength(BALL_COUNT);
     expect(p.solved).toBe(true);
     expect(p.simultaneous).toBe(true);
@@ -50,13 +51,13 @@ describe("dowód ósemką", () => {
   it("działa tak samo dla elipsy obróconej", () => {
     const ball = vec(-0.35, -0.4), hole = vec(0.4, 0.3);
     const k = ellipseFromFoci(ball, hole, 0.9);
-    expect(runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k }).solved).toBe(true);
+    expect(runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k }).solved).toBe(true);
   });
 
   it("przesunięte ognisko: co najmniej jedna piłka chybia", () => {
     const ball = vec(-0.5, 0), hole = vec(0.5, 0);
     const k = ellipseFromFoci(vec(-0.5 + 0.141, 0), hole, 0.8);
-    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k });
+    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k });
     expect(p.solved).toBe(false);
     expect(p.balls.some((b) => !b.holed)).toBe(true);
   });
@@ -72,7 +73,7 @@ describe("dowód ósemką", () => {
   it("count=2: dwie piłki do podglądu", () => {
     const k = ellipseFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.8);
     expect(launchAngles(k, 2)).toHaveLength(2);
-    const p = runProof({ ball: vec(-0.5, 0), hole: vec(0.5, 0), holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k, count: 2 });
+    const p = runProof({ ball: vec(-0.5, 0), hole: vec(0.5, 0), holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k, count: 2 });
     expect(p.balls).toHaveLength(2);
   });
 
@@ -84,5 +85,47 @@ describe("dowód ósemką", () => {
       const rel = ((t % Math.PI) + Math.PI) % Math.PI;
       expect(Math.min(rel, Math.PI - rel)).toBeGreaterThan(0.01);
     }
+  });
+
+  it("wachlarz: kąty równo rozłożone i ściśle wewnątrz sektora", () => {
+    // środek 1 rad, nie 0: błąd znaku przy środku zerowym by się schował
+    const k = ellipseFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.8);
+    const sector = { center: 1, width: 0.5 };
+    const angles = launchAngles(k, 8, sector);
+    expect(angles).toHaveLength(8);
+    expect(angles[0]).toBeCloseTo(1 - 0.25 + 0.5 / 16, 12);
+    expect(angles[7]).toBeCloseTo(1 + 0.25 - 0.5 / 16, 12);
+    for (let i = 1; i < 8; i++) expect(angles[i] - angles[i - 1]).toBeCloseTo(0.5 / 8, 12);
+    for (const t of angles) {
+      expect(t).toBeGreaterThan(0.75);
+      expect(t).toBeLessThan(1.25);
+    }
+  });
+
+  it("wachlarz, podgląd dwupiłkowy: ten sam wzór z n = 2", () => {
+    const k = ellipseFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.8);
+    const [a, b] = launchAngles(k, 2, { center: 1, width: 0.5 });
+    expect(a).toBeCloseTo(0.875, 12);
+    expect(b).toBeCloseTo(1.125, 12);
+  });
+
+  it("brak wachlarza → dokładnie kąty etapu 1", () => {
+    const k = ellipseFromFoci(vec(-0.3, -0.4), vec(0.4, -0.264), 0.8);
+    expect(launchAngles(k, 8, undefined)).toEqual(launchAngles(k, 8));
+    const ball = vec(-0.3, -0.4), hole = vec(0.4, -0.264);
+    const input = { ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k };
+    expect(runProof({ ...input, sector: undefined })).toEqual(runProof(input));
+  });
+
+  it("runProof strzela w kierunkach wachlarza", () => {
+    const ball = vec(-0.5, 0), hole = vec(0.5, 0);
+    const k = ellipseFromFoci(ball, hole, 0.8);
+    const sector = { center: 2, width: 1 };
+    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k, sector });
+    const angles = launchAngles(k, 8, sector);
+    p.balls.forEach((b, i) => {
+      const d = { x: b.path[1].x - b.path[0].x, y: b.path[1].y - b.path[0].y };
+      expect(Math.atan2(d.y, d.x)).toBeCloseTo(angles[i], 9);
+    });
   });
 });

@@ -1,10 +1,9 @@
 import { Vec2, add, dist, dot, norm, scale, sub } from "./vec";
-import { Conic } from "./conic";
-import { rayConic } from "./intersect";
+import { Piece, rayPiece } from "./piece";
 import { normalAt, reflectDir } from "./reflect";
 
 export interface TraceOptions {
-  curves: Conic[];
+  curves: Piece[];
   hole: Vec2;
   holeRadius: number;
   maxBounces: number;
@@ -45,10 +44,10 @@ export function trace(start: Vec2, dir: Vec2, opt: TraceOptions): TraceResult {
 
   for (let bounce = 0; bounce <= opt.maxBounces; bounce++) {
     let best: number | null = null;
-    let bestCurve: Conic | null = null;
-    for (const k of opt.curves) {
-      const t = rayConic(p, d, k);
-      if (t !== null && (best === null || t < best)) { best = t; bestCurve = k; }
+    let bestCurve: Piece | null = null;
+    for (const piece of opt.curves) {
+      const t = rayPiece(p, d, piece);
+      if (t !== null && (best === null || t < best)) { best = t; bestCurve = piece; }
     }
 
     const remaining = opt.maxLength - length;
@@ -74,7 +73,7 @@ export function trace(start: Vec2, dir: Vec2, opt: TraceOptions): TraceResult {
     const hit = add(p, scale(d, best));
     path.push(hit);
     length += best;
-    d = reflectDir(d, normalAt(bestCurve, hit));
+    d = reflectDir(d, normalAt(bestCurve.conic, hit));
     p = hit;
   }
 

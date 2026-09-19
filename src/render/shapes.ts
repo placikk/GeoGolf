@@ -1,7 +1,10 @@
-import { Vec2, add, norm, perp, scale, vec } from "../core/vec";
+import { Vec2, add, dot, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, classify, ellipseGeometry } from "../core/conic";
+import { Piece } from "../core/piece";
 
-const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
+export const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
+const TAU = 2 * Math.PI;
+const mod = (x: number): number => ((x % TAU) + TAU) % TAU;
 
 export function conicPolyline(k: Conic, steps = 128): Vec2[] {
   if (classify(k) === "prosta") {
@@ -17,6 +20,34 @@ export function conicPolyline(k: Conic, steps = 128): Vec2[] {
   const v = perp(u);
   return Array.from({ length: steps }, (_, i) => {
     const t = (i / steps) * 2 * Math.PI;
+    return add(g.center, add(scale(u, g.a * Math.cos(t)), scale(v, g.b * Math.sin(t))));
+  });
+}
+
+/** Łamana kawałka krzywej. Łuk elipsy: parametry `from` i `to`, próbkowanie w tym
+ *  kierunku, który przechodzi przez `via`; końce łuku leżą w łamanej DOKŁADNIE.
+ *  Odcinek: dwa punkty. Brak łuku: jak `conicPolyline`. */
+export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
+  const arc = piece.arc;
+  if (arc === undefined) return conicPolyline(piece.conic, steps);
+  if (classify(piece.conic) === "prosta") return [arc.from, arc.to];
+
+  const g = ellipseGeometry(piece.conic);
+  const u = vec(Math.cos(g.angle), Math.sin(g.angle));
+  const v = perp(u);
+  const param = (p: Vec2): number => {
+    const q = sub(p, g.center);
+    return Math.atan2(dot(q, v) / g.b, dot(q, u) / g.a);
+  };
+  const t0 = param(arc.from);
+  const ccw = mod(param(arc.to) - t0);
+  // idziemy przeciwnie do wskazówek zegara, chyba że `via` leży po drugiej stronie
+  const span = mod(param(arc.via) - t0) < ccw ? ccw : ccw - TAU;
+  const n = Math.max(2, Math.ceil((steps * Math.abs(span)) / TAU));
+  return Array.from({ length: n + 1 }, (_, i) => {
+    if (i === 0) return arc.from;
+    if (i === n) return arc.to;
+    const t = t0 + (span * i) / n;
     return add(g.center, add(scale(u, g.a * Math.cos(t)), scale(v, g.b * Math.sin(t))));
   });
 }
