@@ -119,4 +119,28 @@ describe("poziomy", () => {
       s.kind === "elipsa" && s.arc !== undefined ? { ...s, arc: { start: s.arc.start + d, end: s.arc.end - d } } : s;
     expect(proofFor(level, solutions(level).map(shrink), level.obstacles.map(shrink)).solved).toBe(true);
   });
+
+  // Kaskada: w zapisanym rozwiązaniu jakieś ognisko leży poza piłką i dołkiem. Na takim
+  // poziomie element z zablokowanym rozmiarem nie może zastąpić całej kaskady jedną
+  // elipsą przez piłkę i dołek — ma za mały rozmiar, żeby w ogóle ją zbudować.
+  // (Poziom 9 nie jest kaskadą: tam jedna elipsa przez piłkę i dołek JEST rozwiązaniem.)
+  const same = (p: { x: number; y: number }, q: { x: number; y: number }) => dist(p, q) < 1e-12;
+  const isCascade = (level: Level) =>
+    solutions(level).some((s) => [s.f1, s.f2].some((f) => !same(f, level.ball) && !same(f, level.hole)));
+
+  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16", () => {
+    expect(LEVELS.filter(isCascade).map((l) => l.id)).toEqual(
+      ["kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"],
+    );
+  });
+
+  it.each(LEVELS.filter(isCascade).map((l) => [l.id, l] as const))(
+    "poziom %s: element z zablokowanym rozmiarem nie zbuduje jednej elipsy przez piłkę i dołek",
+    (_id, level) => {
+      for (const piece of level.pieces) {
+        if (!piece.locked.includes("rozmiar")) continue;
+        expect(2 * piece.solution.a).toBeLessThanOrEqual(dist(level.ball, level.hole));
+      }
+    },
+  );
 });

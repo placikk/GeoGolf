@@ -1,4 +1,4 @@
-import { Vec2, add, dist, scale } from "../core/vec";
+import { Vec2, add, dist, scale, sub } from "../core/vec";
 import { ArcRange, EllipseShape, Handle, Level, MIN_ARC } from "../levels/types";
 import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, isCircle } from "../levels/shape";
 
@@ -87,7 +87,11 @@ export function moveArcEnd(arc: ArcRange, which: "poczatek" | "koniec", t: numbe
   return { start: arc.start, end: clamp(end, arc.start + MIN_ARC, arc.start + TAU - MIN_ARC) };
 }
 
-export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2): EllipseShape {
+/** `sizeLocked`: uchwyt rozmiaru tego elementu jest zablokowany. Wtedy `a` NIGDY się nie
+ *  zmienia, a przeciągane ognisko zatrzymuje się na odległości 2a − 2·MIN_GAP od drugiego
+ *  ogniska (na prostej od drugiego ogniska w stronę palca). Bez tego rozsunięcie ognisk
+ *  podnosiło `a` na stałe i zablokowany rozmiar dało się obejść. */
+export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2, sizeLocked = false): EllipseShape {
   if (handle === "poczatek" || handle === "koniec") {
     // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej
     if (state.arc === undefined) return state;
@@ -96,6 +100,13 @@ export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2): Ellips
   if (handle === "rozmiar") {
     const a = (dist(to, state.f1) + dist(to, state.f2)) / 2;
     return { ...state, a: Math.max(a, dist(state.f1, state.f2) / 2 + MIN_GAP) };
+  }
+  if (sizeLocked) {
+    const other = handle === "ognisko1" ? state.f2 : state.f1;
+    const reach = 2 * state.a - 2 * MIN_GAP;
+    const d = dist(to, other);
+    const at = d <= reach ? to : add(other, scale(sub(to, other), reach / d));
+    return handle === "ognisko1" ? { ...state, f1: at } : { ...state, f2: at };
   }
   const next = handle === "ognisko1" ? { ...state, f1: to } : { ...state, f2: to };
   return { ...next, a: Math.max(next.a, dist(next.f1, next.f2) / 2 + MIN_GAP) };

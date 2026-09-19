@@ -201,4 +201,44 @@ describe("przyskakiwanie etapu 2", () => {
     const targets = snapTargets(kaskada, kaskada.pieces.map((p) => p.start), 0);
     expect(snapTo(vec(m.x + 0.05, m.y - 0.05), targets, SNAP_RADIUS)).toEqual(m);
   });
+
+  describe("zablokowany rozmiar stoi", () => {
+    // ognisko2 poza zerem i niesymetrycznie: zasięg liczony od złego ogniska by się ujawnił
+    const locked = ellipse(vec(-0.1, 0.2), vec(0.3, 0.2), 0.5);
+
+    it("ognisko przeciągnięte daleko zatrzymuje się na 2a − 2·MIN_GAP od drugiego, a się nie zmienia", () => {
+      const next = applyDrag(locked, "ognisko1", vec(-3, 0.2), true);
+      expect(next.a).toBe(0.5);
+      expect(dist(next.f1, next.f2)).toBeCloseTo(2 * 0.5 - 2e-3, 12);
+      expect(next.f1.y).toBeCloseTo(0.2, 12);                 // na prostej od f2 w stronę palca
+      expect(next.f1.x).toBeLessThan(next.f2.x);
+      expect(next.f2).toBe(locked.f2);
+    });
+
+    it("ognisko2 też: kierunek od ogniska1 w stronę palca", () => {
+      const next = applyDrag(locked, "ognisko2", vec(0.3, 5), true);
+      expect(next.a).toBe(0.5);
+      expect(dist(next.f1, next.f2)).toBeCloseTo(1 - 2e-3, 12);
+      const dir = { x: next.f2.x - locked.f1.x, y: next.f2.y - locked.f1.y };
+      const want = { x: 0.3 - locked.f1.x, y: 5 - locked.f1.y };
+      expect(dir.x * want.y - dir.y * want.x).toBeCloseTo(0, 12);   // współliniowe
+    });
+
+    it("w zasięgu ognisko idzie dokładnie pod palec", () => {
+      const finger = vec(-0.5, 0.25);
+      expect(applyDrag(locked, "ognisko1", finger, true).f1).toBe(finger);
+    });
+
+    it("odblokowany rozmiar: jak dotąd, a rośnie razem z ogniskami", () => {
+      const next = applyDrag(locked, "ognisko1", vec(-3, 0.2), false);
+      expect(next.f1).toEqual(vec(-3, 0.2));
+      expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
+    });
+
+    it("rozsunięcie i zsunięcie ognisk przy blokadzie nie zostawia większej elipsy", () => {
+      let s = applyDrag(locked, "ognisko1", vec(-3, 0.2), true);
+      s = applyDrag(s, "ognisko1", locked.f1, true);
+      expect(s.a).toBe(0.5);
+    });
+  });
 });
