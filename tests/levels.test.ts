@@ -143,4 +143,22 @@ describe("poziomy", () => {
       }
     },
   );
+
+  it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
+    const level = LEVELS.find((l) => l.id === "wspologniskowe")!;
+    const base = level.pieces[0].solution;
+    for (let i = 0; i <= 119; i++) {
+      const a = 0.62 + 0.02 * i;    // 0.62 … 3.0
+      expect(solves(level, [{ ...base, a }]), `a = ${a.toFixed(2)}`).toBe(false);
+    }
+  });
+
+  it("poziom 16: jedna elipsa przez piłkę i dołek nie wygrywa dla żadnego rozmiaru", () => {
+    const level = LEVELS.find((l) => l.id === "zwienczenie-2")!;
+    const base = level.pieces[0].solution;
+    for (let i = 0; i <= 122; i++) {
+      const a = 0.56 + 0.02 * i;    // 0.56 … 3.0
+      expect(solves(level, [{ ...base, f1: level.ball, f2: level.hole, a }]), `a = ${a.toFixed(2)}`).toBe(false);
+    }
+  });
 });

@@ -51,19 +51,21 @@ export const STAGE_2: Level[] = [
     test: t,
   },
   {
-    // Górny łuk stoi (a = 0.75), gracz domyka dół łukiem współogniskowym. Okrąg pod spodem
-    // wymusza mały rozmiar: b < 0.45, czyli a ∈ (0.45, 0.636).
+    // Górny łuk stoi (a = 0.75), gracz domyka dół łukiem współogniskowym. Duży okrąg pod
+    // spodem wymusza mały rozmiar. Zmierzone (ze ścianami planszy, krok 0.005): wygrywa
+    // jedno ciągłe pasmo a ∈ [0.455, 0.59], nic powyżej aż do a = 3. Mniejszy okrąg
+    // (r = 0.1) przepuszczał duże elipsy — osiem piłek przelatywało obok niego.
     id: "wspologniskowe", title: "Współogniskowe",
     hint: "Dokończ lustro łukiem innej elipsy o tych samych ogniskach.",
     ball: vec(-0.45, 0.1), hole: vec(0.45, 0.1),
     pieces: [{
       start: ellipse(vec(-0.45, 0.1), vec(0.45, 0.1), 0.9, { start: Math.PI, end: 2 * Math.PI }),
-      solution: ellipse(vec(-0.45, 0.1), vec(0.45, 0.1), 0.56, { start: Math.PI, end: 2 * Math.PI }),
+      solution: ellipse(vec(-0.45, 0.1), vec(0.45, 0.1), 0.52, { start: Math.PI, end: 2 * Math.PI }),
       locked: ["ognisko1", "ognisko2", "poczatek", "koniec"],
     }],
     obstacles: [
       ellipse(vec(-0.45, 0.1), vec(0.45, 0.1), 0.75, { start: deg(-20), end: deg(200) }),
-      circle(vec(0, -0.45), 0.1),
+      circle(vec(0, -0.5), 0.25),
     ],
     test: t,
   },
