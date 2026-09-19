@@ -137,6 +137,29 @@ describe("uchwyty łuku", () => {
     expect(grown.end - grown.start).toBeLessThanOrEqual(2 * Math.PI - MIN_ARC + 1e-12);
   });
 
+  it("maksymalna długość łuku: 2π − MIN_ARC, sprawdzona na długim łuku", () => {
+    // Na długim łuku {start: 0, end: 5.5} możemy faktycznie dosięgnąć górnej granicy zacisku.
+    // koniec przesunięty do 8.5: wrap(8.5 - 5.5) = wrap(3) = 3, więc 5.5 + 3 = 8.5,
+    // a to > 2π − MIN_ARC, więc zostaje zaciśnięte.
+    const longArc = { start: 0, end: 5.5 };
+    const maxEnd = moveArcEnd(longArc, "koniec", 8.5);
+    expect(maxEnd.end).toBe(2 * Math.PI - MIN_ARC);
+    expect(maxEnd.start).toBe(0);
+    expect(maxEnd.end - maxEnd.start).toBeCloseTo(2 * Math.PI - MIN_ARC, 12);
+
+    // początek przesunięty do -3: wrap(-3 - 0) = -3 < 5.5 - 2π + MIN_ARC,
+    // więc zostaje zaciśnięty na dolną granicę względem końca
+    const maxStart = moveArcEnd(longArc, "poczatek", -3);
+    expect(maxStart.start).toBeCloseTo(5.5 - 2 * Math.PI + MIN_ARC, 15);
+    expect(maxStart.end).toBe(5.5);
+    expect(maxStart.end - maxStart.start).toBeCloseTo(2 * Math.PI - MIN_ARC, 12);
+
+    // Punkt tuż poniżej granicy nie będzie zaciśnięty
+    const justBelow = moveArcEnd(longArc, "koniec", 5.9);
+    expect(justBelow.end).toBeCloseTo(5.9, 15);
+    expect(justBelow.start).toBe(0);
+  });
+
   it("przeciągnięcie końca łuku bez łuku nic nie zmienia", () => {
     expect(applyDrag(state, "koniec", vec(0, 1))).toBe(state);
   });
