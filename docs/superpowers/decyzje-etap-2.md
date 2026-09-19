@@ -341,18 +341,23 @@ symulowanego czasu w ułamku sekundy realnego, z zapasem ponad bezpiecznik
    i 15 (piłka–dołek dalej niż `2a`) stają się przez to geometrycznie niemożliwe do
    przejścia jedną elipsą, bez żadnych nowych przeszkód w danych. Koszt, jeśli źle:
    na poziomach 13 i 15 jedno ognisko nie da się dociągnąć do celu w jednym geście,
-   gdy drugie ognisko tej samej pary stoi jeszcze daleko — gracz musi przesuwać
-   ogniska na przemian, małymi krokami, żeby oba dotarły na miejsce (dokładnie to,
-   co w zadaniu 5 okazało się potrzebne nawet skryptowi testowemu dla poziomu „Dwie
-   elipsy", punkt 6 checklisty niżej); na telefonie może to wyczuwalnie sprawiać
-   wrażenie „sztywnego" uchwytu zamiast płynnego przeciągania.
+   gdy drugie ognisko tej samej pary stoi jeszcze daleko. Zmierzone przy końcowym
+   przeglądzie: na poziomach 13, 14 i elemencie 1 poziomu 15 rozwiązanie wychodzi
+   w 2 przeciągnięciach przy właściwej kolejności ognisk (3 przy odwrotnej), element
+   2 poziomu 15 potrzebuje 3 — NIGDY małych kroków; wynik zależy wyłącznie od
+   końcowej pozycji palca, nie od drogi, którą do niej doszedł. Końcowy przegląd
+   zaleca zostawić twardy zacisk bez zmian — ciągnięcie drugiego ogniska razem z
+   pierwszym po cichu przesuwałoby ognisko, które gracz już wcześniej trafił
+   przyskokiem. Jeśli poziom 15 na prawdziwym telefonie i tak wyda się sztywny,
+   najtańszą poprawką jest przesunięcie stanu startowego elementu 2 tego poziomu,
+   nie zmiana zacisku.
 
 ### Wynik ręcznego sprawdzenia — zadanie 5 (Playwright, poprawki po etapie 2)
 
 1. **Ramka planszy.** Widoczna na poziomie 1 i na poziomie 16 w stanie startowym —
    cienki czerwony obrys kwadratu `[-1,1]²` wokół elementów gracza, spójny z kolorem
    stałych kształtów. Na poziomie 8 podgląd (dwie blade piłki, faza edycji) pokazuje
-   tor odbity od dolnej krawędzi ramki (piłka startuje blisko `y = -1`, zygzak w
+   tor odbity od dolnej krawędzi ramki (piłka startuje w `(-0.6, -0.55)`, zygzak w
    zrzucie to odbicie o ścianę, nie usterka renderowania).
    Zrzuty: `e2e/shots/check1-level01-start-frame.png`,
    `e2e/shots/check1-level16-start-frame.png`, `e2e/shots/check1-level08-start-preview.png`.

@@ -103,9 +103,11 @@ export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2, sizeLoc
   }
   if (sizeLocked) {
     const other = handle === "ognisko1" ? state.f2 : state.f1;
-    const reach = 2 * state.a - 2 * MIN_GAP;
+    // reach nie może wyjść ujemny (a tuż nad dolnym limitem), a d===0 (palec dokładnie
+    // na drugim ognisku) idzie pod palec wprost — dzielenie przez d byłoby dzieleniem przez 0.
+    const reach = Math.max(0, 2 * state.a - 2 * MIN_GAP);
     const d = dist(to, other);
-    const at = d <= reach ? to : add(other, scale(sub(to, other), reach / d));
+    const at = d <= reach || d === 0 ? to : add(other, scale(sub(to, other), reach / d));
     return handle === "ognisko1" ? { ...state, f1: at } : { ...state, f2: at };
   }
   const next = handle === "ognisko1" ? { ...state, f1: to } : { ...state, f2: to };

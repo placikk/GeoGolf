@@ -240,5 +240,22 @@ describe("przyskakiwanie etapu 2", () => {
       s = applyDrag(s, "ognisko1", locked.f1, true);
       expect(s.a).toBe(0.5);
     });
+
+    it("granica zasięgu: palec dokładnie na 2a − 2·MIN_GAP zostaje pod palcem, o włos dalej jest zaciśnięty", () => {
+      // reach = 2·0.5 − 2·MIN_GAP = 0.998 wzdłuż osi X od f2 (0.3, 0.2). edge liczony
+      // TYM SAMYM odejmowaniem, którego wynik porównuje `dist` w handles.ts — sprawdzone
+      // w node: dist(edge, f2) wychodzi DOKŁADNIE 0.998, bez błędu zaokrąglenia (0.3 i 1
+      // mają dokładną reprezentację binarną na tyle bliską, że odejmowanie i późniejszy
+      // hypot się nie rozjeżdżają), więc nie trzeba szukać osobnej reprezentowalnej liczby.
+      const edge = vec(0.3 - (1 - 2e-3), 0.2);
+      expect(dist(edge, locked.f2)).toBeLessThanOrEqual(1 - 2e-3);
+      const onEdge = applyDrag(locked, "ognisko1", edge, true);
+      expect(onEdge.f1).toEqual(edge);
+
+      const beyond = vec(edge.x - 1e-6, 0.2);
+      const clamped = applyDrag(locked, "ognisko1", beyond, true);
+      expect(dist(clamped.f1, clamped.f2)).toBeCloseTo(1 - 2e-3, 12);
+      expect(clamped.f1).not.toEqual(beyond);
+    });
   });
 });

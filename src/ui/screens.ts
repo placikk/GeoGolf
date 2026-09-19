@@ -57,7 +57,7 @@ export function mount(canvas: HTMLCanvasElement): void {
   function toggleMenu(): void {
     menuOpen = !menuOpen;
     // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
-    if (menuOpen && game.phase === "dowod") game = { ...game, phase: "edycja", proof: null, elapsed: 0 };
+    if (menuOpen && game.phase === "dowod") game = retry(game);
   }
 
   /** Zawija tekst po słowach. Wymaga ustawionego wcześniej `ctx.font`. */

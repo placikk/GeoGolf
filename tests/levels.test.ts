@@ -77,6 +77,28 @@ describe("poziomy", () => {
     }
   });
 
+  // Niezmiennik zablokowanego rozmiaru (poprawki po etapie 2, `ui/handles.ts`): skoro
+  // zablokowany uchwyt „rozmiar" naprawdę stoi — `a` elementu nigdy się nie zmienia,
+  // a przeciągane ognisko nie dotrze dalej niż 2a − 2·MIN_GAP od drugiego ogniska —
+  // poziom, którego zapisane rozwiązanie łamałby ten warunek, byłby cicho nie do
+  // wygrania: gracz fizycznie nie mógłby dociągnąć ognisk do zapisanych pozycji.
+  // Przy okazji: pozostałe blokady (ogniska, końce łuku) muszą się zgadzać ze stanem
+  // startowym, bo inaczej gracz i tak nie mógłby ich przesunąć na rozwiązanie.
+  it.each(byId)("poziom %s: zablokowane uchwyty są zgodne z niezmiennikiem blokady rozmiaru", (_id, level) => {
+    for (const piece of level.pieces) {
+      if (piece.locked.includes("rozmiar")) {
+        expect(piece.start.a).toBe(piece.solution.a);
+        // 2e-3 = 2·MIN_GAP z ui/handles.ts (MIN_GAP jest tam prywatny)
+        expect(dist(piece.solution.f1, piece.solution.f2))
+          .toBeLessThanOrEqual(2 * piece.solution.a - 2e-3);
+      }
+      if (piece.locked.includes("ognisko1")) expect(piece.solution.f1).toEqual(piece.start.f1);
+      if (piece.locked.includes("ognisko2")) expect(piece.solution.f2).toEqual(piece.start.f2);
+      if (piece.locked.includes("poczatek")) expect(piece.solution.arc!.start).toBe(piece.start.arc!.start);
+      if (piece.locked.includes("koniec")) expect(piece.solution.arc!.end).toBe(piece.start.arc!.end);
+    }
+  });
+
   // Kryterium 5% z §6 etapu 1, per element. Ognisko pierwsze każdego elementu: pudło
   // w KAŻDYM z ośmiu kierunków — dokładnie ten sam test co w etapie 1.
   it.each(byId)("poziom %s: każde odblokowane ognisko1 przesunięte o promień przyskakiwania odpada", (_id, level) => {

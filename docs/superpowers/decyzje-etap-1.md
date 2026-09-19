@@ -42,6 +42,9 @@ Ruling: `applyDrag` podnosi `a`, gdy ognisko odjedzie za daleko, także na pozio
   niż zaczynał — bez wpływu na rozwiązanie.
 ```
 
+**ODWOŁANE** — patrz `decyzje-etap-2.md`, sekcja „Poprawki po etapie 2”, pkt 5:
+zablokowany rozmiar stoi.
+
 ## 4. `scripts/task-brief` ze skilla wymaga nagłówków "Task N", a plan ma
 
 ```
