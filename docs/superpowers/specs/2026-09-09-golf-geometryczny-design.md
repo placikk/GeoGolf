@@ -56,9 +56,9 @@ jest błędem projektu — jest puentą.
   rdzenia i renderu. Lepiej mieć uczciwą wycenę niż miłą.
 - **Dwa z czterech taktów animacji** z sekcji 7: błysk w punkcie odbicia z chwilowo
   widoczną normalną, oraz rozbłysk dołka w chwili wspólnego przybycia. Zaimplementowane
-  są takty „ciągnięcie" i „start"; te dwa czekają. To nie jest polerka — normalna przy
-  odbiciu jest w tej specyfikacji wprost nazwana elementem uczącym — więc stoją tu jako
-  dług do spłacenia, a nie jako rzecz porzucona.
+  są takty „ciągnięcie" i „start". **Decyzja właściciela (2026-09-19): tych dwóch
+  taktów nie robimy** — obecna animacja wystarcza. Nie są już długiem, tylko świadomie
+  wyciętym zakresem.
 - **Nakładka diagnostyczna** z sekcji 9 (normalne, punkty odbicia, wartości parametrów),
   która miała zastępować automatyczne testy warstwy wizualnej.
 

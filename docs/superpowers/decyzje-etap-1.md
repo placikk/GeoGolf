@@ -349,3 +349,16 @@ Ruling: POZOSTAŁE TRZY RESZTKI PARKUJĘ jako drobne, z uzasadnieniem recenzenta
   (c) `advance` nadal czeka na najdłuższy tor, więc przegrany dowód może trwać ~10 s
       na wiarygodnych stanach — poprawa z 33 s, ale nie domknięcie tematu.
 ```
+
+---
+
+## Rozstrzygnięcia właściciela po etapie 1 (2026-09-19)
+
+- **Punkt 29 — warunek zwycięstwa zostaje bez zmian.** Wygrana to „wszystkie wpadną",
+  piłki NIE muszą przybyć jednocześnie. Rozwiązania z dołkiem na cięciwie zamiast
+  w ognisku są dozwolone; baner nie chwali się jednoczesnością, gdy jej nie było
+  (commit a385026), więc gra nie kłamie.
+- **Punkt 26 — dwóch taktów animacji nie robimy.** Specyfikacja §2 zaktualizowana.
+- **Punkt 27 — aktualizacja wykonana.** vite 5.4 → 8.3, vitest 2.1 → 5.0; `npm audit`
+  zgłasza 0 podatności. Przy okazji test budżetu buduje z `NODE_ENV=production` — pod
+  vitestem dziedziczył `NODE_ENV=test` i budował paczkę bez service workera.
