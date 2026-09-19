@@ -4,7 +4,7 @@ import { ellipseFromFoci } from "../../src/core/conic";
 import { whole } from "../../src/core/piece";
 import { makeCamera } from "../../src/render/camera";
 import { drawPiece, sectorWedge } from "../../src/render/draw";
-import { ellipse, shapeToPiece } from "../../src/levels";
+import { arcEllipse, shapeToPiece } from "../../src/levels";
 
 function recordingCtx() {
   const calls: { op: string; args?: number[] }[] = [];
@@ -28,7 +28,7 @@ describe("rysowanie kawałków", () => {
     expect(full.calls.filter((c) => c.op === "closePath")).toHaveLength(2);
 
     const arc = recordingCtx();
-    drawPiece(arc.ctx, cam, shapeToPiece(ellipse(vec(-0.3, 0), vec(0.3, 0), 0.5, { start: 0, end: 2 })), "k", "p", 2);
+    drawPiece(arc.ctx, cam, shapeToPiece(arcEllipse(vec(-0.3, 0), vec(0.3, 0), 0.5, 0, 2)), "k", "p", 2);
     expect(arc.calls.filter((c) => c.op === "closePath")).toHaveLength(0);
     expect(arc.calls.filter((c) => c.op === "stroke")).toHaveLength(2);   // poświata + linia
   });

@@ -4,7 +4,8 @@ import { circleConic, classify, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { onPiece, rayPiece } from "../../src/core/piece";
 import {
-  BOARD_WALLS, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic, shapeToPiece, LEVELS,
+  BOARD_WALLS, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic,
+  shapeToPiece, LEVELS,
 } from "../../src/levels";
 import { trace } from "../../src/core/trace";
 import { runProof } from "../../src/core/verify";
@@ -31,12 +32,12 @@ describe("kształty poziomu", () => {
     for (const t of [-2.9, -1, 0, 0.4, 1.7, 3.1]) expect(ellipseParam(e, ellipsePoint(e, t))).toBeCloseTo(t, 12);
   });
 
-  it("łuk z parametrów: końce i `via` w środku zakresu", () => {
-    const arc = ellipse(e.f1, e.f2, e.a, { start: 2, end: 5 });
+  it("łuk z parametrów: końce w zadanych parametrach, `via` w środku długości", () => {
+    const arc = arcEllipse(e.f1, e.f2, e.a, 2, 5);
     const p = shapeToPiece(arc);
-    expect(p.arc!.from).toEqual(ellipsePoint(arc, 2));
-    expect(p.arc!.to).toEqual(ellipsePoint(arc, 5));
-    expect(p.arc!.via).toEqual(ellipsePoint(arc, 3.5));
+    expect(dist(p.arc!.from, ellipsePoint(arc, 2))).toBeLessThan(1e-9);
+    expect(dist(p.arc!.to, ellipsePoint(arc, 5))).toBeLessThan(1e-9);
+    expect(p.arc!.via).toEqual(ellipsePoint(arc, arc.arc.mid));
     expect(onPiece(p, ellipsePoint(arc, 4.5))).toBe(true);
     expect(onPiece(p, ellipsePoint(arc, 1))).toBe(false);
     expect(onPiece(p, ellipsePoint(arc, 5.5))).toBe(false);

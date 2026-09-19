@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { add, dist, fromAngle, scale } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, EllipseShape, Level, LEVELS, MIN_ARC, SNAP_RADIUS, Shape, levelCurves, shapeConic,
+  DIAGONAL, EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeConic,
 } from "../src/levels";
 
 const proofFor = (level: Level, pieces: EllipseShape[], obstacles: Shape[] = level.obstacles) =>
@@ -67,8 +67,8 @@ describe("poziomy", () => {
       expect(s.a).toBeGreaterThan(dist(s.f1, s.f2) / 2);
       expect(() => shapeConic(s)).not.toThrow();
       if (s.arc !== undefined) {
-        expect(s.arc.end - s.arc.start).toBeGreaterThanOrEqual(MIN_ARC);
-        expect(s.arc.end - s.arc.start).toBeLessThanOrEqual(2 * Math.PI - MIN_ARC);
+        expect(s.arc.length).toBeGreaterThanOrEqual(MIN_ARC_LENGTH);
+        expect(s.arc.length).toBeLessThanOrEqual(perimeter(s) - MIN_ARC_LENGTH);
       }
     }
     if (level.sector !== undefined) {
@@ -94,8 +94,11 @@ describe("poziomy", () => {
       }
       if (piece.locked.includes("ognisko1")) expect(piece.solution.f1).toEqual(piece.start.f1);
       if (piece.locked.includes("ognisko2")) expect(piece.solution.f2).toEqual(piece.start.f2);
-      if (piece.locked.includes("poczatek")) expect(piece.solution.arc!.start).toBe(piece.start.arc!.start);
-      if (piece.locked.includes("koniec")) expect(piece.solution.arc!.end).toBe(piece.start.arc!.end);
+      // łuk opisany środkiem i długością: końce nie są niezależne, więc blokada obu końców
+      // oznacza ten sam łuk
+      if (piece.locked.includes("poczatek") && piece.locked.includes("koniec")) {
+        expect(piece.start.arc).toEqual(piece.solution.arc);
+      }
     }
   });
 
@@ -130,15 +133,14 @@ describe("poziomy", () => {
     });
   });
 
-  // Skracamy tylko `arc` (elipsy) — odcinki celowo zostają nietknięte: skrócenie „o 1°"
-  // nie ma sensu dla odcinka, a jego zwężenie żyłoby w parametrze elipsy, z której odcinek
-  // nie powstaje. Ściany (odcinki) tylko ograniczają rozmiar/pozycję elementów gracza;
-  // żadne zapisane rozwiązanie nie opiera się na końcu odcinka — sprawdzone przy końcowym
-  // przeglądzie przez usunięcie wszystkich odcinków z tego testu bez zmiany wyniku.
-  it.each(byId)("poziom %s: rozwiązanie nie opiera się na krawędzi łuku (skrócenie o 1° z obu stron)", (_id, level) => {
-    const d = Math.PI / 180;
+  // Skracamy tylko łuki elips (o 0.02 długości z każdej strony — dawny 1° parametru na
+  // elipsie a ≈ 1 to ok. 0.017). Odcinki celowo zostają nietknięte: ściany tylko
+  // ograniczają rozmiar/pozycję elementów gracza; żadne zapisane rozwiązanie nie opiera
+  // się na końcu odcinka — sprawdzone przez usunięcie wszystkich odcinków z tego testu.
+  it.each(byId)("poziom %s: rozwiązanie nie opiera się na krawędzi łuku (skrócenie o 0.02 z obu stron)", (_id, level) => {
+    const d = 0.02;
     const shrink = <S extends Shape>(s: S): S =>
-      s.kind === "elipsa" && s.arc !== undefined ? { ...s, arc: { start: s.arc.start + d, end: s.arc.end - d } } : s;
+      s.kind === "elipsa" && s.arc !== undefined ? { ...s, arc: { ...s.arc, length: s.arc.length - 2 * d } } : s;
     expect(proofFor(level, solutions(level).map(shrink), level.obstacles.map(shrink)).solved).toBe(true);
   });
 

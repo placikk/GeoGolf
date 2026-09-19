@@ -4,7 +4,7 @@ import { ellipseFromFoci, evalConic, lineThrough } from "../../src/core/conic";
 import { makeCamera } from "../../src/render/camera";
 import { conicPolyline, piecePolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
-import { ellipse, ellipsePoint, segment, shapeToPiece } from "../../src/levels";
+import { arcEllipse, ellipse, ellipsePoint, segment, shapeToPiece } from "../../src/levels";
 
 describe("kamera", () => {
   it("środek świata trafia w środek ekranu", () => {
@@ -56,7 +56,7 @@ describe("polilinia kawałka krzywej", () => {
 
   for (const [name, start, end] of [["łuk mniejszy niż pół", 0.5, 2.5], ["łuk większy niż pół", 2, 6.5]] as const) {
     it(`${name}: końce dokładnie, każdy punkt na krzywej i po stronie \`via\``, () => {
-      const piece = shapeToPiece(ellipse(base.f1, base.f2, base.a, { start, end }));
+      const piece = shapeToPiece(arcEllipse(base.f1, base.f2, base.a, start, end));
       const pts = piecePolyline(piece, 64);
       expect(pts[0]).toEqual(piece.arc!.from);
       expect(pts[pts.length - 1]).toEqual(piece.arc!.to);
@@ -70,7 +70,7 @@ describe("polilinia kawałka krzywej", () => {
   it("łuk opisany odwrotnie (from i to zamienione): próbkowanie idzie zgodnie ze wskazówkami", () => {
     // Bez tego testu implementacja „zawsze przeciwnie do wskazówek zegara" przechodziła
     // wszystko — sprawdzone mutacyjnie przy pisaniu planu.
-    const forward = shapeToPiece(ellipse(base.f1, base.f2, base.a, { start: 0.5, end: 2.5 }));
+    const forward = shapeToPiece(arcEllipse(base.f1, base.f2, base.a, 0.5, 2.5));
     const piece: Piece = {
       conic: forward.conic,
       arc: { from: forward.arc!.to, via: forward.arc!.via, to: forward.arc!.from },
@@ -82,7 +82,7 @@ describe("polilinia kawałka krzywej", () => {
   });
 
   it("łuk przechodzi przez `via`: próbkowanie idzie właściwą stroną", () => {
-    const shape = ellipse(base.f1, base.f2, base.a, { start: 2, end: 6.5 });
+    const shape = arcEllipse(base.f1, base.f2, base.a, 2, 6.5);
     const pts = piecePolyline(shapeToPiece(shape), 256);
     const via = ellipsePoint(shape, 4.25);
     expect(Math.min(...pts.map((p) => Math.hypot(p.x - via.x, p.y - via.y)))).toBeLessThan(0.02);

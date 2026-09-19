@@ -1,6 +1,7 @@
 import { Vec2, add, dist, scale, sub } from "../core/vec";
-import { ArcRange, EllipseShape, Handle, Level, MIN_ARC } from "../levels/types";
+import { ArcRange, EllipseShape, Handle, Level, MIN_ARC_LENGTH } from "../levels/types";
 import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, isCircle } from "../levels/shape";
+import { arcFromParams, arcLengthBetween, arcParams, paramAtLength, perimeter } from "../levels/arc";
 
 const MIN_GAP = 1e-3;
 const TAU = 2 * Math.PI;
@@ -19,9 +20,9 @@ export function handlePositions(state: EllipseShape): { id: Handle; pos: Vec2 }[
   }
   // Na łuku wierzchołek osi wielkiej może leżeć w przerwie, więc uchwyt rozmiaru
   // siedzi w środku łuku — zawsze na tym, co gracz widzi.
-  const { start, end } = state.arc;
+  const { start, end } = arcParams(state, state.arc);
   out.push(
-    { id: "rozmiar", pos: ellipsePoint(state, (start + end) / 2) },
+    { id: "rozmiar", pos: ellipsePoint(state, state.arc.mid) },
     { id: "poczatek", pos: ellipsePoint(state, start) },
     { id: "koniec", pos: ellipsePoint(state, end) },
   );
@@ -70,21 +71,26 @@ export function pickHandle(
 const wrap = (x: number): number => x - TAU * Math.round(x / TAU);
 const clamp = (x: number, lo: number, hi: number): number => Math.min(Math.max(x, lo), hi);
 
-/** Przesuwa jeden koniec łuku do parametru `t`. Nowy koniec wybieramy najbliżej starego
- *  (bez skoku o 2π), po czym zaciskamy tak, żeby łuk miał co najmniej MIN_ARC
- *  i końce się nie minęły.
+/** Przesuwa jeden koniec łuku elipsy `s` do parametru `t`; drugi koniec stoi w miejscu.
+ *  Nowy koniec wybieramy najbliżej starego (bez skoku o 2π), a długość łuku zaciskamy do
+ *  [MIN_ARC_LENGTH, obwód − MIN_ARC_LENGTH], więc końce się nie mijają. Wynik: nowy
+ *  środek i nowa długość łuku.
  *
  *  Znane zachowanie: gdy koniec już stoi na zacisku i palec jedzie dalej o więcej niż π
- *  za jego starą pozycję, `wrap` wybiera drugi reprezentant kąta i koniec przeskakuje
- *  od razu pod palec (łuk może się skrócić skokiem, a nie płynnie). Akceptujemy to —
- *  koniec zawsze zostaje na krzywej, a łuk zawsze mieści się w [MIN_ARC, 2π − MIN_ARC]. */
-export function moveArcEnd(arc: ArcRange, which: "poczatek" | "koniec", t: number): ArcRange {
+ *  (w parametrze) za jego starą pozycję, `wrap` wybiera drugi reprezentant kąta i koniec
+ *  przeskakuje od razu pod palec. Akceptujemy to — koniec zawsze zostaje na krzywej,
+ *  a długość łuku zawsze mieści się w zakresie. */
+export function moveArcEnd(s: EllipseShape & { arc: ArcRange }, which: "poczatek" | "koniec", t: number): ArcRange {
+  const { start, end } = arcParams(s, s.arc);
+  const max = perimeter(s) - MIN_ARC_LENGTH;
   if (which === "poczatek") {
-    const start = arc.start + wrap(t - arc.start);
-    return { start: clamp(start, arc.end - TAU + MIN_ARC, arc.end - MIN_ARC), end: arc.end };
+    const moved = start + wrap(t - start);
+    const len = clamp(arcLengthBetween(s, moved, end), MIN_ARC_LENGTH, max);
+    return arcFromParams(s, paramAtLength(s, end, -len), end);
   }
-  const end = arc.end + wrap(t - arc.end);
-  return { start: arc.start, end: clamp(end, arc.start + MIN_ARC, arc.start + TAU - MIN_ARC) };
+  const moved = end + wrap(t - end);
+  const len = clamp(arcLengthBetween(s, start, moved), MIN_ARC_LENGTH, max);
+  return arcFromParams(s, start, paramAtLength(s, start, len));
 }
 
 /** `sizeLocked`: uchwyt rozmiaru tego elementu jest zablokowany. Wtedy `a` NIGDY się nie
@@ -95,7 +101,7 @@ export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2, sizeLoc
   if (handle === "poczatek" || handle === "koniec") {
     // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej
     if (state.arc === undefined) return state;
-    return { ...state, arc: moveArcEnd(state.arc, handle, ellipseParam(state, to)) };
+    return { ...state, arc: moveArcEnd({ ...state, arc: state.arc }, handle, ellipseParam(state, to)) };
   }
   if (handle === "rozmiar") {
     const a = (dist(to, state.f1) + dist(to, state.f2)) / 2;

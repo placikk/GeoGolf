@@ -7,16 +7,18 @@ export const HOLE_RADIUS = 0.02 * DIAGONAL;
  *  od pasa, w którym niedokładne ustawienie jeszcze przechodzi test. */
 export const SNAP_RADIUS = 0.05 * DIAGONAL;
 
-/** Najkrótszy łuk w parametrze elipsy — dla danych poziomu i dla przeciągania końców.
- *  Pilnuje też, żeby końce się nie minęły: długość łuku leży w [MIN_ARC, 2π − MIN_ARC]. */
-export const MIN_ARC = (10 * Math.PI) / 180;
+/** Najkrótszy łuk (długość wzdłuż krzywej, w jednostkach świata) — dla danych poziomu
+ *  i dla przeciągania końców. Pilnuje też, żeby końce się nie minęły: długość łuku leży
+ *  w [MIN_ARC_LENGTH, obwód − MIN_ARC_LENGTH]. */
+export const MIN_ARC_LENGTH = 0.05;
 
 export type Handle = "ognisko1" | "ognisko2" | "rozmiar" | "poczatek" | "koniec";
 
-/** Zakres łuku jako PARAMETR elipsy w jej układzie własnym (oś od f1 do f2):
- *  x = a·cos t, y = b·sin t. Łuk biegnie przeciwnie do ruchu wskazówek zegara
- *  od `start` do `end`; niezmiennik: start < end < start + 2π. */
-export interface ArcRange { start: number; end: number }
+/** Łuk elipsy opisany DŁUGOŚCIĄ, nie kątem. `mid` to parametr środka łuku w układzie
+ *  własnym elipsy (x = a·cos t, y = b·sin t, oś od f1 do f2), więc łuk jedzie razem
+ *  z elipsą. `length` to długość mierzona wzdłuż krzywej: gdy elipsa rośnie, ten sam łuk
+ *  obejmuje jej mniejszy kawałek — dlatego dużą elipsą nie da się zastąpić kaskady. */
+export interface ArcRange { mid: number; length: number }
 
 export interface EllipseShape { kind: "elipsa"; f1: Vec2; f2: Vec2; a: number; arc?: ArcRange }
 export interface SegmentShape { kind: "odcinek"; from: Vec2; to: Vec2 }

@@ -2,12 +2,21 @@ import { Vec2, add, dist, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, ellipseFromFoci, lineThrough } from "../core/conic";
 import { Piece } from "../core/piece";
 import { ArcRange, EllipseShape, Level, SegmentShape, Shape } from "./types";
+import { arcFromParams, arcParams } from "./arc";
 
 export const ellipse = (f1: Vec2, f2: Vec2, a: number, arc?: ArcRange): EllipseShape =>
   arc === undefined ? { kind: "elipsa", f1, f2, a } : { kind: "elipsa", f1, f2, a, arc };
 
 /** Okrąg to elipsa o zlanych ogniskach — osobny typ okręgu nie istnieje. */
 export const circle = (center: Vec2, radius: number): EllipseShape => ellipse(center, center, radius);
+
+/** Elipsa z łukiem „od `start` do `end`” (parametr, przeciwnie do wskazówek zegara) —
+ *  długość łuku liczona na TEJ elipsie. Wygodny zapis danych poziomów w kątach. */
+export function arcEllipse(
+  f1: Vec2, f2: Vec2, a: number, start: number, end: number,
+): EllipseShape & { arc: ArcRange } {
+  return { kind: "elipsa", f1, f2, a, arc: arcFromParams(ellipse(f1, f2, a), start, end) };
+}
 
 export const segment = (from: Vec2, to: Vec2): SegmentShape => ({ kind: "odcinek", from, to });
 
@@ -61,10 +70,10 @@ export function shapeToPiece(s: Shape): Piece {
     return { conic, arc: { from: s.from, via: scale(add(s.from, s.to), 0.5), to: s.to } };
   }
   if (s.arc === undefined) return { conic };
-  const { start, end } = s.arc;
+  const { start, end } = arcParams(s, s.arc);
   return {
     conic,
-    arc: { from: ellipsePoint(s, start), via: ellipsePoint(s, (start + end) / 2), to: ellipsePoint(s, end) },
+    arc: { from: ellipsePoint(s, start), via: ellipsePoint(s, s.arc.mid), to: ellipsePoint(s, end) },
   };
 }
 
