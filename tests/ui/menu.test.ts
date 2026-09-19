@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { MENU_BUTTON, Rect, hitRect, hitTile, menuLayout, winAction, winLabels } from "../../src/ui/menu";
+import { ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, hitRect, hitTile, menuLayout, playArea, winAction, winLabels } from "../../src/ui/menu";
+import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
 
 const center = (r: Rect) => vec(r.x + r.w / 2, r.y + r.h / 2);
@@ -95,5 +96,34 @@ describe("ekran wygranej na ostatnim poziomie", () => {
     expect(winLabels(false, true)).toEqual({ right: "Następny", note: null });
     expect(winLabels(true, false)).toEqual({ right: "Menu", note: "To był ostatni poziom." });
     expect(winLabels(true, true)).toEqual({ right: "Menu", note: "Wszystkie poziomy ukończone." });
+  });
+});
+
+describe("miejsce na napisy", () => {
+  // telefon w pionie, ten sam w poziomie, komputer, najniższy popularny telefon
+  for (const [w, h] of [[390, 664], [664, 390], [1280, 720], [375, 667]] as const) {
+    it(`${w}×${h}: plansza leży między banerem a przyciskami i mieści się w szerokości`, () => {
+      const cam = makeCamera(w, h, 0.06, playArea(h));
+      const topLeft = cam.toScreen(vec(-1, 1));
+      const bottomRight = cam.toScreen(vec(1, -1));
+      expect(topLeft.y).toBeGreaterThanOrEqual(TOP_BAND);
+      expect(bottomRight.y).toBeLessThanOrEqual(h * ACTION_BAND);
+      expect(topLeft.x).toBeGreaterThanOrEqual(0);
+      expect(bottomRight.x).toBeLessThanOrEqual(w);
+      // wyśrodkowana w obszarze gry
+      const mid = cam.toScreen(vec(0, 0));
+      expect(mid.x).toBeCloseTo(w / 2, 9);
+      expect(mid.y).toBeCloseTo((TOP_BAND + h * ACTION_BAND) / 2, 9);
+      // obchód w obie strony
+      const p = vec(0.37, -0.62);
+      const back = cam.toWorld(cam.toScreen(p));
+      expect(back.x).toBeCloseTo(p.x, 9);
+      expect(back.y).toBeCloseTo(p.y, 9);
+    });
+  }
+
+  it("bez pasa kamera zachowuje się jak dotąd (środek ekranu)", () => {
+    const cam = makeCamera(400, 800);
+    expect(cam.toScreen(vec(0, 0)).y).toBeCloseTo(400, 9);
   });
 });

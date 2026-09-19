@@ -1,4 +1,5 @@
 import { Vec2 } from "../core/vec";
+import { PlayArea } from "../render/camera";
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -7,6 +8,14 @@ export const MENU_BUTTON: Rect = { x: 6, y: 6, w: 44, h: 44 };
 
 /** Dolny pas ekranu, w którym leżą przyciski akcji (ten sam próg co „Sprawdź”). */
 export const ACTION_BAND = 0.86;
+
+/** Górny pas ekranu na baner: numer poziomu, tytuł, podpowiedź do trzech linii
+ *  (linie na 70, 88, 106 px) i przycisk menu. */
+export const TOP_BAND = 112;
+
+/** Pas ekranu na planszę — między banerem a przyciskami, żeby ramka planszy nie
+ *  przecinała napisów (w poziomie i na komputerze plansza zajęłaby całą wysokość). */
+export const playArea = (height: number): PlayArea => ({ top: TOP_BAND, bottom: height * ACTION_BAND });
 
 const SIDE = 16;
 const TOP = 72;       // miejsce na przycisk menu i nagłówek „Poziomy”

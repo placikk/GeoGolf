@@ -6,7 +6,7 @@ import { SPAN } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
-import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, winAction, winLabels } from "./menu";
+import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, playArea, winAction, winLabels } from "./menu";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
 
 const TRAIL = 0.35;
@@ -26,7 +26,10 @@ export function mount(canvas: HTMLCanvasElement): void {
   let time = 0;
 
   const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
-  const cam = () => makeCamera(canvas.width / dpr(), canvas.height / dpr());
+  // plansza między banerem a przyciskami: ramka nie przecina napisów (także w poziomie)
+  const cam = () => makeCamera(
+    canvas.width / dpr(), canvas.height / dpr(), 0.06, playArea(canvas.height / dpr()),
+  );
 
   function resize(): void {
     const r = dpr();
