@@ -175,6 +175,18 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
     expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
     expect(next.arc).toBe(shape.arc);
   });
+
+  it("z zablokowanym rozmiarem (lockedA) powiększone a wraca do wartości poziomu, gdy ognisko wróci na miejsce", () => {
+    const lockedA = shape.a;
+    const far = vec(-3, 0.2);
+    const away = applyDrag(shape, "ognisko1", far, lockedA);
+    expect(away.a).toBeGreaterThan(shape.a);
+    const back = applyDrag(away, "ognisko1", shape.f1, lockedA);
+    expect(back.a).toBe(shape.a);
+    // bez blokady ten sam powrót zostawia rozmiar powiększony — gracz utknąłby
+    const backNoLock = applyDrag(away, "ognisko1", shape.f1);
+    expect(backNoLock.a).toBeGreaterThan(shape.a);
+  });
 });
 
 describe("przyskakiwanie etapu 2", () => {

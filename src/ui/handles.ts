@@ -93,7 +93,9 @@ export function moveArcEnd(s: EllipseShape & { arc: ArcRange }, which: "poczatek
   return arcFromParams(s, start, paramAtLength(s, start, len));
 }
 
-export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2): EllipseShape {
+/** `lockedA`: wartość `a` ze startu poziomu, gdy uchwyt „rozmiar” tego elementu jest
+ *  zablokowany (patrz `PlayerPiece.locked`); w przeciwnym razie `undefined`. */
+export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2, lockedA?: number): EllipseShape {
   if (handle === "poczatek" || handle === "koniec") {
     // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej
     if (state.arc === undefined) return state;
@@ -103,9 +105,13 @@ export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2): Ellips
     const a = (dist(to, state.f1) + dist(to, state.f2)) / 2;
     return { ...state, a: Math.max(a, dist(state.f1, state.f2) / 2 + MIN_GAP) };
   }
-  // Ognisk nic nie ogranicza; gdy się rozjadą, rozmiar rośnie, żeby elipsa istniała —
-  // także przy zablokowanym uchwycie rozmiaru. Kaskady nie da się przez to zastąpić jedną
-  // dużą elipsą, bo łuk ma stałą DŁUGOŚĆ (patrz ArcRange).
+  // Ognisk nic nie ogranicza; gdy się rozjadą, rozmiar rośnie, żeby elipsa istniała.
+  // Bez `lockedA` rozmiar nigdy sam nie maleje — nawet przy zablokowanym uchwycie
+  // rozmiaru — bo inaczej dużą elipsą dałoby się zastąpić całą kaskadę (łuk ma stałą
+  // DŁUGOŚĆ, patrz ArcRange). Z `lockedA` (start poziomu, gdy uchwyt rozmiaru jest
+  // zablokowany) rozmiar WRACA do tej wartości, gdy ogniska znów się zejdą — inaczej
+  // gracz, który przeciągnął ognisko za daleko (choćby po drodze do celu), utknąłby
+  // z elipsą za dużą, żeby wygrać, a zablokowany uchwyt nie pozwoliłby mu tego cofnąć.
   const next = handle === "ognisko1" ? { ...state, f1: to } : { ...state, f2: to };
-  return { ...next, a: Math.max(next.a, dist(next.f1, next.f2) / 2 + MIN_GAP) };
+  return { ...next, a: Math.max(lockedA ?? next.a, dist(next.f1, next.f2) / 2 + MIN_GAP) };
 }

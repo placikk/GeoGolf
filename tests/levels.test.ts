@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, scale } from "../src/core/vec";
+import { add, dist, fromAngle, scale, vec } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
   DIAGONAL, EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeConic,
 } from "../src/levels";
+import { applyDrag } from "../src/ui/handles";
 
 const proofFor = (level: Level, pieces: EllipseShape[], obstacles: Shape[] = level.obstacles) =>
   runProof({
@@ -78,12 +79,13 @@ describe("poziomy", () => {
   });
 
   // Zablokowany uchwyt nie daje się przesunąć, więc to, czego dotyczy, musi być w starcie
-  // takie samo jak w rozwiązaniu — inaczej poziom byłby cicho nie do wygrania. Rozmiar
-  // jest wyjątkiem w jedną stronę: przy zablokowanym uchwycie `a` nadal rośnie, gdy
-  // ogniska się rozjadą (i nigdy nie maleje), więc start nie może mieć większego `a`.
+  // takie samo jak w rozwiązaniu — inaczej poziom byłby cicho nie do wygrania. Rozmiar:
+  // gdy ogniska się rozjadą, `a` rośnie (i nigdy nie maleje samo z siebie), ale przy
+  // zablokowanym uchwycie rozmiaru WRACA do wartości startu poziomu, kiedy ogniska znów
+  // się zejdą (`applyDrag`, `lockedA`) — więc rozwiązanie musi używać dokładnie tej wartości.
   it.each(byId)("poziom %s: zablokowane uchwyty zgadzają się między startem a rozwiązaniem", (_id, level) => {
     for (const piece of level.pieces) {
-      if (piece.locked.includes("rozmiar")) expect(piece.start.a).toBeLessThanOrEqual(piece.solution.a);
+      if (piece.locked.includes("rozmiar")) expect(piece.start.a).toBe(piece.solution.a);
       if (piece.locked.includes("ognisko1")) expect(piece.solution.f1).toEqual(piece.start.f1);
       if (piece.locked.includes("ognisko2")) expect(piece.solution.f2).toEqual(piece.start.f2);
       // łuk opisany środkiem i długością: końce nie są niezależne, więc blokada obu końców
@@ -92,6 +94,26 @@ describe("poziomy", () => {
         expect(piece.start.arc).toEqual(piece.solution.arc);
       }
     }
+  });
+
+  // Pułapka z końcowego przeglądu: przy zablokowanym uchwycie rozmiaru gracz, który
+  // rozciągnie ogniska (choćby po drodze do celu, np. dotykiem rogu planszy), a potem
+  // sprowadzi je z powrotem na miejsce, nie może utknąć z elipsą za dużą, żeby wygrać —
+  // zablokowany rozmiar musi wrócić do wartości poziomu (`lockedA` w `applyDrag`).
+  it.each(byId)("poziom %s: zablokowany rozmiar wraca do wartości poziomu po objeździe ogniskiem", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      // pułapka dotyczy tylko elementów, gdzie gracz naprawdę może ognisko odciągnąć —
+      // gdy oba ogniska są też zablokowane (np. okrąg poziomu 11), nie ma czym objeżdżać
+      if (!piece.locked.includes("rozmiar")) return;
+      if (piece.locked.includes("ognisko1") || piece.locked.includes("ognisko2")) return;
+      let shape = piece.start;
+      shape = applyDrag(shape, "ognisko2", vec(0.95, 0.95), piece.start.a);
+      shape = applyDrag(shape, "ognisko1", piece.solution.f1, piece.start.a);
+      shape = applyDrag(shape, "ognisko2", piece.solution.f2, piece.start.a);
+      expect(shape.a, `element ${k}`).toBe(piece.solution.a);
+      const pieces = level.pieces.map((q, j) => (j === k ? shape : q.solution));
+      expect(solves(level, pieces), `element ${k}`).toBe(true);
+    });
   });
 
   // Kryterium 5% z §6 etapu 1, per element. Ognisko pierwsze każdego elementu: pudło
@@ -154,9 +176,11 @@ describe("poziomy", () => {
   it.each(LEVELS.filter(isCascade).map((l) => [l.id, l] as const))(
     "poziom %s: jedna elipsa przez piłkę i dołek, z łukiem elementu, nie wygrywa dla żadnego rozmiaru",
     (_id, level) => {
+      // start dokładnie na granicy konstruowalności (a = c elipsy przez piłkę i dołek),
+      // nie kawałek nad nią — sweep ćwiczy też ten wąski, wcześniej nieobjęty zakres
+      const a0 = dist(level.ball, level.hole) / 2 + 1e-3;
       level.pieces.forEach((piece, k) => {
-        for (let i = 0; i <= 61; i++) {
-          const a = 0.56 + 0.04 * i;    // 0.56 … 3.0
+        for (let a = a0; a <= 3; a += 0.04) {
           const one = { ...piece.solution, f1: level.ball, f2: level.hole, a };
           const pieces = level.pieces.map((q, j) => (j === k ? one : q.start));
           expect(solves(level, pieces), `element ${k}, a = ${a.toFixed(2)}`).toBe(false);

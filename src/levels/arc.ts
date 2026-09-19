@@ -11,7 +11,9 @@ const SAMPLES = 512;
 function cumulative(s: EllipseShape): Float64Array {
   const c = dist(s.f1, s.f2) / 2;
   const a = s.a;
-  const b = Math.sqrt(a * a - c * c);
+  // zacisk pod pierwiastkiem: przy a < c (elipsa jeszcze nieskonstruowalna, np. w trakcie
+  // przeciągania) `a*a - c*c` bywa ujemne i dałoby NaN zamiast czytelnego błędu gdzie indziej
+  const b = Math.sqrt(Math.max(0, a * a - c * c));
   const cum = new Float64Array(SAMPLES + 1);
   let px = a, py = 0;
   for (let i = 1; i <= SAMPLES; i++) {

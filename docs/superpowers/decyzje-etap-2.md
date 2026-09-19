@@ -677,3 +677,45 @@ telefonu):
   tekstu telefonu.
 - **Wydajność/płynność** na prawdziwym SoC telefonu (nie sprawdzana tu w ogóle — ten sam
   zastrzeżenie co w zadaniach 12 i 5).
+
+## Poprawki po przeglądzie końcowym — łuk opisany długością
+
+Recenzja planu `2026-09-19-golf-luk-dlugoscia-i-uklad` znalazła pułapkę w zachowaniu
+z rozstrzygnięcia 1 wyżej („ognisk nic nie ogranicza”, PRZYWRÓCONE w `decyzje-etap-1.md`).
+
+1. **Pułapka: zablokowany rozmiar, który tylko rośnie, może uwięzić gracza.** Na
+   poziomach z zablokowanym uchwytem „rozmiar” (1, 9, 13, 14, 15) `a` rośnie, gdy gracz
+   odciąga ognisko, i nigdy nie maleje samo z siebie — więc gracz, który po drodze do
+   celu odciągnął ognisko dalej niż trzeba, zostaje z elipsą za dużą, żeby wygrać, a
+   „Jeszcze raz” zostawia to ustawienie (nie cofa go). Zmierzone: poziom 15, element 0,
+   nawet PROSTĄ drogą (ognisko1 od razu na cel) `a` wychodzi `0,5307` i przegrywa;
+   OBJAZD przez róg planszy (typowy przy przeciąganiu palcem) więzi też poziomy 9, 13 i
+   14. Maksymalne `a`, które jeszcze wygrywa (element z zablokowanym rozmiarem, reszta
+   na rozwiązaniu): poziom 13 `0,4925`, poziom 14 `0,565`, poziom 15 element 0 `0,4925`,
+   poziom 15 element 1 `0,565`, poziom 9 `0,8375`, poziom 1 `1,005` (powyżej — ściana
+   planszy). Koszt, jeśli źle: gracz na tych pięciu poziomach mógłby utknąć bez żadnego
+   sposobu na powrót poza „Menu” i wybranie poziomu od nowa.
+2. **Naprawa: `a = max(a_start, c + MIN_GAP)` z blokadą.** `applyDrag` (`src/ui/handles.ts`)
+   dostał opcjonalny parametr `lockedA` — wartość `a` ze startu poziomu, przekazywaną z
+   `src/ui/screens.ts` tylko gdy `piece.locked.includes("rozmiar")`. Przy przeciąganiu
+   ogniska nowe `a` to `Math.max(lockedA ?? next.a, c + MIN_GAP)` (`c` — połowa odległości
+   ognisk): bez blokady zachowanie jest identyczne jak dotąd (nigdy nie maleje samo z
+   siebie), z blokadą `a` WRACA do wartości poziomu, gdy ogniska znów się zejdą. To
+   NIE otwiera z powrotem obejścia kaskad opisanego w rozstrzygnięciu 1 sekcji „Łuk
+   opisany długością” wyżej: przy ogniskach dokładnie na piłce i dołku `a` i tak nie
+   może zejść poniżej `c + MIN_GAP` (tu `0,551` dla geometrii poziomów 13–16) — a przy
+   tym `a` żaden z poziomów 13–16 nie wygrywa jedną elipsą (sprawdzone testem kaskad,
+   patrz punkt 3 niżej). Koszt, jeśli źle: gdyby jakiś przyszły poziom miał zablokowany
+   rozmiar ORAZ start z `a` większym niż potrzeba, `lockedA` przywracałoby zbyt małą
+   wartość — pilnuje tego test niezmiennika (`piece.start.a === piece.solution.a` dla
+   zablokowanego rozmiaru, `tests/levels.test.ts`).
+3. Zmienia zdanie z rozstrzygnięcia 1 sekcji „Łuk opisany długością”: „rozmiar rośnie
+   także przy zablokowanym uchwycie” — teraz przy blokadzie rozmiar także WRACA, gdy
+   ogniska się zejdą, nie tylko rośnie, gdy się rozjadą.
+4. Test kaskad (`tests/levels.test.ts`) zaczyna sweep `a` od prawdziwej granicy
+   konstruowalności (`dist(ball, hole)/2 + 1e-3`), nie od `0,56` — obejmuje też wąski,
+   wcześniej nieprzetestowany zakres tuż nad granicą.
+5. `cumulative` (`src/levels/arc.ts`) liczy `b` jako `Math.sqrt(Math.max(0, a*a - c*c))`
+   — zacisk pod pierwiastkiem, żeby `a < c` w trakcie przeciągania dawało `0`, nie `NaN`.
+6. Komentarz `TOP_BAND` (`src/ui/menu.ts`) mówi teraz, że podpowiedź na telefonach zajmuje
+   do dwóch linii (zmierzone maksimum to 2), z zapasem na trzecią — bez zmiany wartości.

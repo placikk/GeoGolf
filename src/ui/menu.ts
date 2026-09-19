@@ -9,8 +9,9 @@ export const MENU_BUTTON: Rect = { x: 6, y: 6, w: 44, h: 44 };
 /** Dolny pas ekranu, w którym leżą przyciski akcji (ten sam próg co „Sprawdź”). */
 export const ACTION_BAND = 0.86;
 
-/** Górny pas ekranu na baner: numer poziomu, tytuł, podpowiedź do trzech linii
- *  (linie na 70, 88, 106 px) i przycisk menu. */
+/** Górny pas ekranu na baner: numer poziomu, tytuł, podpowiedź (na telefonach zajmuje
+ *  do dwóch linii — zmierzone maksimum to 2 — z zapasem na trzecią) i przycisk menu
+ *  (linie na 70, 88, 106 px). */
 export const TOP_BAND = 112;
 
 /** Pas ekranu na planszę — między banerem a przyciskami, żeby ramka planszy nie
