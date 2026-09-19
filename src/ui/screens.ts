@@ -124,8 +124,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     const snapped = id === "ognisko1" || id === "ognisko2"
       ? snapTo(w, snapTargets(game.level, game.pieces, piece), SNAP_RADIUS)
       : w;
-    const sizeLocked = game.level.pieces[piece].locked.includes("rozmiar");
-    const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped, sizeLocked) : s));
+    const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped) : s));
     game = { ...game, pieces };
   });
 

@@ -77,21 +77,13 @@ describe("poziomy", () => {
     }
   });
 
-  // Niezmiennik zablokowanego rozmiaru (poprawki po etapie 2, `ui/handles.ts`): skoro
-  // zablokowany uchwyt „rozmiar" naprawdę stoi — `a` elementu nigdy się nie zmienia,
-  // a przeciągane ognisko nie dotrze dalej niż 2a − 2·MIN_GAP od drugiego ogniska —
-  // poziom, którego zapisane rozwiązanie łamałby ten warunek, byłby cicho nie do
-  // wygrania: gracz fizycznie nie mógłby dociągnąć ognisk do zapisanych pozycji.
-  // Przy okazji: pozostałe blokady (ogniska, końce łuku) muszą się zgadzać ze stanem
-  // startowym, bo inaczej gracz i tak nie mógłby ich przesunąć na rozwiązanie.
-  it.each(byId)("poziom %s: zablokowane uchwyty są zgodne z niezmiennikiem blokady rozmiaru", (_id, level) => {
+  // Zablokowany uchwyt nie daje się przesunąć, więc to, czego dotyczy, musi być w starcie
+  // takie samo jak w rozwiązaniu — inaczej poziom byłby cicho nie do wygrania. Rozmiar
+  // jest wyjątkiem w jedną stronę: przy zablokowanym uchwycie `a` nadal rośnie, gdy
+  // ogniska się rozjadą (i nigdy nie maleje), więc start nie może mieć większego `a`.
+  it.each(byId)("poziom %s: zablokowane uchwyty zgadzają się między startem a rozwiązaniem", (_id, level) => {
     for (const piece of level.pieces) {
-      if (piece.locked.includes("rozmiar")) {
-        expect(piece.start.a).toBe(piece.solution.a);
-        // 2e-3 = 2·MIN_GAP z ui/handles.ts (MIN_GAP jest tam prywatny)
-        expect(dist(piece.solution.f1, piece.solution.f2))
-          .toBeLessThanOrEqual(2 * piece.solution.a - 2e-3);
-      }
+      if (piece.locked.includes("rozmiar")) expect(piece.start.a).toBeLessThanOrEqual(piece.solution.a);
       if (piece.locked.includes("ognisko1")) expect(piece.solution.f1).toEqual(piece.start.f1);
       if (piece.locked.includes("ognisko2")) expect(piece.solution.f2).toEqual(piece.start.f2);
       // łuk opisany środkiem i długością: końce nie są niezależne, więc blokada obu końców
@@ -145,9 +137,10 @@ describe("poziomy", () => {
   });
 
   // Kaskada: w zapisanym rozwiązaniu jakieś ognisko leży poza piłką i dołkiem. Na takim
-  // poziomie element z zablokowanym rozmiarem nie może zastąpić całej kaskady jedną
-  // elipsą przez piłkę i dołek — ma za mały rozmiar, żeby w ogóle ją zbudować.
-  // (Poziom 9 nie jest kaskadą: tam jedna elipsa przez piłkę i dołek JEST rozwiązaniem.)
+  // poziomie żaden element gracza nie może zastąpić całej kaskady jedną elipsą przez
+  // piłkę i dołek — przy żadnym rozmiarze, bo łuk ma stałą DŁUGOŚĆ i na dużej elipsie
+  // obejmuje za mały kawałek. (Poziom 9 nie jest kaskadą: tam jedna elipsa przez piłkę
+  // i dołek JEST rozwiązaniem.)
   const same = (p: { x: number; y: number }, q: { x: number; y: number }) => dist(p, q) < 1e-12;
   const isCascade = (level: Level) =>
     solutions(level).some((s) => [s.f1, s.f2].some((f) => !same(f, level.ball) && !same(f, level.hole)));
@@ -159,12 +152,16 @@ describe("poziomy", () => {
   });
 
   it.each(LEVELS.filter(isCascade).map((l) => [l.id, l] as const))(
-    "poziom %s: element z zablokowanym rozmiarem nie zbuduje jednej elipsy przez piłkę i dołek",
+    "poziom %s: jedna elipsa przez piłkę i dołek, z łukiem elementu, nie wygrywa dla żadnego rozmiaru",
     (_id, level) => {
-      for (const piece of level.pieces) {
-        if (!piece.locked.includes("rozmiar")) continue;
-        expect(2 * piece.solution.a).toBeLessThanOrEqual(dist(level.ball, level.hole));
-      }
+      level.pieces.forEach((piece, k) => {
+        for (let i = 0; i <= 61; i++) {
+          const a = 0.56 + 0.04 * i;    // 0.56 … 3.0
+          const one = { ...piece.solution, f1: level.ball, f2: level.hole, a };
+          const pieces = level.pieces.map((q, j) => (j === k ? one : q.start));
+          expect(solves(level, pieces), `element ${k}, a = ${a.toFixed(2)}`).toBe(false);
+        }
+      });
     },
   );
 
@@ -174,15 +171,6 @@ describe("poziomy", () => {
     for (let i = 0; i <= 119; i++) {
       const a = 0.62 + 0.02 * i;    // 0.62 … 3.0
       expect(solves(level, [{ ...base, a }]), `a = ${a.toFixed(2)}`).toBe(false);
-    }
-  });
-
-  it("poziom 16: jedna elipsa przez piłkę i dołek nie wygrywa dla żadnego rozmiaru", () => {
-    const level = LEVELS.find((l) => l.id === "zwienczenie-2")!;
-    const base = level.pieces[0].solution;
-    for (let i = 0; i <= 122; i++) {
-      const a = 0.56 + 0.02 * i;    // 0.56 … 3.0
-      expect(solves(level, [{ ...base, f1: level.ball, f2: level.hole, a }]), `a = ${a.toFixed(2)}`).toBe(false);
     }
   });
 });

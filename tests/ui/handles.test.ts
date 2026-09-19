@@ -167,6 +167,14 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
   it("przeciągnięcie końca łuku bez łuku nic nie zmienia", () => {
     expect(applyDrag(state, "koniec", vec(0, 1))).toBe(state);
   });
+
+  it("ognisk nic nie ogranicza: przy dalekim przeciągnięciu rozmiar rośnie, ognisko jest pod palcem", () => {
+    const far = vec(-3, 0.2);
+    const next = applyDrag(shape, "ognisko1", far);
+    expect(next.f1).toBe(far);
+    expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
+    expect(next.arc).toBe(shape.arc);
+  });
 });
 
 describe("przyskakiwanie etapu 2", () => {
@@ -204,62 +212,5 @@ describe("przyskakiwanie etapu 2", () => {
     const m = kaskada.pieces[0].solution.f2;
     const targets = snapTargets(kaskada, kaskada.pieces.map((p) => p.start), 0);
     expect(snapTo(vec(m.x + 0.05, m.y - 0.05), targets, SNAP_RADIUS)).toEqual(m);
-  });
-
-  describe("zablokowany rozmiar stoi", () => {
-    // ognisko2 poza zerem i niesymetrycznie: zasięg liczony od złego ogniska by się ujawnił
-    const locked = ellipse(vec(-0.1, 0.2), vec(0.3, 0.2), 0.5);
-
-    it("ognisko przeciągnięte daleko zatrzymuje się na 2a − 2·MIN_GAP od drugiego, a się nie zmienia", () => {
-      const next = applyDrag(locked, "ognisko1", vec(-3, 0.2), true);
-      expect(next.a).toBe(0.5);
-      expect(dist(next.f1, next.f2)).toBeCloseTo(2 * 0.5 - 2e-3, 12);
-      expect(next.f1.y).toBeCloseTo(0.2, 12);                 // na prostej od f2 w stronę palca
-      expect(next.f1.x).toBeLessThan(next.f2.x);
-      expect(next.f2).toBe(locked.f2);
-    });
-
-    it("ognisko2 też: kierunek od ogniska1 w stronę palca", () => {
-      const next = applyDrag(locked, "ognisko2", vec(0.3, 5), true);
-      expect(next.a).toBe(0.5);
-      expect(dist(next.f1, next.f2)).toBeCloseTo(1 - 2e-3, 12);
-      const dir = { x: next.f2.x - locked.f1.x, y: next.f2.y - locked.f1.y };
-      const want = { x: 0.3 - locked.f1.x, y: 5 - locked.f1.y };
-      expect(dir.x * want.y - dir.y * want.x).toBeCloseTo(0, 12);   // współliniowe
-    });
-
-    it("w zasięgu ognisko idzie dokładnie pod palec", () => {
-      const finger = vec(-0.5, 0.25);
-      expect(applyDrag(locked, "ognisko1", finger, true).f1).toBe(finger);
-    });
-
-    it("odblokowany rozmiar: jak dotąd, a rośnie razem z ogniskami", () => {
-      const next = applyDrag(locked, "ognisko1", vec(-3, 0.2), false);
-      expect(next.f1).toEqual(vec(-3, 0.2));
-      expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
-    });
-
-    it("rozsunięcie i zsunięcie ognisk przy blokadzie nie zostawia większej elipsy", () => {
-      let s = applyDrag(locked, "ognisko1", vec(-3, 0.2), true);
-      s = applyDrag(s, "ognisko1", locked.f1, true);
-      expect(s.a).toBe(0.5);
-    });
-
-    it("granica zasięgu: palec dokładnie na 2a − 2·MIN_GAP zostaje pod palcem, o włos dalej jest zaciśnięty", () => {
-      // reach = 2·0.5 − 2·MIN_GAP = 0.998 wzdłuż osi X od f2 (0.3, 0.2). edge liczony
-      // TYM SAMYM odejmowaniem, którego wynik porównuje `dist` w handles.ts — sprawdzone
-      // w node: dist(edge, f2) wychodzi DOKŁADNIE 0.998, bez błędu zaokrąglenia (0.3 i 1
-      // mają dokładną reprezentację binarną na tyle bliską, że odejmowanie i późniejszy
-      // hypot się nie rozjeżdżają), więc nie trzeba szukać osobnej reprezentowalnej liczby.
-      const edge = vec(0.3 - (1 - 2e-3), 0.2);
-      expect(dist(edge, locked.f2)).toBeLessThanOrEqual(1 - 2e-3);
-      const onEdge = applyDrag(locked, "ognisko1", edge, true);
-      expect(onEdge.f1).toEqual(edge);
-
-      const beyond = vec(edge.x - 1e-6, 0.2);
-      const clamped = applyDrag(locked, "ognisko1", beyond, true);
-      expect(dist(clamped.f1, clamped.f2)).toBeCloseTo(1 - 2e-3, 12);
-      expect(clamped.f1).not.toEqual(beyond);
-    });
   });
 });

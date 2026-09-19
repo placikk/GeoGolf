@@ -42,8 +42,9 @@ Ruling: `applyDrag` podnosi `a`, gdy ognisko odjedzie za daleko, także na pozio
   niż zaczynał — bez wpływu na rozwiązanie.
 ```
 
-**ODWOŁANE** — patrz `decyzje-etap-2.md`, sekcja „Poprawki po etapie 2”, pkt 5:
-zablokowany rozmiar stoi.
+**PRZYWRÓCONE** (2026-09-19) — po krótkim odwołaniu (poprawki po etapie 2, pkt 5) to
+zachowanie znów obowiązuje: kaskad nie da się już przejść jedną elipsą, bo łuk ma stałą
+długość (`decyzje-etap-2.md`, „Łuk opisany długością”).
 
 ## 4. `scripts/task-brief` ze skilla wymaga nagłówków "Task N", a plan ma
 
