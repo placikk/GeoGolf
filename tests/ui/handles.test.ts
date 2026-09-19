@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
-import { EllipseShape, Level, MIN_ARC, SNAP_RADIUS, circle, ellipse, ellipseParam, segment, shapeConic } from "../../src/levels";
+import { EllipseShape, Level, LEVELS, MIN_ARC, SNAP_RADIUS, circle, ellipse, ellipseParam, segment, shapeConic } from "../../src/levels";
 import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
@@ -193,5 +193,12 @@ describe("przyskakiwanie etapu 2", () => {
     expect(snapTo(near, snapTargets(level, [mine, second], 0), SNAP_RADIUS)).toBe(fixed.f1);
     const nearSecond = vec(second.f1.x, second.f1.y + SNAP_RADIUS / 2);
     expect(snapTo(nearSecond, snapTargets(level, [mine, second], 0), SNAP_RADIUS)).toBe(second.f1);
+  });
+
+  it("poziom kaskady: ognisko pierwszego łuku daje się postawić w M samym przyskokiem", () => {
+    const kaskada = LEVELS.find((l) => l.id === "kaskada")!;
+    const m = kaskada.pieces[0].solution.f2;
+    const targets = snapTargets(kaskada, kaskada.pieces.map((p) => p.start), 0);
+    expect(snapTo(vec(m.x + 0.05, m.y - 0.05), targets, SNAP_RADIUS)).toEqual(m);
   });
 });
