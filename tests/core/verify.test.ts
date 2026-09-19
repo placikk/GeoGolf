@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
 import { ellipseFromFoci, ellipseGeometry, lineThrough } from "../../src/core/conic";
 import { BALL_COUNT, launchAngles, runProof } from "../../src/core/verify";
+import { whole } from "../../src/core/piece";
 
 const R = 0.02 * 2 * Math.SQRT2;
 
@@ -19,7 +20,7 @@ describe("dowód ósemką", () => {
   it("poprawna elipsa: wszystkie osiem wpada i wpada RAZEM", () => {
     const ball = vec(-0.5, 0), hole = vec(0.5, 0);
     const k = ellipseFromFoci(ball, hole, 0.8);
-    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k });
+    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k });
     expect(p.balls).toHaveLength(BALL_COUNT);
     expect(p.solved).toBe(true);
     expect(p.simultaneous).toBe(true);
@@ -50,13 +51,13 @@ describe("dowód ósemką", () => {
   it("działa tak samo dla elipsy obróconej", () => {
     const ball = vec(-0.35, -0.4), hole = vec(0.4, 0.3);
     const k = ellipseFromFoci(ball, hole, 0.9);
-    expect(runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k }).solved).toBe(true);
+    expect(runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k }).solved).toBe(true);
   });
 
   it("przesunięte ognisko: co najmniej jedna piłka chybia", () => {
     const ball = vec(-0.5, 0), hole = vec(0.5, 0);
     const k = ellipseFromFoci(vec(-0.5 + 0.141, 0), hole, 0.8);
-    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k });
+    const p = runProof({ ball, hole, holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k });
     expect(p.solved).toBe(false);
     expect(p.balls.some((b) => !b.holed)).toBe(true);
   });
@@ -72,7 +73,7 @@ describe("dowód ósemką", () => {
   it("count=2: dwie piłki do podglądu", () => {
     const k = ellipseFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.8);
     expect(launchAngles(k, 2)).toHaveLength(2);
-    const p = runProof({ ball: vec(-0.5, 0), hole: vec(0.5, 0), holeRadius: R, maxBounces: 4, curves: [k], aimCurve: k, count: 2 });
+    const p = runProof({ ball: vec(-0.5, 0), hole: vec(0.5, 0), holeRadius: R, maxBounces: 4, curves: [whole(k)], aimCurve: k, count: 2 });
     expect(p.balls).toHaveLength(2);
   });
 

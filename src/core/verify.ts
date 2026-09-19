@@ -1,5 +1,6 @@
 import { Vec2, fromAngle } from "./vec";
 import { Conic, classify, ellipseGeometry } from "./conic";
+import { Piece } from "./piece";
 import { trace, TraceResult } from "./trace";
 
 export const BALL_COUNT = 8;
@@ -15,7 +16,7 @@ export interface ProofInput {
   hole: Vec2;
   holeRadius: number;
   maxBounces: number;
-  curves: Conic[];
+  curves: Piece[];
   aimCurve: Conic;
   count?: number;
 }

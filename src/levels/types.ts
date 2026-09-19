@@ -1,5 +1,6 @@
 import { Vec2 } from "../core/vec";
-import { Conic, circleConic, ellipseFromFoci } from "../core/conic";
+import { circleConic, ellipseFromFoci } from "../core/conic";
+import { Piece, whole } from "../core/piece";
 
 export const DIAGONAL = 2 * Math.SQRT2;
 export const HOLE_RADIUS = 0.02 * DIAGONAL;
@@ -26,7 +27,8 @@ export interface Level {
   test: { balls: number; maxBounces: number; holeRadius: number };
 }
 
-export const levelCurves = (level: Level, state: EllipseState): Conic[] => [
-  ellipseFromFoci(state.f1, state.f2, state.a),
-  ...level.obstacles.map((o) => circleConic(o.center, o.radius)),
-];
+export const levelCurves = (level: Level, state: EllipseState): Piece[] =>
+  [
+    ellipseFromFoci(state.f1, state.f2, state.a),
+    ...level.obstacles.map((o) => circleConic(o.center, o.radius)),
+  ].map(whole);
