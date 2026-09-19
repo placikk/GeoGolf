@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { vec, norm, add, scale, fromAngle } from "../../src/core/vec";
 import { Conic, lineThrough, ellipseFromFoci, evalConic } from "../../src/core/conic";
-import { rayConic } from "../../src/core/intersect";
+import { rayConic, rayConicAll } from "../../src/core/intersect";
 
 const circle: Conic = { A: 1, B: 0, C: 1, D: 0, E: 0, F: -1 };
 
@@ -71,5 +71,34 @@ describe("przecięcie półprostej ze stożkową", () => {
       }
     }
     expect(checked).toBeGreaterThan(50);
+  });
+
+  it("rayConicAll zwraca oba pierwiastki rosnąco", () => {
+    // x² + y² = 1 z (−2, 0) w prawo: a=1, b=−4, c=3 → t = 1 i t = 3, oba dokładnie
+    expect(rayConicAll(vec(-2, 0), vec(1, 0), circle)).toEqual([1, 3]);
+    // ze środka: drugi pierwiastek (t = −1) leży za plecami i odpada
+    expect(rayConicAll(vec(0, 0), vec(1, 0), circle)).toEqual([1]);
+    expect(rayConicAll(vec(-2, 5), vec(1, 0), circle)).toEqual([]);
+    const wall = lineThrough(vec(0, 0.5), vec(1, 0));
+    expect(rayConicAll(vec(0, 0), vec(0, 1), wall)).toHaveLength(1);
+  });
+
+  it("rayConic to zawsze pierwszy element rayConicAll", () => {
+    let seed = 13579;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const cases: Conic[] = [
+      { A: 1, B: 0, C: 1, D: -4, E: 0, F: 3 },
+      ellipseFromFoci(vec(0.1, 0.5), vec(0.9, 0.2), 0.7),
+      lineThrough(vec(0.3, 0.4), norm(vec(2, 1))),
+    ];
+    for (const k of cases) {
+      for (let i = 0; i < 50; i++) {
+        const p = vec(rnd() * 2 - 1, rnd() * 2 - 1);
+        const d = fromAngle(rnd() * 2 * Math.PI);
+        const all = rayConicAll(p, d, k);
+        expect(rayConic(p, d, k)).toBe(all.length > 0 ? all[0] : null);
+        for (let j = 1; j < all.length; j++) expect(all[j]).toBeGreaterThan(all[j - 1]);
+      }
+    }
   });
 });
