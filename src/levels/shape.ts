@@ -11,9 +11,12 @@ export const circle = (center: Vec2, radius: number): EllipseShape => ellipse(ce
 
 export const segment = (from: Vec2, to: Vec2): SegmentShape => ({ kind: "odcinek", from, to });
 
+/** Czy elipsa jest okręgiem (ogniska zlane w jeden punkt). */
+export const isCircle = (s: EllipseShape): boolean => dist(s.f1, s.f2) < 1e-12;
+
 /** Kierunek osi f1→f2; dla okręgu (f1 = f2) umownie oś x. */
 export function ellipseAxis(s: EllipseShape): Vec2 {
-  return dist(s.f1, s.f2) < 1e-12 ? vec(1, 0) : norm(sub(s.f2, s.f1));
+  return isCircle(s) ? vec(1, 0) : norm(sub(s.f2, s.f1));
 }
 
 export const ellipseCenter = (s: EllipseShape): Vec2 => scale(add(s.f1, s.f2), 0.5);

@@ -2,7 +2,7 @@ import { Vec2, add, dot, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, classify, ellipseGeometry } from "../core/conic";
 import { Piece } from "../core/piece";
 
-const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
+export const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
 const TAU = 2 * Math.PI;
 const mod = (x: number): number => ((x % TAU) + TAU) % TAU;
 

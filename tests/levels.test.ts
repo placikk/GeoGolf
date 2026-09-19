@@ -108,6 +108,11 @@ describe("poziomy", () => {
     });
   });
 
+  // Skracamy tylko `arc` (elipsy) — odcinki celowo zostają nietknięte: skrócenie „o 1°"
+  // nie ma sensu dla odcinka, a jego zwężenie żyłoby w parametrze elipsy, z której odcinek
+  // nie powstaje. Ściany (odcinki) tylko ograniczają rozmiar/pozycję elementów gracza;
+  // żadne zapisane rozwiązanie nie opiera się na końcu odcinka — sprawdzone przy końcowym
+  // przeglądzie przez usunięcie wszystkich odcinków z tego testu bez zmiany wyniku.
   it.each(byId)("poziom %s: rozwiązanie nie opiera się na krawędzi łuku (skrócenie o 1° z obu stron)", (_id, level) => {
     const d = Math.PI / 180;
     const shrink = <S extends Shape>(s: S): S =>

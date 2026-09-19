@@ -246,3 +246,41 @@ Wszystkie zrzuty i surowy log (`report-raw.json`) leżą w
 `.superpowers/sdd/2026-09-19-golf-etap-2-luki/e2e/report-raw.json` — katalog `e2e/` jest
 ignorowany przez `.superpowers/sdd/.gitignore` (nie trafia do repozytorium), więc dowody
 zostają na tej maszynie; ten dokument jest ich pisemnym podsumowaniem.
+
+---
+
+## Poprawki z końcowego przeglądu (fala poprawek po zadaniu 12)
+
+a. **Poziom 11 „Przycinanie": start zmieniony z `{20°, 340°}` na `{60°, 300°}`.**
+   Zrzut `level-11-przycinanie-edit.png` z zadania 12 pokazał, że oba uchwyty końców
+   łuku na starcie nachodzą na siebie na małym okręgu — przerwa 40° na promieniu
+   r = 0.18 daje w przybliżeniu 60 px CSS na ekranie, a same uchwyty to 44 px, więc
+   luka jest niemal całkowicie zasłonięta przez uchwyty i lekcja poziomu (odsłonić
+   drogę przez przycięcie) nie jest widoczna na starcie. Końcowy przegląd sprawdził,
+   że przerwy 40–120° zostawiają start nierozwiązany, a zwycięskie łuki wymagają
+   start ∈ [110°, 190°], end ∈ [290°, 370°] — `{60°, 300°}` (przerwa 60°) jest bezpiecznie
+   w środku tego zakresu bezpieczeństwa i dalej od uchwytów. Koszt, jeśli źle: gracz nie
+   widzi przerwy w chwili wejścia w poziom, ale rozwiązanie i przeszkoda są nietknięte,
+   więc błąd byłby czysto kosmetyczny.
+b. **Poziom 15 „Dwie elipsy": podpowiedź zmieniona z „Cała kaskada w twoich rękach.
+   Punkt spotkania wybierasz sam." na „Cała kaskada w twoich rękach. Oba łuki muszą
+   mieć wspólne ognisko — znajdź, gdzie je postawić."** Końcowy przegląd policzył, że
+   z siatki 1296 pozycji tylko ~17 daje wygraną (jednoczesną dla obu piłek) — działający
+   obszar to płatek ok. 0,15×0,25 wokół (−0,25, −0,2). Stare sformułowanie sugerowało
+   dowolność („wybierasz sam"), a rzeczywiste pole manewru jest wąskie; nowe zdanie
+   nazywa właściwe kryterium (wspólne ognisko obu łuków) bez zdradzania współrzędnych.
+   Dodatkowo: zbieżne ogniska są przeciągane tylko jako ognisko elementu 2 (element 1
+   jest pod spodem) — to zostawiamy do oceny właścicielowi na prawdziwym telefonie;
+   możliwe opcje, jeśli okaże się za trudne: zablokować jeden uchwyt zgodnie ze specem
+   §8, albo przeciągać zbieżne ogniska razem jako jedną parę. Koszt, jeśli źle: gracz
+   nadal trafia w wąski obszar po omacku — nowa podpowiedź precyzuje kryterium, ale nie
+   zwęża same poszukiwania geometryczne.
+c. **Zostawione właścicielowi bez zmian kodu:**
+   - Spec §6 dalej nazywa przycisk „Cofnij", którego kod nie ma (rozstrzygnięcie 1) —
+     decyzja świadoma, nie usterka; zmiana wymagałaby albo dopisania przycisku (poza
+     zakresem etapu 2), albo poprawki specu, którą robi właściciel.
+   - Oś łuku (`ellipseAxis`) kręci się gwałtownie, gdy ogniska łuku niemal się zlewają —
+     to wynika wprost z parametryzacji (kierunek f1→f2 przy |f1 − f2| → 0 jest źle
+     określony), nie z błędu; nie powoduje awarii ani złego rysowania łuku o w pełni
+     zlanych ogniskach (okrąg ma osobną, umowną oś). Koszt, jeśli źle: kosmetyczne
+     drgnięcie osi w rzadkim przypadku brzegowym, bez wpływu na rozgrywkę.

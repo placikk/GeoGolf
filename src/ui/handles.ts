@@ -1,6 +1,6 @@
 import { Vec2, add, dist, scale } from "../core/vec";
 import { ArcRange, EllipseShape, Handle, Level, MIN_ARC } from "../levels/types";
-import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint } from "../levels/shape";
+import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, isCircle } from "../levels/shape";
 
 const MIN_GAP = 1e-3;
 const TAU = 2 * Math.PI;
@@ -44,7 +44,7 @@ export function snapTo(p: Vec2, targets: Vec2[], radius: number): Vec2 {
  *  palcem niewykonalna. */
 export function snapTargets(level: Level, pieces: EllipseShape[], dragged: number): Vec2[] {
   const fixedFoci = level.obstacles.flatMap((o) =>
-    o.kind === "elipsa" && dist(o.f1, o.f2) > 1e-12 ? [o.f1, o.f2] : []);
+    o.kind === "elipsa" && !isCircle(o) ? [o.f1, o.f2] : []);
   const otherFoci = pieces.flatMap((p, i) => (i === dragged ? [] : [p.f1, p.f2]));
   return [level.ball, level.hole, ...fixedFoci, ...otherFoci];
 }
@@ -72,7 +72,12 @@ const clamp = (x: number, lo: number, hi: number): number => Math.min(Math.max(x
 
 /** Przesuwa jeden koniec łuku do parametru `t`. Nowy koniec wybieramy najbliżej starego
  *  (bez skoku o 2π), po czym zaciskamy tak, żeby łuk miał co najmniej MIN_ARC
- *  i końce się nie minęły. */
+ *  i końce się nie minęły.
+ *
+ *  Znane zachowanie: gdy koniec już stoi na zacisku i palec jedzie dalej o więcej niż π
+ *  za jego starą pozycję, `wrap` wybiera drugi reprezentant kąta i koniec przeskakuje
+ *  od razu pod palec (łuk może się skrócić skokiem, a nie płynnie). Akceptujemy to —
+ *  koniec zawsze zostaje na krzywej, a łuk zawsze mieści się w [MIN_ARC, 2π − MIN_ARC]. */
 export function moveArcEnd(arc: ArcRange, which: "poczatek" | "koniec", t: number): ArcRange {
   if (which === "poczatek") {
     const start = arc.start + wrap(t - arc.start);

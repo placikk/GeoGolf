@@ -4,7 +4,7 @@ import { circleConic, classify, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { onPiece, rayPiece } from "../../src/core/piece";
 import {
-  circle, ellipse, ellipseParam, ellipsePoint, levelCurves, segment, shapeConic, shapeToPiece, LEVELS,
+  circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic, shapeToPiece, LEVELS,
 } from "../../src/levels";
 
 // ogniska nieosiowe i niesymetryczne wokół zera
@@ -51,6 +51,11 @@ describe("kształty poziomu", () => {
       if (t1 === null) expect(t).toBeNull();
       else expect(t).toBeCloseTo(t1, 12);
     }
+  });
+
+  it("isCircle: prawda dla okręgu, fałsz dla elipsy o różnych ogniskach", () => {
+    expect(isCircle(circle(vec(0.3, -0.2), 0.1))).toBe(true);
+    expect(isCircle(ellipse(vec(-0.2, 0.3), vec(0.5, -0.1), 0.6))).toBe(false);
   });
 
   it("odcinek to prosta przycięta do końców", () => {

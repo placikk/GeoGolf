@@ -1,7 +1,8 @@
-import { Vec2, dist, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, shapeToPiece } from "../levels";
+import { Vec2, vec } from "../core/vec";
+import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge } from "../render/draw";
+import { SPAN } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, startProof } from "./game";
@@ -166,14 +167,14 @@ export function mount(canvas: HTMLCanvasElement): void {
     // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
     // gdzie lecą piłki" wyglądałby na błąd gry
     if (game.phase === "edycja" && level.sector !== undefined) {
-      sectorWedge(ctx, c, level.ball, level.sector, 3, PALETTE.sector);
+      sectorWedge(ctx, c, level.ball, level.sector, SPAN, PALETTE.sector);
     }
 
     for (const o of level.obstacles) {
       drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
       // ogniska stałych elips blado — lekcje kaskad to „trafić ogniskiem w to ognisko";
       // okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
-      if (o.kind === "elipsa" && dist(o.f1, o.f2) > 1e-12) {
+      if (o.kind === "elipsa" && !isCircle(o)) {
         glowDot(ctx, c, o.f1, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
         glowDot(ctx, c, o.f2, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
       }

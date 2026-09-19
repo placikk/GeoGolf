@@ -43,7 +43,7 @@ export const STAGE_2: Level[] = [
     hint: "Okrąg wokół piłki odbija ją z powrotem. Przytnij go, żeby odsłonić drogę do lustra.",
     ball: vec(-0.35, -0.4), hole: vec(0.35, 0.4),
     pieces: [{
-      start: ellipse(vec(-0.35, -0.4), vec(-0.35, -0.4), 0.18, { start: deg(20), end: deg(340) }),
+      start: ellipse(vec(-0.35, -0.4), vec(-0.35, -0.4), 0.18, { start: deg(60), end: deg(300) }),
       solution: ellipse(vec(-0.35, -0.4), vec(-0.35, -0.4), 0.18, { start: deg(150), end: deg(310) }),
       locked: ["ognisko1", "ognisko2", "rozmiar"],
     }],
@@ -100,7 +100,7 @@ export const STAGE_2: Level[] = [
     // M = (−0.25, −0.2) nie jest ogniskiem żadnej przeszkody, więc nie jest pokazane —
     // gracz stawia oba ogniska, a drugie przyskakuje do pierwszego.
     id: "dwie-elipsy", title: "Dwie elipsy",
-    hint: "Cała kaskada w twoich rękach. Punkt spotkania wybierasz sam.",
+    hint: "Cała kaskada w twoich rękach. Oba łuki muszą mieć wspólne ognisko — znajdź, gdzie je postawić.",
     ball: vec(-0.55, -0.6), hole: vec(0.11, 0.28),
     pieces: [
       {
