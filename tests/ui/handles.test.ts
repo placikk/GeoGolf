@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
-import { EllipseState, SNAP_RADIUS } from "../../src/levels/types";
+import { EllipseShape, SNAP_RADIUS, ellipse } from "../../src/levels";
 import { applyDrag, handlePositions, pickHandle, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci } from "../../src/core/conic";
 
-const state: EllipseState = { f1: vec(-0.5, 0), f2: vec(0.5, 0), a: 0.8 };
+const state: EllipseShape = ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8);
 
 describe("uchwyty", () => {
   it("daje trzy uchwyty, rozmiar na końcu osi wielkiej", () => {
@@ -22,12 +22,12 @@ describe("uchwyty", () => {
   });
 
   it("nie pozwala chwycić zablokowanego uchwytu", () => {
-    expect(pickHandle(vec(0.8, 0), state, [], 0.1)).toBe("rozmiar");
-    expect(pickHandle(vec(0.8, 0), state, ["rozmiar"], 0.1)).toBeNull();
+    expect(pickHandle(vec(0.8, 0), [state], [[]], 0.1)).toEqual({ piece: 0, id: "rozmiar" });
+    expect(pickHandle(vec(0.8, 0), [state], [["rozmiar"]], 0.1)).toBeNull();
   });
 
   it("przeciągnięcie ogniska zachowuje elipsę mimo małego a", () => {
-    const next = applyDrag({ f1: vec(-0.1, 0), f2: vec(0.1, 0), a: 0.15 }, "ognisko1", vec(-0.9, 0));
+    const next = applyDrag(ellipse(vec(-0.1, 0), vec(0.1, 0), 0.15), "ognisko1", vec(-0.9, 0));
     expect(next.f1.x).toBeCloseTo(-0.9, 9);
     expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
   });
@@ -62,8 +62,8 @@ describe("uchwyty", () => {
 
   it("gdy dwa uchwyty są w zasięgu, wygrywa bliższy", () => {
     // ognisko2 w (0.5,0), uchwyt rozmiaru w (0.8,0); promień 0.4 obejmuje oba naraz
-    expect(pickHandle(vec(0.55, 0), state, [], 0.4)).toBe("ognisko2");
-    expect(pickHandle(vec(0.75, 0), state, [], 0.4)).toBe("rozmiar");
+    expect(pickHandle(vec(0.55, 0), [state], [[]], 0.4)?.id).toBe("ognisko2");
+    expect(pickHandle(vec(0.75, 0), [state], [[]], 0.4)?.id).toBe("rozmiar");
   });
 
   it("nietknięte ognisko zachowuje TOŻSAMOŚĆ obiektu, nie tylko wartość", () => {
@@ -73,8 +73,24 @@ describe("uchwyty", () => {
 
   it("środek liczy się jako średnia ognisk, nie ich suma", () => {
     // fixture symetryczny wokół zera maskuje zgubione dzielenie przez 2 — ten nie maskuje
-    const asym: EllipseState = { f1: vec(0.1, 0.2), f2: vec(0.5, 0.6), a: 0.6 };
+    const asym = ellipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6);
     const hs = handlePositions(asym);
     expect(dist(hs[2].pos, vec(0.3, 0.4))).toBeCloseTo(asym.a, 12);
+  });
+});
+
+describe("uchwyty wielu elementów", () => {
+  const other = ellipse(vec(0.1, 0.5), vec(0.7, 0.3), 0.5);
+
+  it("przy dwóch elementach wygrywa bliższy uchwyt, z właściwym numerem elementu", () => {
+    // ognisko2 elementu 0 w (0.5, 0), ognisko1 elementu 1 w (0.1, 0.5); promień obejmuje oba
+    expect(pickHandle(vec(0.45, 0.05), [state, other], [[], []], 0.6)).toEqual({ piece: 0, id: "ognisko2" });
+    expect(pickHandle(vec(0.15, 0.45), [state, other], [[], []], 0.6)).toEqual({ piece: 1, id: "ognisko1" });
+  });
+
+  it("blokady są per element: ten sam uchwyt zablokowany w jednym, wolny w drugim", () => {
+    // w promieniu 0.2 od (0.15, 0.45) jest tylko ognisko1 elementu 1
+    expect(pickHandle(vec(0.15, 0.45), [state, other], [[], ["ognisko1"]], 0.2)).toBeNull();
+    expect(pickHandle(vec(0.15, 0.45), [state, other], [["ognisko1"], []], 0.2)).toEqual({ piece: 1, id: "ognisko1" });
   });
 });

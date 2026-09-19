@@ -9,7 +9,7 @@ describe("stan gry", () => {
   it("nowa gra startuje w edycji, ze stanem początkowym poziomu", () => {
     const g = newGame(level);
     expect(g.phase).toBe("edycja");
-    expect(g.ellipse).toEqual(level.start);
+    expect(g.pieces).toEqual([level.pieces[0].start]);
     expect(g.proof).toBeNull();
   });
 
@@ -18,14 +18,14 @@ describe("stan gry", () => {
   });
 
   it("uruchomienie dowodu daje osiem piłek i fazę dowodu", () => {
-    const g = startProof({ ...newGame(level), ellipse: level.solution });
+    const g = startProof({ ...newGame(level), pieces: [level.pieces[0].solution] });
     expect(g.phase).toBe("dowod");
     expect(g.proof?.balls).toHaveLength(8);
     expect(g.elapsed).toBe(0);
   });
 
   it("poprawne rozwiązanie kończy się wygraną po przebiegu animacji", () => {
-    let g = startProof({ ...newGame(level), ellipse: level.solution });
+    let g = startProof({ ...newGame(level), pieces: [level.pieces[0].solution] });
     for (let i = 0; i < 600 && g.phase === "dowod"; i++) g = advance(g, 1 / 60);
     expect(g.phase).toBe("wygrana");
   });
@@ -45,7 +45,7 @@ describe("stan gry", () => {
     // na obu dystansach — czyli odwzorowanie jest wprost proporcjonalne, a nie wygładzone.
     const free = LEVELS[1];
     for (const a of [0.75, 1.0]) {
-      let g = startProof({ ...newGame(free), ellipse: { ...free.solution, a } });
+      let g = startProof({ ...newGame(free), pieces: [{ ...free.pieces[0].solution, a }] });
       expect(g.proof!.solved, `a=${a}`).toBe(true);
       const longest = Math.max(...g.proof!.balls.map((b) => pathLength(b.path)));
       g = advance(g, longest / BALL_SPEED - 1e-6);
@@ -62,7 +62,7 @@ describe("stan gry", () => {
     const editing = newGame(level);
     expect(advance(editing, 1 / 60)).toBe(editing);
 
-    let g = startProof({ ...newGame(level), ellipse: level.solution });
+    let g = startProof({ ...newGame(level), pieces: [level.pieces[0].solution] });
     for (let i = 0; i < 600 && g.phase === "dowod"; i++) g = advance(g, 1 / 60);
     expect(g.phase).toBe("wygrana");
     expect(advance(g, 1 / 60)).toBe(g);

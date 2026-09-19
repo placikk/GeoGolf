@@ -1,6 +1,5 @@
-import { ellipseFromFoci } from "../core/conic";
 import { Proof, runProof } from "../core/verify";
-import { EllipseState, Level, levelCurves } from "../levels";
+import { EllipseShape, Level, levelCurves, shapeConic } from "../levels";
 
 /** jednostek świata na sekundę — prędkość jest dosłowna, bez krzywych czasu */
 export const BALL_SPEED = 1.2;
@@ -9,7 +8,8 @@ export type Phase = "edycja" | "dowod" | "wygrana" | "porazka";
 
 export interface GameState {
   level: Level;
-  ellipse: EllipseState;
+  /** bieżący kształt każdego elementu gracza, w kolejności `level.pieces` */
+  pieces: EllipseShape[];
   phase: Phase;
   proof: Proof | null;
   /** sekundy od startu dowodu */
@@ -17,7 +17,7 @@ export interface GameState {
 }
 
 export const newGame = (level: Level): GameState => ({
-  level, ellipse: level.start, phase: "edycja", proof: null, elapsed: 0,
+  level, pieces: level.pieces.map((p) => p.start), phase: "edycja", proof: null, elapsed: 0,
 });
 
 const proofFor = (state: GameState, count: number): Proof =>
@@ -26,8 +26,10 @@ const proofFor = (state: GameState, count: number): Proof =>
     hole: state.level.hole,
     holeRadius: state.level.test.holeRadius,
     maxBounces: state.level.test.maxBounces,
-    curves: levelCurves(state.level, state.ellipse),
-    aimCurve: ellipseFromFoci(state.ellipse.f1, state.ellipse.f2, state.ellipse.a),
+    curves: levelCurves(state.level, state.pieces),
+    // kierunek bazowy dowodu 360° to oś pierwszego elementu gracza — jak w etapie 1
+    aimCurve: shapeConic(state.pieces[0]),
+    sector: state.level.sector,
     count,
   });
 
