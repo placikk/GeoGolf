@@ -306,17 +306,30 @@ symulowanego czasu w ułamku sekundy realnego, z zapasem ponad bezpiecznik
 1. **Ściana stoi na brzegu planszy `[-1,1]²`, nie na brzegu ekranu** (decyzja
    właściciela, §2 specu). Pomiar w zadaniu 5: wszystkich 16 poziomów nadal daje się
    wygrać uchwytami od stanu startowego po dodaniu ścian — bez zmian względem stanu
-   sprzed poprawki.
+   sprzed poprawki. Koszt, jeśli źle: fizyka poziomu przestaje zależeć od urządzenia
+   (dobrze), ale gdyby jakiś przyszły poziom miał celowo polegać na tym, że piłka
+   opuszcza planszę i przepada (`boundsExit`), taki poziom przestałby działać zgodnie
+   z zamysłem — trzeba by go przeprojektować pod ścianę zamiast pod ucieczkę piłki.
 2. **„Jeszcze raz" zachowuje ustawienie elementów** po wygranej, po porażce i przy
    dotknięciu ekranu w trakcie animacji dowodu — wraca do fazy edycji z `pieces` bez
    zmian, nie do stanu startowego. Pełny reset zostaje tam, gdzie był: pod kafelkiem
-   tego samego poziomu w menu (`goTo` → `newGame`).
+   tego samego poziomu w menu (`goTo` → `newGame`). Koszt, jeśli źle: gracz, który
+   chciał świadomie zacząć od zera po nieudanej próbie, musi pamiętać, że jedyna
+   droga to menu i ten sam kafelek — dotknięcie ekranu go tam NIE zaprowadzi; jeśli to
+   zaskoczenie okaże się częste, brakuje osobnego, oczywistego przycisku „reset".
 3. **Ostatni poziom (16): prawy przycisk to „Menu" z podsumowaniem**, nie „Następny".
    Zawijanie „Następny" z poziomu 16 z powrotem na poziom 1 zniknęło — na ostatnim
-   poziomie nie ma już żadnego przycisku, który cichcem zaczynałby od nowa.
+   poziomie nie ma już żadnego przycisku, który cichcem zaczynałby od nowa. Koszt,
+   jeśli źle: gracz, który wcześniej przyzwyczaił się, że „Następny" na poziomie 16
+   zapętla się na poziom 1, traci ten skrót i musi przejść przez menu — dodatkowe
+   dotknięcie, nie utrata funkcji (poziom 1 nadal jest pierwszym kafelkiem).
 4. **Poziom 12: okrąg `(0, −0.5)`, promień `0.25`**, rozwiązanie `a = 0.52` (pasmo
    zmierzone ze ścianami z §2: `a ∈ [0.455, 0.59]`, nic powyżej aż do `a = 3`). Stary
    okrąg (`r = 0.1`) przepuszczał osiem piłek obok siebie i nie wymuszał rozmiaru.
+   Koszt, jeśli źle: gdyby nowy okrąg okazał się za duży (zbyt wąskie albo puste
+   pasmo zwycięskie), poziom stałby się nierozwiązywalny albo frustrująco precyzyjny
+   na telefonie — wymagałoby to ponownego pomiaru pasma i kolejnej korekty promienia
+   albo pozycji okręgu, tak jak poprzednio z `r = 0.1`.
 5. **Zablokowany rozmiar naprawdę stoi — odwołuje rozstrzygnięcie 3 z
    `decyzje-etap-1.md`.** Tamto rozstrzygnięcie pozwalało `applyDrag` podnosić `a`
    zawsze, gdy ogniska rozjadą się dalej niż `2a` (żeby elipsa dała się skonstruować).
@@ -326,7 +339,13 @@ symulowanego czasu w ułamku sekundy realnego, z zapasem ponad bezpiecznik
    `rozmiar` jest zablokowany, `a` tego elementu nigdy się nie zmienia; przeciągane
    ognisko zatrzymuje się na granicy `2a − 2·MIN_GAP` od drugiego ogniska. Poziomy 13
    i 15 (piłka–dołek dalej niż `2a`) stają się przez to geometrycznie niemożliwe do
-   przejścia jedną elipsą, bez żadnych nowych przeszkód w danych.
+   przejścia jedną elipsą, bez żadnych nowych przeszkód w danych. Koszt, jeśli źle:
+   na poziomach 13 i 15 jedno ognisko nie da się dociągnąć do celu w jednym geście,
+   gdy drugie ognisko tej samej pary stoi jeszcze daleko — gracz musi przesuwać
+   ogniska na przemian, małymi krokami, żeby oba dotarły na miejsce (dokładnie to,
+   co w zadaniu 5 okazało się potrzebne nawet skryptowi testowemu dla poziomu „Dwie
+   elipsy", punkt 6 checklisty niżej); na telefonie może to wyczuwalnie sprawiać
+   wrażenie „sztywnego" uchwytu zamiast płynnego przeciągania.
 
 ### Wynik ręcznego sprawdzenia — zadanie 5 (Playwright, poprawki po etapie 2)
 
@@ -348,7 +367,8 @@ symulowanego czasu w ułamku sekundy realnego, z zapasem ponad bezpiecznik
    (`localStorage` bez `"kaskada"` w `solved`).
    Zrzuty: `e2e/shots/check2a-kaskada-before-stretch.png`,
    `e2e/shots/check2a-kaskada-after-stretch.png`, `e2e/shots/check2b-2-f1-at-ball.png`,
-   `e2e/shots/check2b-3-f2-stopped-short-of-hole.png`.
+   `e2e/shots/check2b-3-f2-stopped-short-of-hole.png`,
+   `e2e/shots/check2b-4-result.png` (stan po „Sprawdź" — porażka).
 3. **Poziom 12: `a ≈ 0.9` przegrywa, `a = 0.52` wygrywa.** Stan startowy poziomu
    (`a = 0.9`, uchwyty nietknięte) uruchomiony wprost przez „Sprawdź" daje porażkę
    („Chybiło 2 z 8"). Po przeciągnięciu uchwytu rozmiaru do `a = 0.52` (rozwiązanie)
