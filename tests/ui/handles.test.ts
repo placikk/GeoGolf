@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
-import { EllipseShape, SNAP_RADIUS, ellipse } from "../../src/levels";
-import { applyDrag, handlePositions, pickHandle, snapTo } from "../../src/ui/handles";
-import { ellipseFromFoci } from "../../src/core/conic";
+import { EllipseShape, Level, MIN_ARC, SNAP_RADIUS, circle, ellipse, ellipseParam, segment, shapeConic } from "../../src/levels";
+import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
+import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
 const state: EllipseShape = ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8);
 
@@ -92,5 +92,83 @@ describe("uchwyty wielu elementów", () => {
     // w promieniu 0.2 od (0.15, 0.45) jest tylko ognisko1 elementu 1
     expect(pickHandle(vec(0.15, 0.45), [state, other], [[], ["ognisko1"]], 0.2)).toBeNull();
     expect(pickHandle(vec(0.15, 0.45), [state, other], [["ognisko1"], []], 0.2)).toEqual({ piece: 1, id: "ognisko1" });
+  });
+});
+
+describe("uchwyty łuku", () => {
+  it("końce łuku są uchwytami tylko wtedy, gdy łuk istnieje; rozmiar siedzi w środku łuku", () => {
+    expect(handlePositions(state).map((h) => h.id)).toEqual(["ognisko1", "ognisko2", "rozmiar"]);
+    const arc = ellipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6, { start: 1, end: 3 });
+    const hs = handlePositions(arc);
+    expect(hs.map((h) => h.id)).toEqual(["ognisko1", "ognisko2", "rozmiar", "poczatek", "koniec"]);
+    expect(ellipseParam(arc, hs[2].pos)).toBeCloseTo(2, 12);
+    expect(ellipseParam(arc, hs[3].pos)).toBeCloseTo(1, 12);
+    expect(ellipseParam(arc, hs[4].pos)).toBeCloseTo(3, 12);
+  });
+
+  it("uchwyt końca łuku po przeciągnięciu leży na krzywej, pod kątem palca", () => {
+    const arc = ellipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6, { start: 1, end: 3 });
+    const finger = vec(-0.2, 0.9);   // poza krzywą
+    const next = applyDrag(arc, "koniec", finger);
+    const end = handlePositions(next).find((h) => h.id === "koniec")!.pos;
+    expect(evalConic(shapeConic(next), end)).toBeCloseTo(0, 12);
+    expect(next.arc!.end).toBeCloseTo(ellipseParam(arc, finger), 12);
+    expect(next.f1).toBe(arc.f1);
+    expect(next.arc!.start).toBe(1);
+  });
+
+  it("minimalna długość łuku: dokładnie na granicy przechodzi, dalej jest zaciskana", () => {
+    // start 0 i koniec 1: wrap(t − 0) = t, więc granica początku liczy się bez zaokrągleń
+    const arc = { start: 0, end: 1 };
+    expect(moveArcEnd(arc, "poczatek", 1 - MIN_ARC).start).toBe(1 - MIN_ARC);
+    expect(moveArcEnd(arc, "poczatek", 1 - MIN_ARC / 2).start).toBe(1 - MIN_ARC);
+    // dla końca 1 + (t − 1) nie jest dokładne w liczbach zmiennoprzecinkowych — tu tolerancja
+    expect(moveArcEnd(arc, "koniec", MIN_ARC).end).toBeCloseTo(MIN_ARC, 15);
+    expect(moveArcEnd(arc, "koniec", MIN_ARC / 2).end).toBe(MIN_ARC);
+  });
+
+  it("końce nie mogą się minąć: początek przeciągnięty za koniec zatrzymuje się przed nim", () => {
+    const arc = { start: 0, end: 1 };
+    const moved = moveArcEnd(arc, "poczatek", 1.5);
+    expect(moved.end - moved.start).toBeGreaterThanOrEqual(MIN_ARC);
+    expect(moved.start).toBeLessThan(moved.end);
+    // w drugą stronę łuk nie może urosnąć ponad 2π − MIN_ARC
+    const grown = moveArcEnd(arc, "koniec", -0.01);
+    expect(grown.end - grown.start).toBeLessThanOrEqual(2 * Math.PI - MIN_ARC + 1e-12);
+  });
+
+  it("przeciągnięcie końca łuku bez łuku nic nie zmienia", () => {
+    expect(applyDrag(state, "koniec", vec(0, 1))).toBe(state);
+  });
+});
+
+describe("przyskakiwanie etapu 2", () => {
+  const fixed = ellipse(vec(-0.1, 0.1), vec(0.5, 0.1), 0.4, { start: -3, end: -0.7 });
+  const round = circle(vec(0.3, -0.6), 0.1);
+  const level: Level = {
+    id: "t", title: "t", hint: "t", ball: vec(-0.6, 0.1), hole: vec(0.5, 0.1),
+    pieces: [], obstacles: [fixed, round, segment(vec(-1, -0.9), vec(1, -0.9))],
+    test: { balls: 8, maxBounces: 4, holeRadius: 0.05 },
+  };
+  const mine = ellipse(vec(-0.6, 0.1), vec(-0.2, 0.3), 0.4);
+  const second = ellipse(vec(0.2, -0.3), vec(0.6, -0.2), 0.4);
+
+  it("cele: piłka, dołek, ogniska stałych elips i ogniska POZOSTAŁYCH elementów gracza", () => {
+    const targets = snapTargets(level, [mine, second], 0);
+    expect(targets).toContain(level.ball);
+    expect(targets).toContain(level.hole);
+    expect(targets).toContain(fixed.f1);
+    expect(targets).toContain(fixed.f2);
+    expect(targets).toContain(second.f1);
+    expect(targets).toContain(second.f2);
+    expect(targets).not.toContain(mine.f2);       // własne ognisko nie jest celem
+    expect(targets).not.toContain(round.f1);      // środek okręgu nie jest celem
+  });
+
+  it("ognisko przyskakuje do ogniska przeszkody i do ogniska drugiego elementu gracza", () => {
+    const near = vec(fixed.f1.x + SNAP_RADIUS / 2, fixed.f1.y);
+    expect(snapTo(near, snapTargets(level, [mine, second], 0), SNAP_RADIUS)).toBe(fixed.f1);
+    const nearSecond = vec(second.f1.x, second.f1.y + SNAP_RADIUS / 2);
+    expect(snapTo(nearSecond, snapTargets(level, [mine, second], 0), SNAP_RADIUS)).toBe(second.f1);
   });
 });

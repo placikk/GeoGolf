@@ -3,7 +3,7 @@ import { LEVELS, SNAP_RADIUS, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge } from "../render/draw";
 import { positionAt, trailSegment } from "../render/trails";
-import { HandleRef, applyDrag, handlePositions, pickHandle, snapTo } from "./handles";
+import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, startProof } from "./game";
 import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, winAction } from "./menu";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -115,9 +115,10 @@ export function mount(canvas: HTMLCanvasElement): void {
     const w = toWorld(e);
     pointer = w;
     const { piece, id } = dragging;
-    const snapped = id === "rozmiar"
-      ? w
-      : snapTo(w, [game.level.ball, game.level.hole], SNAP_RADIUS);
+    // przyskakują tylko ogniska; rozmiar i końce łuku idą za palcem
+    const snapped = id === "ognisko1" || id === "ognisko2"
+      ? snapTo(w, snapTargets(game.level, game.pieces, piece), SNAP_RADIUS)
+      : w;
     const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped) : s));
     game = { ...game, pieces };
   });
