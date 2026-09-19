@@ -1,7 +1,7 @@
-import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, shapeConic } from "../levels";
+import { Vec2, dist, vec } from "../core/vec";
+import { LEVELS, SNAP_RADIUS, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
-import { PALETTE, drawConic, glowDot, glowPolyline, holeMark, ringHandle } from "../render/draw";
+import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge } from "../render/draw";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, startProof } from "./game";
@@ -162,12 +162,24 @@ export function mount(canvas: HTMLCanvasElement): void {
     ctx.fillStyle = PALETTE.bg;
     ctx.fillRect(0, 0, canvas.width / dpr(), canvas.height / dpr());
 
+    // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
+    // gdzie lecą piłki" wyglądałby na błąd gry
+    if (game.phase === "edycja" && level.sector !== undefined) {
+      sectorWedge(ctx, c, level.ball, level.sector, 3, PALETTE.sector);
+    }
+
     for (const o of level.obstacles) {
-      drawConic(ctx, c, shapeConic(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
+      drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
+      // ogniska stałych elips blado — lekcje kaskad to „trafić ogniskiem w to ognisko";
+      // okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
+      if (o.kind === "elipsa" && dist(o.f1, o.f2) > 1e-12) {
+        glowDot(ctx, c, o.f1, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+        glowDot(ctx, c, o.f2, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+      }
     }
 
     for (const s of game.pieces) {
-      drawConic(ctx, c, shapeConic(s), PALETTE.curve, PALETTE.curveGlow, 2);
+      drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
     }
 
     // Stałe punkty są pełne (piłka) albo wyglądają jak otwór (dołek); wszystko, co da się
