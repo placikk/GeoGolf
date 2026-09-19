@@ -1,23 +1,29 @@
-import { Vec2 } from "../core/vec";
+import { Vec2, vec } from "../core/vec";
 import { circleConic, ellipseFromFoci } from "../core/conic";
 import { LEVELS, SNAP_RADIUS } from "../levels";
 import { makeCamera } from "../render/camera";
-import { PALETTE, drawConic, glowDot, glowPolyline } from "../render/draw";
+import { PALETTE, drawConic, glowDot, glowPolyline, holeMark, ringHandle } from "../render/draw";
 import { positionAt, trailSegment } from "../render/trails";
 import { applyDrag, handlePositions, pickHandle, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, startProof } from "./game";
+import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, winAction } from "./menu";
+import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
 
 const TRAIL = 0.35;
 const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
 
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
-  let levelIndex = 0;
+  const store = browserStore();
+  let progress = loadProgress(store, LEVELS.length);
+  let levelIndex = progress.last;
   let game: GameState = newGame(LEVELS[levelIndex]);
+  let menuOpen = false;
   let dragging: ReturnType<typeof pickHandle> = null;
   let pointer: Vec2 | null = null;
   let consumedReset = false;
   let last = performance.now();
+  let time = 0;
 
   const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
   const cam = () => makeCamera(canvas.width / dpr(), canvas.height / dpr());
@@ -31,10 +37,26 @@ export function mount(canvas: HTMLCanvasElement): void {
     ctx.setTransform(r, 0, 0, r, 0, 0);
   }
 
-  const toWorld = (e: PointerEvent): Vec2 => {
+  const toScreenPoint = (e: PointerEvent): Vec2 => {
     const r = canvas.getBoundingClientRect();
-    return cam().toWorld({ x: e.clientX - r.left, y: e.clientY - r.top });
+    return vec(e.clientX - r.left, e.clientY - r.top);
   };
+  const toWorld = (e: PointerEvent): Vec2 => cam().toWorld(toScreenPoint(e));
+  const viewW = () => canvas.width / dpr();
+  const viewH = () => canvas.height / dpr();
+
+  function goTo(index: number): void {
+    levelIndex = index;
+    game = newGame(LEVELS[index]);
+    progress = { ...progress, last: index };
+    saveProgress(store, progress);
+  }
+
+  function toggleMenu(): void {
+    menuOpen = !menuOpen;
+    // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swojej elipsy.
+    if (menuOpen && game.phase === "dowod") game = { ...game, phase: "edycja", proof: null, elapsed: 0 };
+  }
 
   /** Zawija tekst po słowach. Wymaga ustawionego wcześniej `ctx.font`. */
   const wrapByWords = (text: string, maxWidth: number): string[] => {
@@ -54,9 +76,29 @@ export function mount(canvas: HTMLCanvasElement): void {
   };
 
   canvas.addEventListener("pointerdown", (e) => {
+    const p = toScreenPoint(e);
+    if (hitRect(MENU_BUTTON, p)) {
+      toggleMenu();
+      consumedReset = true;
+      return;
+    }
+    if (menuOpen) {
+      // kafelek wybiera poziom (także ten sam — od nowa), tło po prostu zamyka menu
+      const i = hitTile(menuLayout(viewW(), viewH(), LEVELS.length), p);
+      if (i !== null) goTo(i);
+      menuOpen = false;
+      consumedReset = true;
+      return;
+    }
+    if (game.phase === "wygrana") {
+      const action = winAction(p, viewW(), viewH());
+      if (action === "nastepny") goTo((levelIndex + 1) % LEVELS.length);
+      if (action === "powtorz") goTo(levelIndex);
+      consumedReset = true;
+      return;
+    }
     if (game.phase !== "edycja") {
-      if (game.phase === "wygrana") levelIndex = (levelIndex + 1) % LEVELS.length;
-      game = newGame(LEVELS[levelIndex]);
+      goTo(levelIndex);
       consumedReset = true;
       return;
     }
@@ -92,13 +134,21 @@ export function mount(canvas: HTMLCanvasElement): void {
     endDrag();
     if (wasDragging || afterReset || game.phase !== "edycja") return;
     const r = canvas.getBoundingClientRect();
-    if (e.clientY - r.top > r.height * 0.86) game = startProof(game);
+    if (e.clientY - r.top > r.height * ACTION_BAND) game = startProof(game);
   });
 
   function frame(now: number): void {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
-    game = advance(game, dt);
+    time = now / 1000;
+    if (!menuOpen) {
+      const before = game.phase;
+      game = advance(game, dt);
+      if (before === "dowod" && game.phase === "wygrana") {
+        progress = markSolved(progress, game.level.id);
+        saveProgress(store, progress);
+      }
+    }
     draw();
     requestAnimationFrame(frame);
   }
@@ -116,13 +166,17 @@ export function mount(canvas: HTMLCanvasElement): void {
     const k = ellipseFromFoci(game.ellipse.f1, game.ellipse.f2, game.ellipse.a);
     drawConic(ctx, c, k, PALETTE.curve, PALETTE.curveGlow, 2);
 
-    glowDot(ctx, c, level.hole, PALETTE.hole, PALETTE.holeGlow, 9);
+    // Stałe punkty są pełne (piłka) albo wyglądają jak otwór (dołek); wszystko, co da się
+    // przeciągnąć, to pulsujący pusty pierścień w kolorze elipsy. Pierścienie rysujemy
+    // na końcu, żeby ognisko postawione na piłce otaczało ją, a nie znikało pod nią.
+    holeMark(ctx, c, level.hole, PALETTE.hole, PALETTE.holeGlow, PALETTE.holeInside, 9);
     glowDot(ctx, c, level.ball, PALETTE.ball, PALETTE.ballGlow, 6);
 
     if (game.phase === "edycja") {
       for (const h of handlePositions(game.ellipse)) {
         if (level.locked.includes(h.id)) continue;
-        glowDot(ctx, c, h.pos, PALETTE.handle, PALETTE.curveGlow, 7);
+        const r = dragging === h.id ? 15 : 12 + 1.5 * Math.sin(time * 3.2);
+        ringHandle(ctx, c, h.pos, PALETTE.handle, PALETTE.handleGlow, r);
       }
       // podgląd na żywo: dwie piłki, blade tory
       for (const b of preview(game).balls) {
@@ -157,7 +211,7 @@ export function mount(canvas: HTMLCanvasElement): void {
           game.proof.simultaneous
             ? "Osiem torów, jedno miejsce, ta sama chwila."
             : "Osiem torów, jedno miejsce.",
-          "Następny",
+          ["Jeszcze raz", "Następny"],
         );
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
@@ -165,11 +219,17 @@ export function mount(canvas: HTMLCanvasElement): void {
       }
     }
 
-    function banner(title: string, hint: string, action: string): void {
-      const w = canvas.width / dpr();
-      const h = canvas.height / dpr();
-      ctx.fillStyle = PALETTE.text;
+    if (menuOpen) drawMenu();
+    drawMenuButton();
+
+    function banner(title: string, hint: string, action: string | [string, string]): void {
+      const w = viewW();
+      const h = viewH();
       ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.muted;
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.fillText(`Poziom ${levelIndex + 1} / ${LEVELS.length}`, w / 2, 22);
+      ctx.fillStyle = PALETTE.text;
       ctx.font = "600 18px system-ui, sans-serif";
       ctx.fillText(title, w / 2, 46);
       // Podpowiedź ZAWIJAMY. Bez tego instrukcja poziomu urywa się na szerokości
@@ -181,8 +241,62 @@ export function mount(canvas: HTMLCanvasElement): void {
         ctx.fillText(line, w / 2, 70 + i * 18);
       });
       ctx.font = "600 16px system-ui, sans-serif";
-      ctx.fillStyle = PALETTE.curve;
-      ctx.fillText(action, w / 2, h * 0.93);
+      if (typeof action === "string") {
+        ctx.fillStyle = PALETTE.curve;
+        ctx.fillText(action, w / 2, h * 0.93);
+      } else {
+        ctx.fillStyle = PALETTE.text;
+        ctx.fillText(action[0], w / 4, h * 0.93);
+        ctx.fillStyle = PALETTE.curve;
+        ctx.fillText(action[1], (3 * w) / 4, h * 0.93);
+        ctx.fillStyle = PALETTE.muted;
+        ctx.fillRect(w / 2 - 0.5, h * 0.9, 1, h * 0.05);
+      }
+      ctx.textAlign = "left";
+    }
+
+    function drawMenuButton(): void {
+      const b = MENU_BUTTON;
+      ctx.fillStyle = menuOpen ? PALETTE.curve : PALETTE.text;
+      for (let i = -1; i <= 1; i++) {
+        ctx.fillRect(b.x + b.w / 2 - 10, b.y + b.h / 2 + i * 6 - 1, 20, 2);
+      }
+    }
+
+    function drawMenu(): void {
+      const w = viewW();
+      const h = viewH();
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.fillRect(0, 0, w, h);
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText("Poziomy", w / 2, 34);
+      menuLayout(w, h, LEVELS.length).forEach((t, i) => {
+        const lvl = LEVELS[i];
+        ctx.beginPath();
+        ctx.roundRect(t.x, t.y, t.w, t.h, 10);
+        ctx.fillStyle = PALETTE.tile;
+        ctx.fill();
+        ctx.lineWidth = i === levelIndex ? 2 : 1;
+        ctx.strokeStyle = i === levelIndex ? PALETTE.curve : PALETTE.tileEdge;
+        ctx.stroke();
+        ctx.textAlign = "left";
+        ctx.fillStyle = PALETTE.text;
+        ctx.font = "600 22px system-ui, sans-serif";
+        ctx.fillText(String(i + 1), t.x + 12, t.y + 30);
+        if (progress.solved.includes(lvl.id)) {
+          ctx.textAlign = "right";
+          ctx.fillStyle = PALETTE.curve;
+          ctx.fillText("✓", t.x + t.w - 12, t.y + 30);
+          ctx.textAlign = "left";
+        }
+        ctx.fillStyle = PALETTE.muted;
+        ctx.font = "13px system-ui, sans-serif";
+        wrapByWords(lvl.title, t.w - 24).slice(0, 3).forEach((line, j) => {
+          ctx.fillText(line, t.x + 12, t.y + 54 + j * 16);
+        });
+      });
       ctx.textAlign = "left";
     }
   }
