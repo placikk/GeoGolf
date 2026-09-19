@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { LEVELS } from "../../src/levels";
 import { pathLength } from "../../src/render/trails";
-import { advance, newGame, preview, startProof, BALL_SPEED } from "../../src/ui/game";
+import { advance, newGame, preview, retry, startProof, BALL_SPEED } from "../../src/ui/game";
 
 const level = LEVELS[0];
 
@@ -92,5 +92,44 @@ describe("stan gry", () => {
         expect(g.phase).toBe("wygrana");
       },
     );
+  });
+});
+
+describe("jeszcze raz", () => {
+  const lvl = LEVELS[1];
+  // ustawienie gracza inne niż start i inne niż zapisane rozwiązanie
+  const mine = { ...lvl.pieces[0].solution, a: 0.9 };
+
+  const finish = (g: ReturnType<typeof newGame>) => {
+    for (let i = 0; i < 1200 && g.phase === "dowod"; i++) g = advance(g, 1 / 60);
+    return g;
+  };
+
+  it("po wygranej wraca do edycji z TYM SAMYM ustawieniem (tożsamość obiektów)", () => {
+    const won = finish(startProof({ ...newGame(lvl), pieces: [mine] }));
+    expect(won.phase).toBe("wygrana");
+    const again = retry(won);
+    expect(again.phase).toBe("edycja");
+    expect(again.proof).toBeNull();
+    expect(again.elapsed).toBe(0);
+    expect(again.pieces).toBe(won.pieces);
+    expect(again.pieces[0]).toBe(mine);
+  });
+
+  it("po porażce też: ustawienie zostaje, nie wraca stan startowy", () => {
+    const bad = { ...mine, f1: { x: -0.1, y: 0.3 } };
+    const lost = finish(startProof({ ...newGame(lvl), pieces: [bad] }));
+    expect(lost.phase).toBe("porazka");
+    expect(retry(lost).pieces[0]).toBe(bad);
+  });
+
+  it("w trakcie dowodu: przerwanie wraca do edycji z tym samym ustawieniem", () => {
+    const running = advance(startProof({ ...newGame(lvl), pieces: [mine] }), 0.1);
+    expect(running.phase).toBe("dowod");
+    expect(retry(running).pieces[0]).toBe(mine);
+  });
+
+  it("nowa gra nadal daje stan startowy", () => {
+    expect(newGame(lvl).pieces).toEqual([lvl.pieces[0].start]);
   });
 });

@@ -5,8 +5,8 @@ import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sector
 import { SPAN } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
-import { BALL_SPEED, GameState, advance, newGame, preview, startProof } from "./game";
-import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, winAction } from "./menu";
+import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
+import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, winAction, winLabels } from "./menu";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
 
 const TRAIL = 0.35;
@@ -44,6 +44,8 @@ export function mount(canvas: HTMLCanvasElement): void {
   const toWorld = (e: PointerEvent): Vec2 => cam().toWorld(toScreenPoint(e));
   const viewW = () => canvas.width / dpr();
   const viewH = () => canvas.height / dpr();
+
+  const isLast = (): boolean => levelIndex === LEVELS.length - 1;
 
   function goTo(index: number): void {
     levelIndex = index;
@@ -91,14 +93,16 @@ export function mount(canvas: HTMLCanvasElement): void {
       return;
     }
     if (game.phase === "wygrana") {
-      const action = winAction(p, viewW(), viewH());
-      if (action === "nastepny") goTo((levelIndex + 1) % LEVELS.length);
-      if (action === "powtorz") goTo(levelIndex);
+      const action = winAction(p, viewW(), viewH(), isLast());
+      if (action === "nastepny") goTo(levelIndex + 1);
+      if (action === "menu") menuOpen = true;
+      if (action === "powtorz") game = retry(game);
       consumedReset = true;
       return;
     }
     if (game.phase !== "edycja") {
-      goTo(levelIndex);
+      // dotknięcie w trakcie dowodu albo po porażce: z powrotem do edycji, ustawienie zostaje
+      game = retry(game);
       consumedReset = true;
       return;
     }
@@ -233,13 +237,12 @@ export function mount(canvas: HTMLCanvasElement): void {
         // rozwiązania, w których dołek leży na cięciwie zamiast w ognisku i piłki
         // przybywają w odstępie kilku sekund. Chwalenie się wtedy "tą samą chwilą"
         // byłoby kłamstwem gry wobec gracza.
-        banner(
-          "Wpadły wszystkie",
-          game.proof.simultaneous
-            ? "Osiem torów, jedno miejsce, ta sama chwila."
-            : "Osiem torów, jedno miejsce.",
-          ["Jeszcze raz", "Następny"],
-        );
+        const allSolved = LEVELS.every((l) => progress.solved.includes(l.id));
+        const { right, note } = winLabels(isLast(), allSolved);
+        const summary = game.proof.simultaneous
+          ? "Osiem torów, jedno miejsce, ta sama chwila."
+          : "Osiem torów, jedno miejsce.";
+        banner("Wpadły wszystkie", note === null ? summary : `${summary} ${note}`, ["Jeszcze raz", right]);
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
         banner("Nie wszystkie", `Chybiło ${missed} z ${game.proof.balls.length}. Zobacz, którędy.`, "Jeszcze raz");

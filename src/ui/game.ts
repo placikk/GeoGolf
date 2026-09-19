@@ -39,6 +39,12 @@ export const startProof = (state: GameState): GameState => ({
   ...state, phase: "dowod", proof: proofFor(state, state.level.test.balls), elapsed: 0,
 });
 
+/** „Jeszcze raz": z powrotem do edycji z TYM SAMYM ustawieniem elementów, które gracz
+ *  właśnie sprawdził. Reset do stanu startowego to `newGame` (kafelek poziomu w menu). */
+export const retry = (state: GameState): GameState => ({
+  ...state, phase: "edycja", proof: null, elapsed: 0,
+});
+
 export function advance(state: GameState, dt: number): GameState {
   if (state.phase !== "dowod" || state.proof === null) return state;
   const elapsed = state.elapsed + dt;

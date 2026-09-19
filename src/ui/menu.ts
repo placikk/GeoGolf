@@ -30,14 +30,27 @@ export function menuLayout(width: number, height: number, count: number): Rect[]
   }));
 }
 
+export type WinAction = "powtorz" | "nastepny" | "menu";
+
+/** Na ekranie wygranej dolny pas dzieli się na „Jeszcze raz" (lewo) i „Następny" (prawo);
+ *  na ostatnim poziomie prawa połowa to „Menu". Dotknięcie wyżej niczego nie robi,
+ *  żeby nie przeskoczyć poziomu przypadkiem. */
+export function winAction(p: Vec2, width: number, height: number, isLast = false): WinAction | null {
+  if (p.y < height * ACTION_BAND) return null;
+  if (p.x < width / 2) return "powtorz";
+  return isLast ? "menu" : "nastepny";
+}
+
+/** Prawy przycisk ekranu wygranej i dopisek do banera. Na ostatnim poziomie nie ma
+ *  „Następnego" — jest „Menu" i podsumowanie. */
+export function winLabels(isLast: boolean, allSolved: boolean): { right: string; note: string | null } {
+  if (!isLast) return { right: "Następny", note: null };
+  return { right: "Menu", note: allSolved ? "Wszystkie poziomy ukończone." : "To był ostatni poziom." };
+}
+
+
 export function hitTile(tiles: Rect[], p: Vec2): number | null {
   const i = tiles.findIndex((t) => hitRect(t, p));
   return i < 0 ? null : i;
 }
 
-/** Na ekranie wygranej dolny pas dzieli się na „Jeszcze raz” (lewo) i „Następny” (prawo).
- *  Dotknięcie wyżej niczego nie robi, żeby nie przeskoczyć poziomu przypadkiem. */
-export function winAction(p: Vec2, width: number, height: number): "powtorz" | "nastepny" | null {
-  if (p.y < height * ACTION_BAND) return null;
-  return p.x < width / 2 ? "powtorz" : "nastepny";
-}

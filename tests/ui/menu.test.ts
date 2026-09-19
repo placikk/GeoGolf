@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { MENU_BUTTON, Rect, hitRect, hitTile, menuLayout, winAction } from "../../src/ui/menu";
+import { MENU_BUTTON, Rect, hitRect, hitTile, menuLayout, winAction, winLabels } from "../../src/ui/menu";
 import { LEVELS } from "../../src/levels";
 
 const center = (r: Rect) => vec(r.x + r.w / 2, r.y + r.h / 2);
@@ -77,4 +77,23 @@ describe("menu z poziomami etapu 2", () => {
       }
     });
   }
+});
+
+describe("ekran wygranej na ostatnim poziomie", () => {
+  const w = 390, h = 844;
+  it("prawa połowa dolnego pasa: na ostatnim poziomie menu, na innych następny", () => {
+    expect(winAction(vec(340, h * 0.93), w, h, true)).toBe("menu");
+    expect(winAction(vec(340, h * 0.93), w, h, false)).toBe("nastepny");
+  });
+
+  it("lewa połowa zawsze powtarza, a dotknięcie ponad pasem nic nie robi", () => {
+    expect(winAction(vec(50, h * 0.93), w, h, true)).toBe("powtorz");
+    expect(winAction(vec(340, h * 0.5), w, h, true)).toBeNull();
+  });
+
+  it("podpisy: następny bez dopisku; na ostatnim menu i podsumowanie zależne od postępu", () => {
+    expect(winLabels(false, true)).toEqual({ right: "Następny", note: null });
+    expect(winLabels(true, false)).toEqual({ right: "Menu", note: "To był ostatni poziom." });
+    expect(winLabels(true, true)).toEqual({ right: "Menu", note: "Wszystkie poziomy ukończone." });
+  });
 });
