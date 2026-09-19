@@ -1,7 +1,7 @@
 # Golf geometryczny — etap 2: łuki i odcinki
 
 Data: 2026-09-19
-Status: zaakceptowana w rozmowie, czeka na przegląd pliku
+Status: zaakceptowana (2026-09-19), gotowa do planu implementacji
 Etap: 2
 Poprzedni dokument: `2026-09-09-golf-geometryczny-design.md` (etap 1) — wszystko,
 czego ten dokument nie zmienia, obowiązuje nadal.
