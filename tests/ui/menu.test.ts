@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, hitRect, hitTile, menuLayout, playArea, winAction, winLabels } from "../../src/ui/menu";
+import {
+  ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, editAction, hitRect, hitTile, menuLayout, playArea, settingsButton,
+  settingsLayout, winAction, winLabels,
+} from "../../src/ui/menu";
 import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
 
@@ -125,5 +128,51 @@ describe("miejsce na napisy", () => {
   it("bez pasa kamera zachowuje się jak dotąd (środek ekranu)", () => {
     const cam = makeCamera(400, 800);
     expect(cam.toScreen(vec(0, 0)).y).toBeCloseTo(400, 9);
+  });
+});
+
+describe("przycisk ustawień i ekran ustawień", () => {
+  const overlapR = (a: Rect, b: Rect) =>
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  for (const [w, h] of [[375, 667], [390, 664], [664, 390], [1280, 720]] as const) {
+    it(`${w}×${h}: ⚙ w prawym górnym rogu, ≥ 44 px, nie nachodzi na ☰ ani na planszę`, () => {
+      const b = settingsButton(w);
+      expect(b.x + b.w).toBeLessThanOrEqual(w);
+      expect(b.x).toBeGreaterThan(w / 2);
+      expect(b.y).toBeLessThan(20);
+      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(44);
+      expect(overlapR(b, MENU_BUTTON)).toBe(false);
+      const cam = makeCamera(w, h, 0.06, playArea(h));
+      const tl = cam.toScreen(vec(-1, 1)), br = cam.toScreen(vec(1, -1));
+      expect(overlapR(b, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y })).toBe(false);
+    });
+
+    it(`${w}×${h}: wiersze ustawień mieszczą się, są celami ≥ 44 px i nie nachodzą na nic`, () => {
+      const rows = settingsLayout(w, h, 2);
+      rows.forEach((r, i) => {
+        expect(r.x >= 0 && r.y >= 0 && r.x + r.w <= w && r.y + r.h <= h, `wiersz ${i}`).toBe(true);
+        expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(44);
+        expect(overlapR(r, MENU_BUTTON)).toBe(false);
+        expect(overlapR(r, settingsButton(w))).toBe(false);
+        rows.slice(i + 1).forEach((u) => expect(overlapR(r, u)).toBe(false));
+      });
+      rows.forEach((r, i) => expect(hitTile(rows, center(r))).toBe(i));
+      expect(hitTile(rows, vec(w / 2, h - 2))).toBeNull();
+    });
+  }
+});
+
+describe("dolny pas w edycji", () => {
+  const w = 390, h = 844;
+  it("lewa połowa to reset, prawa to sprawdź", () => {
+    expect(editAction(vec(50, h * 0.93), w, h)).toBe("reset");
+    expect(editAction(vec(340, h * 0.93), w, h)).toBe("sprawdz");
+  });
+
+  it("dotknięcie ponad pasem nic nie robi; granica pasa należy już do pasa", () => {
+    expect(editAction(vec(50, h * 0.5), w, h)).toBeNull();
+    expect(editAction(vec(340, h * ACTION_BAND - 1), w, h)).toBeNull();
+    expect(editAction(vec(340, h * ACTION_BAND), w, h)).toBe("sprawdz");
   });
 });

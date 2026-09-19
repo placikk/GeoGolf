@@ -6,6 +6,9 @@ export interface Rect { x: number; y: number; w: number; h: number }
 /** Przycisk ☰ w lewym górnym rogu — 44 px, minimalny cel dotykowy. */
 export const MENU_BUTTON: Rect = { x: 6, y: 6, w: 44, h: 44 };
 
+/** Przycisk ⚙ w prawym górnym rogu — lustrzane odbicie ☰; zależy od szerokości ekranu. */
+export const settingsButton = (width: number): Rect => ({ x: width - 6 - 44, y: 6, w: 44, h: 44 });
+
 /** Dolny pas ekranu, w którym leżą przyciski akcji (ten sam próg co „Sprawdź”). */
 export const ACTION_BAND = 0.86;
 
@@ -64,3 +67,28 @@ export function hitTile(tiles: Rect[], p: Vec2): number | null {
   return i < 0 ? null : i;
 }
 
+export type EditAction = "reset" | "sprawdz";
+
+/** W trybie edycji dolny pas dzieli się na „Reset" (lewo) i „Sprawdź" (prawo) — ten sam
+ *  układ co „Jeszcze raz | Następny" na ekranie wygranej. Wyżej: nic. */
+export function editAction(p: Vec2, width: number, height: number): EditAction | null {
+  if (p.y < height * ACTION_BAND) return null;
+  return p.x < width / 2 ? "reset" : "sprawdz";
+}
+
+const ROW_H = 56;
+const ROW_GAP = 12;
+const ROW_MAX_W = 360;
+
+/** Wiersze ekranu ustawień: jeden pod drugim, wyśrodkowane, każdy ≥ 44 px wysokości,
+ *  poniżej przycisków ☰ / ⚙ i nagłówka. */
+export function settingsLayout(width: number, height: number, count: number): Rect[] {
+  const w = Math.min(ROW_MAX_W, width - 2 * SIDE);
+  const total = count * ROW_H + (count - 1) * ROW_GAP;
+  const top = Math.max(TOP, (height - total) / 2);
+  return Array.from({ length: count }, (_, i) => ({
+    x: (width - w) / 2,
+    y: top + i * (ROW_H + ROW_GAP),
+    w, h: ROW_H,
+  }));
+}
