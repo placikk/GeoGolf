@@ -1,8 +1,9 @@
 import { Vec2, vec } from "../core/vec";
-import { BOARD_WALLS, LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
+import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
-import { PALETTE, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge } from "../render/draw";
-import { SPAN } from "../render/shapes";
+import {
+  PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
+} from "../render/draw";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
@@ -175,15 +176,13 @@ export function mount(canvas: HTMLCanvasElement): void {
     ctx.fillStyle = PALETTE.bg;
     ctx.fillRect(0, 0, canvas.width / dpr(), canvas.height / dpr());
 
-    // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
-    // gdzie lecą piłki" wyglądałby na błąd gry
-    if (game.phase === "edycja" && level.sector !== undefined) {
-      sectorWedge(ctx, c, level.ball, level.sector, SPAN, PALETTE.sector);
-    }
+    // brzeg planszy jest ścianą: jaśniejsze tło planszy i stonowana ramka
+    boardFrame(ctx, c, PALETTE.board, PALETTE.frame, PALETTE.frameGlow, 1);
 
-    // brzeg planszy jest ścianą — cienka ramka w kolorze stałych kształtów
-    for (const w of BOARD_WALLS) {
-      drawPiece(ctx, c, shapeToPiece(w), PALETTE.obstacle, PALETTE.obstacleGlow, 1);
+    // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
+    // gdzie lecą piłki" wyglądałby na błąd gry; mały i przycięty do planszy
+    if (game.phase === "edycja" && level.sector !== undefined) {
+      sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
     }
 
     for (const o of level.obstacles) {

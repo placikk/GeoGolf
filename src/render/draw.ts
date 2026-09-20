@@ -28,7 +28,24 @@ export const PALETTE = {
   tileEdge: "rgba(203, 213, 225, 0.22)",
   fixedFocus: "rgba(248, 113, 113, 0.45)",
   sector: "rgba(248, 250, 252, 0.05)",
+  board: "#10161e",
+  frame: "#64748b",
+  frameGlow: "rgba(100, 116, 139, 0.18)",
 };
+
+/** Promień klina wachlarza w jednostkach świata — mały, żeby mieścił się w ramce. */
+export const SECTOR_REACH = 0.4;
+
+/** Promień zaokrąglenia rogów ramki w pikselach CSS. Tylko rysunek: ściany (fizyka)
+ *  mają ostre narożniki, a 6 px różnicy w rogu jest niewidoczne dla gry. */
+export const FRAME_RADIUS = 6;
+
+/** Prostokąt planszy [-1, 1]² na ekranie. */
+function boardRect(cam: Camera): { x: number; y: number; w: number; h: number } {
+  const tl = cam.toScreen({ x: -1, y: 1 });
+  const br = cam.toScreen({ x: 1, y: -1 });
+  return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+}
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -127,7 +144,8 @@ export function drawPiece(
   glowPolyline(ctx, cam, pts, color, glow, width, piece.arc === undefined && pts.length > 2);
 }
 
-/** Blady klin wachlarza od piłki. Samo wypełnienie, bez obrysu i bez poświaty. */
+/** Blady klin wachlarza od piłki. Samo wypełnienie, bez obrysu i bez poświaty,
+ *  przycięte do planszy — klin nigdy nie wychodzi za ramkę. */
 export function sectorWedge(
   ctx: Ctx, cam: Camera, apex: Vec2, sector: Sector, reach: number, fill: string,
 ): void {
@@ -136,10 +154,39 @@ export function sectorWedge(
   // oś Y ekranu jest odwrócona, więc kąty świata zmieniają znak
   const from = -(sector.center + sector.width / 2);
   const to = -(sector.center - sector.width / 2);
+  const b = boardRect(cam);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(b.x, b.y, b.w, b.h);
+  ctx.clip();
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.moveTo(s.x, s.y);
   ctx.arc(s.x, s.y, r, from, to);
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
+}
+
+/** Plansza: tło o odcień jaśniejsze od ekranu i cienka stonowana ramka z poświatą przez
+ *  podwójny obrys (bez rozmycia cienia), z lekko zaokrąglonymi rogami. */
+export function boardFrame(
+  ctx: Ctx, cam: Camera, fill: string, color: string, glow: string, width: number,
+): void {
+  const b = boardRect(cam);
+  const outline = () => {
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, b.w, b.h, FRAME_RADIUS);
+  };
+  ctx.fillStyle = fill;
+  outline();
+  ctx.fill();
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = width * 5;
+  outline();
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  outline();
+  ctx.stroke();
 }
