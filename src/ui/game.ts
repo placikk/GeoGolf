@@ -40,7 +40,8 @@ export const startProof = (state: GameState): GameState => ({
 });
 
 /** „Jeszcze raz": z powrotem do edycji z TYM SAMYM ustawieniem elementów, które gracz
- *  właśnie sprawdził. Reset do stanu startowego to `newGame` (kafelek poziomu w menu). */
+ *  właśnie sprawdził. Reset do stanu startowego to `newGame` (kafelek poziomu w menu
+ *  albo przycisk „Reset" w dolnym pasku edycji). */
 export const retry = (state: GameState): GameState => ({
   ...state, phase: "edycja", proof: null, elapsed: 0,
 });

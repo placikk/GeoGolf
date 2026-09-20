@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
-  ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, editAction, hitRect, hitTile, menuLayout, playArea, settingsButton,
-  settingsLayout, winAction, winLabels,
+  ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea,
+  settingsButton, settingsLayout, winAction, winLabels,
 } from "../../src/ui/menu";
 import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
@@ -175,6 +175,21 @@ describe("dolny pas w edycji", () => {
     expect(editAction(vec(50, h * 0.5), w, h)).toBeNull();
     expect(editAction(vec(340, h * ACTION_BAND - 1), w, h)).toBeNull();
     expect(editAction(vec(340, h * ACTION_BAND), w, h)).toBe("sprawdz");
+  });
+
+  it("inActionBand: granica pasa jest już w pasie, piksel wyżej jeszcze nie", () => {
+    expect(inActionBand(vec(50, h * ACTION_BAND - 1), h)).toBe(false);
+    expect(inActionBand(vec(50, h * ACTION_BAND), h)).toBe(true);
+    expect(inActionBand(vec(50, h * ACTION_BAND + 10), h)).toBe(true);
+  });
+
+  it("editAction zgadza się z inActionBand: null dokładnie wtedy, gdy poza pasem", () => {
+    for (const y of [h * 0.5, h * ACTION_BAND - 1, h * ACTION_BAND, h * ACTION_BAND + 10, h - 1]) {
+      for (const x of [10, w / 2, w - 10]) {
+        const p = vec(x, y);
+        expect(editAction(p, w, h) === null).toBe(!inActionBand(p, h));
+      }
+    }
   });
 });
 

@@ -18,6 +18,11 @@ describe("ustawienia", () => {
     expect(loadSettings(memory())).toEqual(DEFAULT_SETTINGS);
   });
 
+  it("bez pamięci zwraca kopię domyślnych, nie referencję (nikt jej nie zmutuje)", () => {
+    expect(loadSettings(null)).not.toBe(DEFAULT_SETTINGS);
+    expect(loadSettings(null)).toEqual(DEFAULT_SETTINGS);
+  });
+
   it("zapis wraca po ponownym wczytaniu, pod własnym kluczem (nie psuje postępu)", () => {
     const s = memory({ "golf-geometryczny/postep": '{"solved":["skos"],"last":2}' });
     saveSettings(s, { previewPaths: true, hints: false });

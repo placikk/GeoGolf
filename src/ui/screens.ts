@@ -8,7 +8,8 @@ import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  MENU_BUTTON, editAction, hitRect, hitTile, menuLayout, playArea, settingsButton, settingsLayout, winAction, winLabels,
+  MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, settingsButton, settingsLayout,
+  winAction, winLabels,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -140,6 +141,13 @@ export function mount(canvas: HTMLCanvasElement): void {
       return;
     }
     consumedReset = false;
+    if (inActionBand(p, viewH())) {
+      // dotknięcie w pasie akcji: nie łapiemy uchwytu — `pointerup` rozpozna to
+      // jako Reset / Sprawdź (patrz komentarz przy tamtym listenerze)
+      dragging = null;
+      pointer = null;
+      return;
+    }
     const w = toWorld(e);
     dragging = pickHandle(
       w, game.pieces, game.level.pieces.map((p) => p.locked), (HANDLE_PX * 1.5) / cam().scale,
@@ -305,8 +313,11 @@ export function mount(canvas: HTMLCanvasElement): void {
       });
       ctx.font = "600 16px system-ui, sans-serif";
       if (typeof action === "string") {
+        // po stronie „Sprawdź" (nie na środku) — środek to granica Reset | Sprawdź
+        // w trybie edycji, więc drugie dotknięcie tego samego miejsca (np. przy
+        // podwójnym stuknięciu) trafiłoby czasem w Reset i skasowało układ gracza
         ctx.fillStyle = PALETTE.curve;
-        ctx.fillText(action, w / 2, h * 0.93);
+        ctx.fillText(action, (3 * w) / 4, h * 0.93);
       } else {
         ctx.fillStyle = PALETTE.text;
         ctx.fillText(action[0], w / 4, h * 0.93);

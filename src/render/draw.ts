@@ -5,6 +5,8 @@ import { Sector } from "../core/verify";
 import { Camera } from "./camera";
 import { conicPolyline, piecePolyline } from "./shapes";
 
+const MUTED = "#64748b";
+
 export const PALETTE = {
   bg: "#0b0f14",
   curve: "#5eead4",
@@ -22,14 +24,15 @@ export const PALETTE = {
   handleGlow: "rgba(94, 234, 212, 0.22)",
   miss: "#f87171",
   text: "#cbd5e1",
-  muted: "#64748b",
+  muted: MUTED,
   overlay: "rgba(11, 15, 20, 0.94)",
   tile: "rgba(94, 234, 212, 0.05)",
   tileEdge: "rgba(203, 213, 225, 0.22)",
   fixedFocus: "rgba(248, 113, 113, 0.45)",
   sector: "rgba(248, 250, 252, 0.05)",
   board: "#10161e",
-  frame: "#64748b",
+  frame: MUTED,
+  // ta sama barwa co `frame`/`muted`, tylko przy niskiej krycia — poświata ramki
   frameGlow: "rgba(100, 116, 139, 0.18)",
 };
 

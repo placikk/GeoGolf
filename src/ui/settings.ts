@@ -22,12 +22,13 @@ const KEY = "golf-geometryczny/ustawienia";
 export function loadSettings(store: Store | null): Settings {
   try {
     const raw = store?.getItem(KEY);
-    if (raw == null) return DEFAULT_SETTINGS;
+    // kopia, żeby żaden wywołujący nie mógł przez referencję zmutować wartości domyślnej
+    if (raw == null) return { ...DEFAULT_SETTINGS };
     const s = JSON.parse(raw) as Partial<Settings> | null;
     // tylko jawne `true` włącza — wszystko inne (brak pola, śmieci) to wartość domyślna
     return { previewPaths: s?.previewPaths === true, hints: s?.hints === true };
   } catch {
-    return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS };
   }
 }
 

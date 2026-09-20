@@ -12,6 +12,9 @@ export const settingsButton = (width: number): Rect => ({ x: width - 6 - 44, y: 
 /** Dolny pas ekranu, w którym leżą przyciski akcji (ten sam próg co „Sprawdź”). */
 export const ACTION_BAND = 0.86;
 
+/** Czy punkt leży w dolnym pasie akcji (Reset / Sprawdź / przyciski ekranów). */
+export const inActionBand = (p: Vec2, height: number): boolean => p.y >= height * ACTION_BAND;
+
 /** Górny pas ekranu na baner: numer poziomu, tytuł, podpowiedź (na telefonach zajmuje
  *  do dwóch linii — zmierzone maksimum to 2 — z zapasem na trzecią) i przycisk menu
  *  (linie na 70, 88, 106 px). */
@@ -72,7 +75,7 @@ export type EditAction = "reset" | "sprawdz";
 /** W trybie edycji dolny pas dzieli się na „Reset" (lewo) i „Sprawdź" (prawo) — ten sam
  *  układ co „Jeszcze raz | Następny" na ekranie wygranej. Wyżej: nic. */
 export function editAction(p: Vec2, width: number, height: number): EditAction | null {
-  if (p.y < height * ACTION_BAND) return null;
+  if (!inActionBand(p, height)) return null;
   return p.x < width / 2 ? "reset" : "sprawdz";
 }
 
