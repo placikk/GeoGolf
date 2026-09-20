@@ -145,7 +145,9 @@ describe("typy nowych kształtów", () => {
 
 describe("parabola i hiperbola jako kształty poziomu", () => {
   const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
-  const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+  // odległość ognisk 1.2, NIE 1 — inaczej `norm(...)` w gałęzi hiperboli byłby
+  // identycznością i test nie odróżniłby normalizacji od jej braku.
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.7, 0), 0.3, 1, { mid: 0, span: 2 });
 
   it("shapeFrame paraboli ma oś jednostkową od wierzchołka do ogniska", () => {
     const f = shapeFrame(par);
@@ -158,8 +160,9 @@ describe("parabola i hiperbola jako kształty poziomu", () => {
   it("shapeFrame hiperboli liczy b z ognisk i a", () => {
     const f = shapeFrame(hyp);
     if (f.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(len(f.axis)).toBeCloseTo(1, 12);
     expect(f.a).toBeCloseTo(0.3, 12);
-    expect(f.b).toBeCloseTo(Math.sqrt(0.25 - 0.09), 12);
+    expect(f.b).toBeCloseTo(Math.sqrt(0.36 - 0.09), 12);
     expect(f.branch).toBe(1);
   });
 
@@ -196,6 +199,6 @@ describe("parabola i hiperbola jako kształty poziomu", () => {
 
   it("shapeFoci zwraca ogniska każdej krzywej", () => {
     expect(shapeFoci(par)).toEqual([vec(-0.5, 0)]);
-    expect(shapeFoci(hyp)).toEqual([vec(-0.5, 0), vec(0.5, 0)]);
+    expect(shapeFoci(hyp)).toEqual([vec(-0.5, 0), vec(0.7, 0)]);
   });
 });
