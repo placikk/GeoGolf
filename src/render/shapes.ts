@@ -31,9 +31,12 @@ export function conicPolyline(k: Conic, steps = 128): Vec2[] {
 export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
   const range = piece.range;
   if (range !== undefined) {
-    // krzywa nieograniczona: równe kroki parametru. Dla paraboli parametr to odsunięcie
-    // prostopadłe, więc punkty wychodzą równomiernie; dla hiperboli gęstnieją przy
-    // wierzchołku, czyli tam, gdzie krzywizna jest największa — dokładnie gdzie trzeba.
+    // krzywa nieograniczona: równe kroki parametru. Prędkość parametryzacji |dP/dt|
+    // jest najmniejsza przy wierzchołku — dla paraboli rośnie jak √(1 + t²/4p²) (ok. 41%
+    // zmienności), dla hiperboli ostro jak cosh. Punkty się zatem gęszczą przy
+    // wierzchołku, gdzie krzywizna jest największa — dokładnie gdzie polylinii trzeba
+    // największej gęstości. Dla paraboli tylko składowa prostopadła zmienia się równomiernie,
+    // co będzie ważne w zadaniu 18 (szerokość wiązki odbytej = zakres t niezależnie od p).
     const n = Math.max(2, steps);
     return Array.from({ length: n + 1 }, (_, i) =>
       framePoint(range.frame, range.from + ((range.to - range.from) * i) / n));

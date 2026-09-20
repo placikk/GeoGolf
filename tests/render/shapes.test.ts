@@ -5,7 +5,7 @@ import { makeCamera } from "../../src/render/camera";
 import { conicPolyline, piecePolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
 import { arcEllipse, ellipse, ellipsePoint, segment, shapeToPiece } from "../../src/levels";
-import { CurveFrame, framePoint } from "../../src/core/frame";
+import { CurveFrame, frameParam, framePoint } from "../../src/core/frame";
 
 describe("kamera", () => {
   it("środek świata trafia w środek ekranu", () => {
@@ -119,9 +119,20 @@ describe("łamana kawałka z zakresem parametru", () => {
   });
 
   it("wszystkie punkty leżą na krzywej i na czynnej gałęzi", () => {
-    for (const p of piecePolyline(piece, 32)) {
+    const pts = piecePolyline(piece, 32);
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
       expect(evalConic(piece.conic, p)).toBeCloseTo(0, 9);
       expect(p.x).toBeGreaterThan(0); // prawa gałąź
+      // parametr każdego punktu musi leżeć w zakresie
+      const { t } = frameParam(frame, p);
+      expect(t).toBeGreaterThanOrEqual(piece.range!.from - 1e-9);
+      expect(t).toBeLessThanOrEqual(piece.range!.to + 1e-9);
+      // parametry są monotoniczne rosnące
+      if (i > 0) {
+        const { t: prevT } = frameParam(frame, pts[i - 1]);
+        expect(t).toBeGreaterThan(prevT - 1e-9);
+      }
     }
   });
 
@@ -133,6 +144,24 @@ describe("łamana kawałka z zakresem parametru", () => {
     };
     const pts = piecePolyline(pp, 16);
     expect(pts).toHaveLength(17);
-    for (const p of pts) expect(evalConic(pp.conic, p)).toBeCloseTo(0, 9);
+    // końce DOKŁADNIE
+    expect(pts[0].x).toBeCloseTo(framePoint(pf, -0.6).x, 12);
+    expect(pts[0].y).toBeCloseTo(framePoint(pf, -0.6).y, 12);
+    expect(pts[16].x).toBeCloseTo(framePoint(pf, 0.6).x, 12);
+    expect(pts[16].y).toBeCloseTo(framePoint(pf, 0.6).y, 12);
+    // wszystkie punkty
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      expect(evalConic(pp.conic, p)).toBeCloseTo(0, 9);
+      // parametr każdego punktu musi leżeć w zakresie
+      const { t } = frameParam(pf, p);
+      expect(t).toBeGreaterThanOrEqual(-0.6 - 1e-9);
+      expect(t).toBeLessThanOrEqual(0.6 + 1e-9);
+      // parametry są monotoniczne rosnące
+      if (i > 0) {
+        const { t: prevT } = frameParam(pf, pts[i - 1]);
+        expect(t).toBeGreaterThan(prevT - 1e-9);
+      }
+    }
   });
 });
