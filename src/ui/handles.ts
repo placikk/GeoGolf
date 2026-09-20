@@ -1,6 +1,8 @@
-import { Vec2, add, dist, scale } from "../core/vec";
-import { ArcRange, EllipseShape, Handle, Level, MIN_ARC_LENGTH } from "../levels/types";
-import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, isCircle } from "../levels/shape";
+import { Vec2, add, dist, dot, norm, scale, sub } from "../core/vec";
+import {
+  ArcRange, EllipseShape, Handle, HyperbolaShape, Level, MIN_ARC_LENGTH, MovableShape, ParabolaShape,
+} from "../levels/types";
+import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, shapeFoci } from "../levels/shape";
 import { arcFromParams, arcLengthBetween, arcParams, paramAtLength, perimeter } from "../levels/arc";
 
 const MIN_GAP = 1e-3;
@@ -9,7 +11,22 @@ const TAU = 2 * Math.PI;
 /** Który uchwyt którego elementu gracza. */
 export interface HandleRef { piece: number; id: Handle }
 
-export function handlePositions(state: EllipseShape): { id: Handle; pos: Vec2 }[] {
+/** Wierzchołek czynnej gałęzi hiperboli — tam siedzi uchwyt rozmiaru, bo tam gracz
+ *  widzi krzywą. Wierzchołek drugiej gałęzi nie jest uchwytem niczego. */
+const hyperbolaVertex = (s: HyperbolaShape): Vec2 =>
+  add(scale(add(s.f1, s.f2), 0.5), scale(norm(sub(s.f2, s.f1)), s.branch * s.a));
+
+export function handlePositions(state: MovableShape): { id: Handle; pos: Vec2 }[] {
+  if (state.kind === "parabola") {
+    return [{ id: "ognisko", pos: state.focus }, { id: "wierzcholek", pos: state.vertex }];
+  }
+  if (state.kind === "hiperbola") {
+    return [
+      { id: "ognisko1", pos: state.f1 },
+      { id: "ognisko2", pos: state.f2 },
+      { id: "rozmiar", pos: hyperbolaVertex(state) },
+    ];
+  }
   const out: { id: Handle; pos: Vec2 }[] = [
     { id: "ognisko1", pos: state.f1 },
     { id: "ognisko2", pos: state.f2 },
@@ -43,17 +60,16 @@ export function snapTo(p: Vec2, targets: Vec2[], radius: number): Vec2 {
  *  (bez okręgów — ich „ognisko" to środek przeszkody, nigdy nie jest celem) i ogniska
  *  POZOSTAŁYCH elementów gracza. Bez ostatnich kaskada z dwóch elementów gracza byłaby
  *  palcem niewykonalna. */
-export function snapTargets(level: Level, pieces: EllipseShape[], dragged: number): Vec2[] {
-  const fixedFoci = level.obstacles.flatMap((o) =>
-    o.kind === "elipsa" && !isCircle(o) ? [o.f1, o.f2] : []);
-  const otherFoci = pieces.flatMap((p, i) => (i === dragged ? [] : [p.f1, p.f2]));
+export function snapTargets(level: Level, pieces: MovableShape[], dragged: number): Vec2[] {
+  const fixedFoci = level.obstacles.flatMap((o) => (o.kind === "odcinek" ? [] : shapeFoci(o)));
+  const otherFoci = pieces.flatMap((p, i) => (i === dragged ? [] : shapeFoci(p)));
   return [level.ball, level.hole, ...fixedFoci, ...otherFoci];
 }
 
 /** Najbliższy odblokowany uchwyt ze WSZYSTKICH elementów gracza. `locks[i]` to blokady
  *  elementu `pieces[i]`. */
 export function pickHandle(
-  world: Vec2, pieces: EllipseShape[], locks: Handle[][], radius: number,
+  world: Vec2, pieces: MovableShape[], locks: Handle[][], radius: number,
 ): HandleRef | null {
   let best: HandleRef | null = null;
   let bestD = radius;
@@ -93,9 +109,64 @@ export function moveArcEnd(s: EllipseShape & { arc: ArcRange }, which: "poczatek
   return arcFromParams(s, start, paramAtLength(s, start, len));
 }
 
+/** Parabola przestaje istnieć, gdy ognisko usiądzie w wierzchołku, więc odsuwamy je
+ *  o MIN_GAP wzdłuż dotychczasowej osi — tak jak elipsa broni się przed a ≤ c. */
+function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape {
+  const os = norm(sub(s.focus, s.vertex));
+  if (handle === "ognisko") {
+    const focus = dist(to, s.vertex) < MIN_GAP ? add(s.vertex, scale(os, MIN_GAP)) : to;
+    return { ...s, focus };
+  }
+  if (handle !== "wierzcholek") return s;
+  const vertex = dist(s.focus, to) < MIN_GAP ? add(s.focus, scale(os, -MIN_GAP)) : to;
+  return { ...s, vertex };
+}
+
+/** Gdy przeciągane ognisko usiądzie na drugim, c → 0 i żadne a nie mieści się w (0, c) —
+ *  `fit` poniżej wtedy nie ma z czego wybrać. Tak jak parabola broni się przed ogniskiem
+ *  w wierzchołku, odsuwamy przeciągane ognisko o MIN_FOCUS_GAP od drugiego, zamiast
+ *  pozwolić im się zlać w jeden punkt. */
+const MIN_FOCUS_GAP = 10 * MIN_GAP;
+const keepApart = (moved: Vec2, other: Vec2, fallbackAxis: Vec2): Vec2 => {
+  const d = dist(moved, other);
+  if (d >= MIN_FOCUS_GAP) return moved;
+  const dir = d < 1e-12 ? fallbackAxis : norm(sub(moved, other));
+  return add(other, scale(dir, MIN_FOCUS_GAP));
+};
+
+/** Hiperbola istnieje tylko przy 0 < a < c, więc KAŻDE przeciągnięcie kończy się
+ *  zaciśnięciem `a` do tego przedziału. Gałąź jest daną poziomu — uchwyt rozmiaru
+ *  bierze z palca tylko ODLEGŁOŚĆ od środka wzdłuż osi, nigdy stronę. */
+function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaShape {
+  const fit = (x: HyperbolaShape): HyperbolaShape => {
+    const c = dist(x.f1, x.f2) / 2;
+    return { ...x, a: clamp(x.a, MIN_GAP, Math.max(MIN_GAP * 2, c - MIN_GAP)) };
+  };
+  if (handle === "ognisko1") {
+    return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))) });
+  }
+  if (handle === "ognisko2") {
+    return fit({ ...s, f2: keepApart(to, s.f1, norm(sub(s.f2, s.f1))) });
+  }
+  if (handle !== "rozmiar") return s;
+  const center = scale(add(s.f1, s.f2), 0.5);
+  return fit({ ...s, a: Math.abs(dot(sub(to, center), norm(sub(s.f2, s.f1)))) });
+}
+
 /** `lockedA`: wartość `a` ze startu poziomu, gdy uchwyt „rozmiar” tego elementu jest
- *  zablokowany (patrz `PlayerPiece.locked`); w przeciwnym razie `undefined`. */
-export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2, lockedA?: number): EllipseShape {
+ *  zablokowany (patrz `PlayerPiece.locked`); w przeciwnym razie `undefined`.
+ *
+ *  Przeciążenie na `EllipseShape` istnieje, bo zwykły `MovableShape → MovableShape`
+ *  gubi dla wywołującego wiedzę, że wynik przeciągnięcia elipsy jest dalej elipsą —
+ *  TypeScript nie wnioskuje tego sam z unii bez przeciążenia, a etapy 1–2 mają kod,
+ *  który po `applyDrag` od razu czyta pola elipsy (`.a`, `.f1`, `.arc`) bez zawężania. */
+export function applyDrag(state: EllipseShape, handle: Handle, to: Vec2, lockedA?: number): EllipseShape;
+export function applyDrag(state: MovableShape, handle: Handle, to: Vec2, lockedA?: number): MovableShape;
+export function applyDrag(
+  state: MovableShape, handle: Handle, to: Vec2, lockedA?: number,
+): MovableShape {
+  if (state.kind === "parabola") return dragParabola(state, handle, to);
+  if (state.kind === "hiperbola") return dragHyperbola(state, handle, to);
   if (handle === "poczatek" || handle === "koniec") {
     // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej
     if (state.arc === undefined) return state;

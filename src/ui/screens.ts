@@ -1,5 +1,5 @@
 import { Vec2, vec } from "../core/vec";
-import { EllipseShape, LEVELS, MovableShape, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
+import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
@@ -16,26 +16,6 @@ import { browserStore, loadProgress, markSolved, saveProgress } from "./progress
 
 const TRAIL = 0.35;
 const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
-
-/** TYMCZASOWE RUSZTOWANIE zadania 9, nie docelowy design — do USUNIĘCIA w zadaniu 10.
- *  Uchwyty (jeszcze) istnieją tylko dla elips — `pickHandle`/`applyDrag` z `./handles`
- *  są typowane na `EllipseShape`, bo zadanie 10 dopiero je poszerzy do `MovableShape`;
- *  parabola i hiperbola nie mają uchwytów końców, ich kawałek opisuje `span` z danych
- *  poziomu, nie palec gracza. Filtrujemy elementy gracza do elips, ale zachowujemy
- *  ORYGINALNE indeksy z `game.pieces`, żeby `HandleRef.piece` dalej trafiał we właściwy
- *  element (dziś to bez znaczenia — wszystkie 16 poziomów ma same elipsy — ale nie wolno
- *  tego cicho zepsuć samemu zadaniu 10). Gdy zadanie 10 poszerzy `handles.ts` do
- *  `MovableShape`, wywołania w `mount()` powinny znów przyjmować `game.pieces` wprost —
- *  zostawienie tej funkcji wtedy CICHO odbierałoby graczowi możliwość przeciągania
- *  paraboli/hiperboli, czyli dokładnie to, po co jest zadanie 10. */
-function ellipsePieces(pieces: MovableShape[]): { shapes: EllipseShape[]; toOriginal: number[] } {
-  const shapes: EllipseShape[] = [];
-  const toOriginal: number[] = [];
-  pieces.forEach((s, i) => {
-    if (s.kind === "elipsa") { shapes.push(s); toOriginal.push(i); }
-  });
-  return { shapes, toOriginal };
-}
 
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
@@ -169,11 +149,10 @@ export function mount(canvas: HTMLCanvasElement): void {
       return;
     }
     const w = toWorld(e);
-    const { shapes, toOriginal } = ellipsePieces(game.pieces);
     const picked = pickHandle(
-      w, shapes, toOriginal.map((i) => game.level.pieces[i].locked), (HANDLE_PX * 1.5) / cam().scale,
+      w, game.pieces, game.level.pieces.map((p) => p.locked), (HANDLE_PX * 1.5) / cam().scale,
     );
-    dragging = picked === null ? null : { piece: toOriginal[picked.piece], id: picked.id };
+    dragging = picked;
     pointer = w;
     canvas.setPointerCapture(e.pointerId);
   });
@@ -183,18 +162,17 @@ export function mount(canvas: HTMLCanvasElement): void {
     const w = toWorld(e);
     pointer = w;
     const { piece, id } = dragging;
-    const { shapes, toOriginal } = ellipsePieces(game.pieces);
-    // przyskakują tylko ogniska; rozmiar i końce łuku idą za palcem
-    const snapped = id === "ognisko1" || id === "ognisko2"
-      ? snapTo(w, snapTargets(game.level, shapes, toOriginal.indexOf(piece)), SNAP_RADIUS)
+    // przyskakują tylko ogniska (elipsy, hiperboli i paraboli); rozmiar, wierzchołek
+    // i końce łuku idą za palcem
+    const snapped = id === "ognisko1" || id === "ognisko2" || id === "ognisko"
+      ? snapTo(w, snapTargets(game.level, game.pieces, piece), SNAP_RADIUS)
       : w;
     const def = game.level.pieces[piece];
     // przy zablokowanym uchwycie rozmiaru rozmiar wraca do wartości poziomu, gdy ogniska
-    // znów się zejdą — patrz komentarz w `applyDrag`
+    // znów się zejdą — patrz komentarz w `applyDrag`. To zachowanie ma dziś sens tylko
+    // dla elipsy: `dragHyperbola`/`dragParabola` nie przyjmują `lockedA` i go ignorują.
     const lockedA = def.locked.includes("rozmiar") && def.start.kind === "elipsa" ? def.start.a : undefined;
-    const pieces = game.pieces.map((s, i) => (
-      i === piece && s.kind === "elipsa" ? applyDrag(s, id, snapped, lockedA) : s
-    ));
+    const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped, lockedA) : s));
     game = { ...game, pieces };
   });
 
@@ -271,7 +249,6 @@ export function mount(canvas: HTMLCanvasElement): void {
 
     if (game.phase === "edycja") {
       game.pieces.forEach((s, piece) => {
-        if (s.kind !== "elipsa") return;
         for (const h of handlePositions(s)) {
           if (level.pieces[piece].locked.includes(h.id)) continue;
           const active = dragging !== null && dragging.piece === piece && dragging.id === h.id;

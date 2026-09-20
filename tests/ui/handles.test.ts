@@ -2,12 +2,16 @@ import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
 import {
   EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams,
-  circle, ellipse, ellipseParam, ellipsePoint, paramAtLength, perimeter, segment, shapeConic,
+  circle, ellipse, ellipseParam, ellipsePoint, hyperbola, paramAtLength, parabola, perimeter, segment, shapeAxisAngle,
+  shapeConic,
 } from "../../src/levels";
 import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
 const state: EllipseShape = ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8);
+// wyniesione nad oba bloki: `par` z testów paraboli jest potrzebny też w ostatnim
+// teście hiperboli (przyskakiwanie widzi ogniska obu krzywych naraz)
+const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
 
 describe("uchwyty", () => {
   it("daje trzy uchwyty, rozmiar na końcu osi wielkiej", () => {
@@ -229,5 +233,73 @@ describe("przyskakiwanie etapu 2", () => {
     const m = asEllipse(kaskada.pieces[0].solution).f2;
     const targets = snapTargets(kaskada, kaskada.pieces.map((p) => asEllipse(p.start)), 0);
     expect(snapTo(vec(m.x + 0.05, m.y - 0.05), targets, SNAP_RADIUS)).toEqual(m);
+  });
+});
+
+describe("uchwyty paraboli", () => {
+  it("ma dokładnie dwa uchwyty: ognisko i wierzchołek", () => {
+    expect(handlePositions(par).map((h) => h.id).sort()).toEqual(["ognisko", "wierzcholek"]);
+  });
+
+  it("przeciągnięcie ogniska przenosi ognisko", () => {
+    const next = applyDrag(par, "ognisko", vec(-0.4, 0.2));
+    expect(next.kind).toBe("parabola");
+    if (next.kind === "parabola") expect(next.focus).toEqual(vec(-0.4, 0.2));
+  });
+
+  it("ognisko nie może usiąść na wierzchołku — parabola musi istnieć", () => {
+    const next = applyDrag(par, "ognisko", par.vertex);
+    if (next.kind !== "parabola") throw new Error("zły rodzaj");
+    expect(dist(next.focus, next.vertex)).toBeGreaterThan(0);
+    expect(() => shapeConic(next)).not.toThrow();
+  });
+
+  it("przeciągnięcie wierzchołka zmienia i oś, i rozmiar", () => {
+    const next = applyDrag(par, "wierzcholek", vec(-0.5, -0.4));
+    if (next.kind !== "parabola") throw new Error("zły rodzaj");
+    expect(next.vertex).toEqual(vec(-0.5, -0.4));
+    expect(shapeAxisAngle(next)).toBeCloseTo(Math.PI / 2, 9);
+  });
+});
+
+describe("uchwyty hiperboli", () => {
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+
+  it("ma ten sam komplet uchwytów co elipsa", () => {
+    expect(handlePositions(hyp).map((h) => h.id).sort()).toEqual(["ognisko1", "ognisko2", "rozmiar"]);
+  });
+
+  it("uchwyt rozmiaru siedzi w wierzchołku CZYNNEJ gałęzi", () => {
+    const poz = (s: typeof hyp) => handlePositions(s).find((h) => h.id === "rozmiar")!.pos;
+    expect(poz(hyp).x).toBeCloseTo(0.3, 9);
+    expect(poz({ ...hyp, branch: -1 }).x).toBeCloseTo(-0.3, 9);
+  });
+
+  it("NIEZMIENNIK: a zostaje w (0, c) po przeciągnięciu rozmiaru gdziekolwiek", () => {
+    for (const cel of [vec(5, 0), vec(-5, 0), vec(0, 0), vec(0.5, 0), vec(0.499, 0)]) {
+      const next = applyDrag(hyp, "rozmiar", cel);
+      if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+      expect(next.a).toBeGreaterThan(0);
+      expect(next.a).toBeLessThan(dist(next.f1, next.f2) / 2);
+      expect(() => shapeConic(next)).not.toThrow();
+    }
+  });
+
+  it("NIEZMIENNIK: a zostaje w (0, c) po przeciągnięciu ogniska na drugie", () => {
+    const next = applyDrag(hyp, "ognisko1", vec(0.5, 0));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(() => shapeConic(next)).not.toThrow();
+  });
+
+  it("NIEZMIENNIK: rozmiar nie przeskakuje między gałęziami", () => {
+    // palec po przeciwnej stronie środka niż czynna gałąź
+    const next = applyDrag(hyp, "rozmiar", vec(-0.4, 0.1));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(next.branch).toBe(1);
+  });
+
+  it("przyskakiwanie widzi ogniska nowych krzywych", () => {
+    const lvl = { ball: vec(0, 0), hole: vec(1, 1), obstacles: [] } as unknown as Level;
+    expect(snapTargets(lvl, [hyp, par], 0)).toContainEqual(vec(-0.5, 0));
   });
 });
