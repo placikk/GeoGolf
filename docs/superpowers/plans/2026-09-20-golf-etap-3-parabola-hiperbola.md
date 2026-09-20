@@ -1256,9 +1256,14 @@ i na POCZĄTKU `piecePolyline`, przed obsługą `arc`:
 export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
   const range = piece.range;
   if (range !== undefined) {
-    // krzywa nieograniczona: równe kroki parametru. Dla paraboli parametr to odsunięcie
-    // prostopadłe, więc punkty wychodzą równomiernie; dla hiperboli gęstnieją przy
-    // wierzchołku, czyli tam, gdzie krzywizna jest największa — dokładnie gdzie trzeba.
+    // krzywa nieograniczona: równe kroki parametru. NIE dają punktów równo rozłożonych
+    // wzdłuż krzywej — na obu krzywych gęstnieją przy wierzchołku, bo tam prędkość
+    // parametryzacji jest najmniejsza. I bardzo dobrze: wierzchołek to miejsce
+    // największej krzywizny, czyli dokładnie tam, gdzie łamana potrzebuje punktów.
+    // Parabola zagęszcza łagodnie (|dP/dt| = √(1 + t²/4p²), ~41% różnicy na zakresie
+    // ±0.6 przy p = 0.3), hiperbola ostro (cosh/sinh). Równy jest tylko składnik
+    // PROSTOPADŁY, bo dla paraboli parametr JEST tym odsunięciem — i na tym stoi
+    // poziom 18, bo szerokość wiązki odbitej równa się zakresowi t niezależnie od p.
     const n = Math.max(2, steps);
     return Array.from({ length: n + 1 }, (_, i) =>
       framePoint(range.frame, range.from + ((range.to - range.from) * i) / n));
