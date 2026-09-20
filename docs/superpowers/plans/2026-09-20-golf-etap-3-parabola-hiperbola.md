@@ -140,7 +140,7 @@ Expected: FAIL — `parabolaFromFocusVertex is not defined`.
 - [ ] **Krok 3: Implementacja**
 
 W `src/core/conic.ts` rozszerz import wektorów na
-`import { Vec2, dist, dot, norm, perp, scale, sub, vec } from "./vec";`
+`import { Vec2, dist, dot, perp, scale, sub, vec } from "./vec";`
 i dopisz pod `ellipseFromFoci`:
 
 ```ts
