@@ -51,6 +51,18 @@ describe("poziomy", () => {
     expect(SNAP_RADIUS).toBeGreaterThanOrEqual(0.05 * DIAGONAL);
   });
 
+  // `shapeAxisAngle` zwraca kierunek f1→f2, a stary kod odczytywał oś z wektora własnego
+  // o znaku zależnym od danych — dla części obróconych elips te dwa kąty różnią się o π.
+  // Przesunięcie bazy o π to dokładnie count/2 kroków wachlarza, więc przy PARZYSTYM
+  // count to tylko przenumerowanie tego samego zbioru kierunków (kula i strzela tam,
+  // gdzie wcześniej i+count/2) — wynik dowodu się nie zmienia. Przy NIEPARZYSTYM count
+  // byłby to naprawdę inny zestaw kierunków. Niezmiennik pilnowany tu, nie w rdzeniu:
+  // nieparzyste count jest świadomie dopuszczone przez specyfikację etapu 1 (jedna piłka
+  // celowo na osi), więc `launchAngles`/`runProof` nie mają prawa tego zabraniać.
+  it("każdy poziom ma PARZYSTĄ liczbę piłek — inaczej kierunek osi przestaje być obojętny", () => {
+    for (const l of LEVELS) expect(l.test.balls % 2).toBe(0);
+  });
+
   it.each(byId)("poziom %s: zapisane rozwiązanie faktycznie rozwiązuje", (_id, level) => {
     expect(proofFor(level, solutions(level)).solved).toBe(true);
   });

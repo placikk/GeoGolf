@@ -28,6 +28,20 @@ describe("kształty poziomu", () => {
     expect(axis.x * q.y - axis.y * q.x).toBeGreaterThan(0);   // przeciwnie do wskazówek zegara
   });
 
+  it("shapeAxisAngle to kierunek f1→f2, a nie f2→f1", () => {
+    // oś `e` (atan2(-0.4, 0.7) ≈ -29.7°) nie jest wielokrotnością π/2, więc zwroty
+    // f1→f2 i f2→f1 (różne o π) dają się tu jednoznacznie odróżnić — na osi 0°/90°
+    // ten test przeszedłby nawet po odwróceniu zwrotu.
+    const toF2 = Math.atan2(e.f2.y - e.f1.y, e.f2.x - e.f1.x);
+    const toF1 = Math.atan2(e.f1.y - e.f2.y, e.f1.x - e.f2.x);
+    expect(shapeAxisAngle(e)).toBeCloseTo(toF2, 12);
+    expect(shapeAxisAngle(e)).not.toBeCloseTo(toF1, 5);
+  });
+
+  it("shapeAxisAngle dla okręgu (f1 = f2): umowna oś x, jak ellipseAxis", () => {
+    expect(shapeAxisAngle(circle(vec(0.1, -0.2), 0.3))).toBe(0);
+  });
+
   it("ellipseParam odwraca ellipsePoint", () => {
     for (const t of [-2.9, -1, 0, 0.4, 1.7, 3.1]) expect(ellipseParam(e, ellipsePoint(e, t))).toBeCloseTo(t, 12);
   });

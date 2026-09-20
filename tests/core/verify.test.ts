@@ -68,7 +68,7 @@ describe("dowód ósemką", () => {
     expect(angles).toHaveLength(8);
   });
 
-  it("prosta linia: nie wyrzuca, bazą jest kąt zero", () => {
+  it("baseAngle=0 z domyślnym count odtwarza wzór z etapu 1", () => {
     const angles = launchAngles(0);
     expect(angles).toHaveLength(BALL_COUNT);
     const firstAngle = angles[0];
