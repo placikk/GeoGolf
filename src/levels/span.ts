@@ -1,14 +1,17 @@
 import { dist } from "../core/vec";
 import { CurveFrame, framePoint } from "../core/frame";
 import { Span } from "./types";
+import { cumulativeIndexAt } from "./cumulative";
 
 /** Tyle samo co w `arc.ts` — ważniejsze od gęstości jest to, żeby WSZĘDZIE liczyć
  *  tą samą funkcją; wtedy długość i jej odwrotność są swoimi dokładnymi odwrotnościami. */
 const SAMPLES = 512;
 
-/** Zasięg planszy w `trace` to [-2, 2]²; 4 jednostki od wierzchołka wyprowadzają
- *  krzywą poza ten kwadrat z każdego punktu startowego wewnątrz [-1, 1]². */
-const REACH = 4;
+/** Zasięg planszy to [-2, 2]²; pochodzenie ramy jest w [-1, 1]², trzeba max(|dx|, |dy|) > 3.
+ *  Najgorzej przy osi diagonalnej: max(|dx|, |dy|) = |d|/√2. Dla paraboli |d| ≥ |t|,
+ *  dla hiperboli |d| ≥ b·sinh t (już obsłużone przez asinh(REACH / b)).
+ *  Wymóg to |d| > 3√2 ≈ 4.243, zatem REACH = 5 > 3√2. */
+const REACH = 5;
 
 /** Parametr, poza którym krzywa na pewno jest poza planszą — granica tablicy długości.
  *  Dla paraboli odsunięcie prostopadłe to wprost `t`. Dla hiperboli to `b·sinh t`. */
@@ -42,14 +45,8 @@ function lengthAt(cum: Float64Array, T: number, t: number): number {
 function paramAt(cum: Float64Array, T: number, v: number): number {
   const total = cum[SAMPLES];
   const r = v < 0 ? 0 : v > total ? total : v;
-  let lo = 0, hi = SAMPLES;
-  while (hi - lo > 1) {
-    const m = (lo + hi) >> 1;
-    if (cum[m] <= r) lo = m; else hi = m;
-  }
-  const seg = cum[lo + 1] - cum[lo];
-  const f = seg > 0 ? (r - cum[lo]) / seg : 0;
-  return -T + (2 * T * (lo + f)) / SAMPLES;
+  const indexFrac = cumulativeIndexAt(cum, r);
+  return -T + (2 * T * indexFrac) / SAMPLES;
 }
 
 /** Długość wzdłuż krzywej od parametru t0 do t1 (ujemna, gdy t1 < t0). */
