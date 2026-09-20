@@ -1556,13 +1556,29 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
 /** Hiperbola istnieje tylko przy 0 < a < c, więc KAŻDE przeciągnięcie kończy się
  *  zaciśnięciem `a` do tego przedziału. Gałąź jest daną poziomu — uchwyt rozmiaru
  *  bierze z palca tylko ODLEGŁOŚĆ od środka wzdłuż osi, nigdy stronę. */
+/** Ogniska nie mogą się zejść w jeden punkt: wtedy `c = 0`, a `fit` niżej ma PODŁOGĘ
+ *  `MIN_GAP * 2`, więc wypchnęłoby `a` powyżej `c` i `hyperbolaFromFoci` by rzuciło
+ *  w środku gestu. Odsuwamy przeciągane ognisko, tak jak `dragParabola` odsuwa ognisko
+ *  od wierzchołka. */
+const MIN_FOCUS_GAP = 10 * MIN_GAP;
+const keepApart = (moved: Vec2, other: Vec2, fallbackAxis: Vec2): Vec2 => {
+  const d = dist(moved, other);
+  if (d >= MIN_FOCUS_GAP) return moved;
+  const dir = d > 0 ? scale(sub(moved, other), 1 / d) : fallbackAxis;
+  return add(other, scale(dir, MIN_FOCUS_GAP));
+};
+
 function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaShape {
   const fit = (x: HyperbolaShape): HyperbolaShape => {
     const c = dist(x.f1, x.f2) / 2;
     return { ...x, a: clamp(x.a, MIN_GAP, Math.max(MIN_GAP * 2, c - MIN_GAP)) };
   };
-  if (handle === "ognisko1") return fit({ ...s, f1: to });
-  if (handle === "ognisko2") return fit({ ...s, f2: to });
+  if (handle === "ognisko1") {
+    return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))) });
+  }
+  if (handle === "ognisko2") {
+    return fit({ ...s, f2: keepApart(to, s.f1, norm(sub(s.f2, s.f1))) });
+  }
   if (handle !== "rozmiar") return s;
   const center = scale(add(s.f1, s.f2), 0.5);
   return fit({ ...s, a: Math.abs(dot(sub(to, center), norm(sub(s.f2, s.f1)))) });
@@ -1570,6 +1586,19 @@ function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaSh
 ```
 
 Dopisz do importu z `../core/vec` brakujące `dot`, `norm`, `sub`.
+
+**`applyDrag` potrzebuje przeciążenia**, którego ten plan wcześniej nie przewidział:
+`(s: EllipseShape, …) => EllipseShape` obok `(s: MovableShape, …) => MovableShape`.
+Bez niego `tsc` wywala kilkadziesiąt istniejących linii w `tests/ui/handles.test.ts`
+i `tests/levels.test.ts`, które czytają `.f1`/`.a`/`.arc` wprost z wyniku — TypeScript
+nie zawęzi zwracanej unii sam.
+
+**Usuń rusztowanie `ellipsePieces()`** z `src/ui/screens.ts` (zostawione przez zadanie 9)
+i przepnij wszystkie jego wywołania na `game.pieces` wprost. Przejrzyj przy okazji
+WSZYSTKIE bramki `kind === "elipsa"` w tym pliku: ta w pętli rysującej uchwyty jest już
+błędna (parabole i hiperbole też mają uchwyty), ta przy `lockedA` zostaje (tylko gałąź
+elipsy go używa), a w bloku `.map` stosującym przeciągnięcie jest trzecia, która po cichu
+unieważniałaby przeciąganie nowych krzywych.
 
 - [ ] **Krok 4: Uruchom testy**
 
