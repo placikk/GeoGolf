@@ -719,3 +719,172 @@ z rozstrzygnięcia 1 wyżej („ognisk nic nie ogranicza”, PRZYWRÓCONE w `dec
    — zacisk pod pierwiastkiem, żeby `a < c` w trakcie przeciągania dawało `0`, nie `NaN`.
 6. Komentarz `TOP_BAND` (`src/ui/menu.ts`) mówi teraz, że podpowiedź na telefonach zajmuje
    do dwóch linii (zmierzone maksimum to 2), z zapasem na trzecią — bez zmiany wartości.
+
+---
+
+## Ustawienia, ramka i reset (spec `2026-09-19-golf-ustawienia-ramka-reset-design.md`)
+
+Plan `2026-09-19-golf-ustawienia-ramka-reset` (branch `poprawki-etap-2`, start `6b4be10`),
+zadania 1–4: menu ustawień z dwoma przełącznikami, zniknięcie zdania o ośmiu torach z
+ekranu wygranej, stonowana ramka planszy z jaśniejszym tłem i mały przycięty wachlarz,
+przycisk „Reset” w dolnym pasku. Zadanie 5 (ten wpis) to sprawdzenie w przeglądarce
+(Playwright, tak jak w zadaniach 12 i 5 wyżej) i zapis rozstrzygnięć.
+
+### Rozstrzygnięcia
+
+1. **Menu ustawień z dwoma przełącznikami, oba domyślnie wyłączone** (decyzja
+   właściciela) — „Tory podglądu” (`previewPaths`, blade tory dwóch piłek w edycji) i
+   „Podpowiedzi” (`hints`, tekst podpowiedzi pod tytułem). Zapis pod osobnym kluczem
+   `golf-geometryczny/ustawienia`, z tą samą odpornością co postęp (`src/ui/settings.ts`:
+   brak pamięci, wyjątek przy odczycie/zapisie i uszkodzony JSON dają wartości domyślne,
+   tylko jawne `true` włącza pole — więc częściowy albo zaśmiecony zapis nie włącza
+   niczego przypadkiem). Pas banera (`TOP_BAND`) i pozycja planszy nie zależą od tego,
+   czy podpowiedź jest widoczna, więc plansza nie „skacze” po przełączeniu. Koszt, jeśli
+   źle: gdyby walidacja odczytu była luźniejsza (np. każde `truthy` zamiast `=== true`
+   włączało ustawienie), uszkodzony zapis (np. `{"previewPaths":"tak"}` po ręcznej
+   edycji `localStorage` albo błędzie serializacji) mógłby włączyć coś, czego gracz nie
+   wybrał — obecna reguła to wyklucza.
+2. **Zniknięcie zdania „Osiem torów, jedno miejsce…” z ekranu wygranej** (decyzja
+   właściciela) — zostaje sam tytuł „Wpadły wszystkie”; dopisek pod tytułem istnieje
+   TYLKO na ostatnim poziomie (`winLabels`, `src/ui/menu.ts`): „To był ostatni poziom.”
+   albo, gdy wszystkie 16 poziomów ma już `solved`, „Wszystkie poziomy ukończone.” Na
+   pozostałych poziomach pod tytułem nic. Ekran porażki bez zmian. Koszt, jeśli źle:
+   gracz traci jedyne zdanie, które explicite tłumaczyło regułę „ta sama chwila” — jeśli
+   się to okaże mylące, naprawą byłoby dopisanie krótszej wersji reguły do samych
+   podpowiedzi poziomów, nie przywracanie starego zdania na banerze wygranej (ono
+   dotyczyło geometrii ośmiu torów, a nie samej reguły synchronizacji).
+3. **Ramka: stonowana linia (`PALETTE.frame`, ten sam odcień co `PALETTE.muted`) +
+   jaśniejsze tło planszy (`PALETTE.board`), rogi zaokrąglone TYLKO w rysunku**
+   (`FRAME_RADIUS = 6` px CSS, `boardFrame()` w `src/render/draw.ts`, poświata przez
+   podwójny obrys — zakaz `shadowBlur` zachowany). Fizyka ścian bez zmian: cztery
+   odcinki na brzegu kwadratu `[-1,1]²` z ostrymi narożnikami — 6 px różnicy w rogu jest
+   niewidoczne dla gry (żaden tor piłki nie przechodzi tak blisko rogu, żeby to
+   wykryć). Koszt, jeśli źle: gdyby jednak jakiś przyszły poziom miał tor odbijający się
+   dokładnie w rogu planszy, zaokrąglenie tylko rysunkowe mogłoby wizualnie nie zgadzać
+   się z punktem odbicia o te same kilka pikseli — żaden z obecnych 16 poziomów tego nie
+   robi.
+4. **Wachlarz: promień `0.4` jednostki świata (zamiast `3`) i przycięcie do planszy**
+   (`SECTOR_REACH`, `sectorWedge()` woła `ctx.clip()` do prostokąta planszy PRZED
+   wypełnieniem klina) — klin nigdy nie wychodzi za ramkę, niezależnie od rozmiaru
+   elipsy na poziomie. Sprawdzone na poziomie 13 „Kaskada” (jedynym z zestawu 12–16,
+   gdzie klin startuje blisko rogu piłki): `e2e/shots/04b-level13-kaskada-board-zoom.png`
+   pokazuje mały, w całości wewnątrz ramki klin, nieprzecinający ani ramki, ani żadnej
+   krzywej. Koszt, jeśli źle: mniejszy klin mniej sugeruje kierunek ośmiu torów niż
+   stary promień `3` (który sam wychodził poza planszę) — to świadomy kompromis
+   właściciela (mniejszy wachlarz w zamian za estetykę), nie usterka.
+5. **Reset poziomu w dolnym pasku (lewa połowa), bez potwierdzenia** — dolny pas w
+   edycji dzieli się na „Reset” (lewo, `newGame(game.level)` — pełny stan startowy,
+   postęp i ustawienia bez zmian) i „Sprawdź” (prawo, bez zmian), ten sam układ co
+   „Jeszcze raz | Następny” na ekranie wygranej (`editAction`, `src/ui/menu.ts`).
+   Zachowany dotychczasowy bezpiecznik: `pointerup` sprawdza `wasDragging` PRZED
+   `editAction`, więc puszczenie przeciąganego uchwytu w dolnym pasie nie uruchamia ani
+   resetu, ani dowodu — element zostaje tam, gdzie spadł. Sprawdzone w zadaniu 5 (patrz
+   niżej): zrzuty przed/po przeciągnięciu/po resecie są bitowo identyczne w obszarze
+   krzywej gracza (ten sam ograniczający prostokąt tealowych pikseli, `count=398` w obu
+   przypadkach), a puszczenie uchwytu wewnątrz pasa zostawia element dokładnie tam, gdzie
+   spadł (bez skoku do startu, bez animacji dowodu). Koszt, jeśli źle: brak potwierdzenia
+   oznacza, że przypadkowe dotknięcie „Reset” kasuje bieżącą pracę gracza nad
+   ustawieniem elementów bez możliwości cofnięcia — świadomy wybór właściciela (poziom
+   i tak zapamiętuje tylko `solved`, nie stan edycji, więc „strata” to co najwyżej kilka
+   przeciągnięć do powtórzenia).
+
+### Wyniki sprawdzenia — zadanie 5 (Playwright)
+
+**Metoda:** `npm run build` (25,32 kB / 9,88 kB gzip — budżet < 100 kB, margines duży),
+`npx vite preview --port 4173 --strictPort`. Playwright 1.63 (Chromium z lokalnego
+cache'u `~/.cache/ms-playwright`), zainstalowany lokalnie w
+`.superpowers/sdd/2026-09-19-golf-ustawienia-ramka-reset/e2e/` (poza repozytorium,
+katalog ignorowany przez `.superpowers/sdd/.gitignore`; `package.json` główny projektu
+nietknięty). Konteksty `390×664` i `664×390`, `hasTouch: true`, `isMobile: true` — Chromium
+desktopowe generuje `PointerEvent` z gestów myszy, a canvas gry nie filtruje po
+`pointerType` (to samo zastrzeżenie co w zadaniach 12 i 5 wyżej).
+
+Współrzędne przycisków i uchwytów **liczone niezależnie, tymi samymi wzorami co gra**:
+`cameraFor()`/`menuTileCenter()`/`settingsRowCenter()` w `e2e/run.mjs` replikują
+`makeCamera`+`playArea` (`src/render/camera.ts`, `src/ui/menu.ts`) i `menuLayout`/
+`settingsLayout`; plany przeciągnięć dla poziomów „Dwa ogniska” i „Zwieńczenie kaskad”
+(`e2e/gen-plan.ts`) importują WPROST `src/levels`, `src/ui/handles`, żeby wyliczyć
+dokładne cele (przyskok ogniska do piłki/dołka/ogniska stałej przeszkody, punkt na osi
+wielkiej dający zadane `a`) i z góry sprawdziły w Node, że wynikowy stan jest bitowo
+równy zapisanemu `solution` obu poziomów — dowód wygrywalności geometryczny, nie
+"strzał w piksel". Dowód uruchamiany przez „Sprawdź” domykany przez `page.clock`
+(`install()` + `fastForward(1500)` w pętli), nie przez czekanie w czasie rzeczywistym.
+
+1. **Pierwsze uruchomienie: brak torów i brak podpowiedzi.** Świeży `localStorage`
+   (bez ustawień): baner pokazuje tylko numer i tytuł poziomu, bez linii podpowiedzi;
+   elipsa gracza bez bladych torów. Zrzuty: `e2e/shots/01-fresh-390x664.png`,
+   `e2e/shots/01-fresh-664x390.png`.
+2. **⚙ otwiera ustawienia; przełączanie i trwałość.** Otwarcie: oba wiersze „wył.”, bez
+   obwódki (`02a`). Dotknięcie „Tory podglądu”: „wł.” + teal obwódka (`02b`). Dotknięcie
+   „Podpowiedzi”: też „wł.” (`02c`), `localStorage["golf-geometryczny/ustawienia"]` =
+   `{"previewPaths":true,"hints":true}`. Zamknięcie (⚙ ponownie): pod tytułem widoczna
+   podpowiedź, na elipsie blade tory dwóch piłek (`02d`). Po `page.reload()`: identyczny
+   widok — tory i podpowiedź zostają (`02e`), `localStorage` niezmieniony; otwarcie
+   ustawień po przeładowaniu pokazuje oba wiersze dalej „wł.” (`02f`). Zrzuty:
+   `e2e/shots/02{a,b,c,d,e,f}-*.png`.
+3. **Ramka: stonowana linia, jaśniejsze tło, nic nie przecina napisów.** Zbliżenia na
+   oba rogi ramki (górny lewy, dolny prawy), `390×664` i `664×390`: cienka
+   szaroniebieska linia z łagodną poświatą, zaokrąglony róg, tło planszy wyraźnie
+   jaśniejsze od tła ekranu; żaden zrzut (pełny ani zbliżenie) nie pokazuje ramki
+   nachodzącej na tekst banera ani przycisków. Zrzuty:
+   `e2e/shots/03-frame-{topleft,bottomright}-{390x664,664x390}.png`.
+4. **Wachlarz (poziom 13 „Kaskada”):** klin widoczny od piłki w edycji, mały, w
+   całości wewnątrz ramki, nieprzecinający żadnej krzywej ani brzegu planszy. Zrzuty:
+   `e2e/shots/04a-level13-kaskada-edit.png`, `e2e/shots/04b-level13-kaskada-board-zoom.png`.
+5. **Reset i bezpiecznik dolnego pasa.** Zrzut startowy `05a`; po przeciągnięciu
+   ogniska w róg ekranu elipsa wyraźnie zdeformowana i wychodzi poza ramkę (`05b`); po
+   dotknięciu „Reset” — piksel w piksel jak `05a` (`05c`) — potwierdzone też liczbowo:
+   ograniczający prostokąt tealowych pikseli (krzywa + uchwyty) identyczny przed
+   przeciągnięciem i po resecie (`{minX:84,minY:198,maxX:340,maxY:620,count:398}` w obu
+   przypadkach), wyraźnie inny zaraz po przeciągnięciu (`count:329`, przesunięty
+   prostokąt). „Sprawdź” dalej działa: rozwiązanie poziomu 1 przeciągnięciem obu ognisk
+   (`05d`) kończy się banerem „Wpadły wszystkie” bez zdania o ośmiu torach (`05e`),
+   `localStorage["golf-geometryczny/postep"]` zawiera `"ogniska"`. Bezpiecznik:
+   przeciągnięcie ogniska w dół, w głąb dolnego paska, i puszczenie tam — element
+   zostaje dokładnie w miejscu puszczenia (prostokąt tealowych pikseli sięga do
+   `maxY≈630`, w okolicy paska), ekran dalej pokazuje „Reset | Sprawdź” (czyli edycję, a
+   nie animację dowodu), i nic się dalej nie rusza w kolejne 400 ms
+   (`bboxAfter`≈`bboxAfterWait`) — więc puszczenie w pasku NIE uruchomiło ani resetu
+   (element nie wrócił na start), ani dowodu. Zrzuty:
+   `e2e/shots/05{a,b,c,d,e,f}-*.png`.
+6. **Ekran wygranej bez zdania o ośmiu torach.** Poziom 1: tylko „Wpadły wszystkie”,
+   przyciski „Jeszcze raz | Następny” (`05e` wyżej). Poziom 16, rozwiązany
+   przeciągnięciem ognisk do punktu M (przyskok) i dołka (przyskok) oraz uchwytu
+   rozmiaru na wyliczony punkt osi wielkiej (dokładnie odtwarzający zapisane
+   `solution` — sprawdzone w Node przed uruchomieniem przeglądarki): z resztą poziomów
+   NIE zaliczoną dopisek „To był ostatni poziom.” i przycisk „Menu”
+   (`06-not-all-level16-win-banner.png`); z resztą poziomów zaliczoną wcześniej (ustawione
+   w `localStorage` przed wczytaniem) dopisek „Wszystkie poziomy ukończone.”
+   (`06-all-solved-level16-win-banner.png`). Żaden z trzech banerów nie zawiera zdania
+   „Osiem torów…”. Zrzuty solved-edit przed „Sprawdź”:
+   `e2e/shots/06-{not-all,all-solved}-level16-solved-edit.png`.
+
+### Emulacja kontra prawdziwy telefon
+
+Te same ograniczenia co w zadaniach 12 i 5 wyżej (Chromium desktopowe, gesty myszy
+zamiast wieloetapowego dotyku, serwer tylko na `localhost`, brak realnego GPU/SoC).
+Dodatkowo dla tego zadania:
+- **Rozmiar celu dotykowego wierszy ustawień i przycisku ⚙ w praktyce** — 44 px CSS to
+  teoria z kodu (`settingsLayout`, `settingsButton`); czy palec dorosłego trafia w
+  wiersz bez pudła obok sąsiedniego, i czy ⚙ nie myli się z ☰ na małym ekranie, zostaje
+  do oceny na prawdziwym telefonie.
+- **Czytelność ramki i mniejszego wachlarza na prawdziwym ekranie** — subiektywna ocena
+  „stonowania” koloru i tego, czy klin `0.4` jednostki nadal czytelnie sugeruje kierunek
+  ośmiu torów, zależy od jasności/kontrastu prawdziwego wyświetlacza, nie tylko od
+  wartości RGB zmierzonych tu.
+- **Przypadkowe trafienie w „Reset” zamiast „Sprawdź”** (i odwrotnie) kciukiem — dolna
+  połowa/połowa paska to 50/50 szerokości ekranu, więc teoretycznie trudno pomylić, ale
+  rzeczywista precyzja kciuka przy krawędzi środkowej kreski jest nieoceniana tutaj.
+- **Emulacja dotyku a `pointerType`.** Playwright generuje zdarzenia myszy (Chromium
+  tłumaczy je na `PointerEvent`), nie prawdziwe `touchstart`/`touchmove`; canvas gry nie
+  rozróżnia `pointerType`, więc ryzyko ogranicza się do tego, czego emulacja z zasady
+  nie widzi (nacisk, wielkość stykowa, poślizg palca po szkle) — to samo zastrzeżenie co
+  w zadaniach 12 i 5.
+
+### Pliki z dowodami
+
+Skrypty (`gen-plan.ts`, `run.mjs`), wygenerowany plan (`plan.json`), surowy wynik
+(`results.json`) i wszystkie zrzuty leżą w
+`.superpowers/sdd/2026-09-19-golf-ustawienia-ramka-reset/e2e/` — katalog ignorowany przez
+`.superpowers/sdd/.gitignore` (nie trafia do repozytorium), więc dowody zostają na tej
+maszynie; ten dokument jest ich pisemnym podsumowaniem.
