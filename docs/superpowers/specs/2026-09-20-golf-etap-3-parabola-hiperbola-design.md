@@ -35,10 +35,11 @@ z etapem 2; etap 3 wkłada w nie nowe krzywe.
 
 ### Co zostaje nienaruszone
 
-Dołek jest punktem. Wygrana to „wszystkie osiem wpadnie". `trace` i `runProof` nie
-zmieniają kontraktu. Odrzucone zostały oba warianty, które by to ruszyły: meta jako
-odcinek (osłabia puentę — osiem piłek na linii zamiast błysku w punkcie) oraz zmiana
-warunku zwycięstwa.
+Dołek jest punktem. **Wygrana to „wszystkie osiem wpadnie" — i nic ponadto. Piłki nie
+muszą wpaść w tej samej chwili.** `trace` i `runProof` nie zmieniają kontraktu. Odrzucone
+zostały oba warianty, które by to ruszyły: meta jako odcinek (osłabia puentę — osiem
+piłek na linii zamiast błysku w punkcie) oraz zmiana warunku zwycięstwa na
+`solved && simultaneous`.
 
 ---
 
@@ -64,10 +65,12 @@ warunku zwycięstwa.
   dochodzą **addytywnie**, obietnica z §4 zostaje spełniona tylko w rdzeniu.
 - Ruchome odcinki — bez zmian względem etapu 2.
 - Edytor poziomów — etap 4.
-- Jednoczesność przybycia jako warunek **wygranej**. Punkt 29 z `decyzje-etap-1.md`
-  obowiązuje: wygrana to „wszystkie wpadną". §7 tego dokumentu nakłada jednoczesność
-  jako niezmiennik **danych poziomów 17–24**, sprawdzany testem w CI — to wymóg wobec
-  autora poziomu, nie wobec gracza.
+- **Jednoczesność przybycia w jakiejkolwiek roli wiążącej.** Punkt 29
+  z `decyzje-etap-1.md` obowiązuje bez osłabień: **wygrana to „wszystkie wpadną", piłki
+  nie muszą przybyć w tej samej chwili**. Etap 3 nie czyni z jednoczesności ani warunku
+  zwycięstwa dla gracza, ani warunku dopuszczenia poziomu, ani przedmiotu testu (§8).
+  Występuje w tym dokumencie wyłącznie jako **fakt geometryczny** o konstrukcjach z §3 —
+  nigdy jako bramka.
 
 ---
 
@@ -103,6 +106,12 @@ ognisko z lustrem głównym przenosi ognisko układu tam, gdzie jest wygodne. I 
 najmocniejszy argument za tym wariantem:
 **obie konstrukcje zachowują jednoczesność przybycia.** Kulminacja z §7 specyfikacji
 etapu 1 — osiem świateł zbiegających w jednym błysku — nie ginie w etapie 3.
+
+To jest obserwacja o geometrii, nie reguła gry. **Jednoczesność nigdzie nie jest
+warunkiem wygranej** — wygrana to „wszystkie wpadną", tak jak w etapach 1 i 2. Powyższy
+rachunek mówi tylko tyle, że gdy gracz zbuduje układ zgodny z zamysłem poziomu, dostanie
+wspólny błysk w nagrodę. Rozwiązanie, które trafia ósemką, ale rozjeżdża się w czasie,
+jest **pełnoprawną wygraną**.
 
 ---
 
@@ -338,14 +347,20 @@ Do istniejącej siatki dochodzą cztery pozycje:
 | Stała droga w konstrukcji dwustopniowej, na losowych danych | błędy w nowych postaciach kwadratowych, w normalnej i w odbiciu — odpowiednik testu `2a` z etapu 1 |
 | `conicParam` jest odwrotnością parametryzacji, dla wszystkich trzech krzywych | błędy w wyborze zakresu i w rysowaniu |
 | Trafienie w nieczynną gałąź hiperboli nie jest zaliczane | regresję do błędu cięciwy opisanego w §4 |
-| Każdy poziom 17–24 ma `proof.simultaneous === true` | poziom, który wygrywa, ale gubi wspólny błysk |
+| Kawałek opisany długością i ten sam kawałek opisany zakresem parametru pokrywają się | błędy w całkowaniu długości łuku i w jego odwrotności — najbardziej ryzykownym nowym kodzie |
 
-Czwarty wymaga podkreślenia, bo łatwo go pomylić ze zmianą reguł gry. **Warunek
-zwycięstwa dla gracza się nie zmienia** — punkt 29 z `decyzje-etap-1.md` obowiązuje,
-wygrana to „wszystkie wpadną". To jest niezmiennik **danych poziomu**: zapisane
-rozwiązanie poziomu etapu 3 musi zbiegać jednocześnie, bo cały argument z §3 na tym stoi.
-Poziom, który przechodzi bez jednoczesności, jest zbudowany inaczej, niż zakładaliśmy,
-i ma o tym powiedzieć głośno.
+### Czego testy NIE wymagają: jednoczesności
+
+**Piłki nie muszą wpaść w tej samej chwili, żeby poziom był wygrany.** Warunek zwycięstwa
+jest dokładnie ten sam co w etapach 1 i 2 — „wszystkie osiem wpadnie" — i etap 3 go nie
+rusza ani dla gracza, ani dla autora poziomu. Punkt 29 z `decyzje-etap-1.md` obowiązuje
+bez wyjątku.
+
+Nie ma więc testu żądającego `proof.simultaneous`. Rachunek z §3 pokazuje, że obie
+konstrukcje **dają** jednoczesność, gdy gracz zbuduje układ zgodnie z zamysłem poziomu —
+i to jest nagroda, a nie wymóg. Rozwiązanie trafiające ósemką rozjechaną w czasie jest
+wygraną tak samo dobrą, a baner, tak jak od commitu `a385026`, po prostu nie chwali się
+jednoczesnością, gdy jej nie było. Gra nie kłamie i niczego nie zabrania.
 
 Kryterium 5% liczone **per element ruchomy**, jak rozstrzygnięcie 2 z `decyzje-etap-2.md`
 (`ognisko1`: pudło w każdym z ośmiu kierunków; `ognisko2`: pudło w co najmniej sześciu).
@@ -379,4 +394,6 @@ kształcie — nie porzucenie wariantu długościowego, bo to on chroni kaskady.
 
 **Budżet 100 KB.** Etap 3 dokłada kod numeryczny, dwie parametryzacje i osiem poziomów.
 Zapas jest duży (9.94 KB w użyciu), ale kolejność cięć z §11 etapu 1 obowiązuje bez zmian:
-nigdy smugi i nigdy jednoczesność przybycia.
+nigdy smugi i nigdy dosłowność prędkości piłki, z której bierze się wspólny błysk. To jest
+reguła o **animacji** — o tym, że nie wolno naginać tempa dla efektu — a nie o tym, kiedy
+poziom jest wygrany.
