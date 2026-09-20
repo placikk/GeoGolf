@@ -1077,7 +1077,7 @@ Nowy plik `tests/core/dwustopniowe.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, scale, sub, vec } from "../../src/core/vec";
+import { add, dist, fromAngle, sub, vec } from "../../src/core/vec";
 import { trace } from "../../src/core/trace";
 import { ellipse, hyperbola, parabola, shapeToPiece } from "../../src/levels/shape";
 
