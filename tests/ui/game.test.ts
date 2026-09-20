@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { LEVELS } from "../../src/levels";
+import { vec } from "../../src/core/vec";
+import { LEVELS, Level, parabola, HOLE_RADIUS } from "../../src/levels";
 import { pathLength } from "../../src/render/trails";
 import { advance, newGame, preview, retry, startProof, BALL_SPEED } from "../../src/ui/game";
 
@@ -45,7 +46,8 @@ describe("stan gry", () => {
     // na obu dystansach — czyli odwzorowanie jest wprost proporcjonalne, a nie wygładzone.
     const free = LEVELS[1];
     for (const a of [0.75, 1.0]) {
-      let g = startProof({ ...newGame(free), pieces: [{ ...free.pieces[0].solution, a }] });
+      const resized = { ...free.pieces[0].solution, a };
+      let g = startProof({ ...newGame(free), pieces: [resized] });
       expect(g.proof!.solved, `a=${a}`).toBe(true);
       const longest = Math.max(...g.proof!.balls.map((b) => pathLength(b.path)));
       g = advance(g, longest / BALL_SPEED - 1e-6);
@@ -131,5 +133,45 @@ describe("jeszcze raz", () => {
 
   it("nowa gra nadal daje stan startowy", () => {
     expect(newGame(lvl).pieces).toEqual([lvl.pieces[0].start]);
+  });
+});
+
+describe("gra z krzywą nieograniczoną", () => {
+  // dwie parabole naprzeciw siebie: ognisko → wiązka równoległa → drugie ognisko
+  const poziom: Level = {
+    id: "test-parabola", title: "test", hint: "",
+    ball: vec(-0.5, 0), hole: vec(0.5, 0),
+    pieces: [{
+      start: parabola(vec(-0.45, 0.3), vec(-0.8, 0), { mid: 0, span: 1.2 }),
+      solution: parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 }),
+      locked: ["wierzcholek"],
+    }],
+    obstacles: [parabola(vec(0.5, 0), vec(0.8, 0), { mid: 0, span: 1.2 })],
+    sector: { center: Math.PI, width: 2 },
+    // Dołek MUSI być mniejszy niż na prawdziwych poziomach. Piłka, dołek i oba wierzchołki
+    // leżą na jednej osi, a wachlarz mierzy dokładnie wokół tej osi — promień odbity od
+    // pierwszej paraboli pod kątem δ od ogniska trafia w nią w parametrze t = 2p·tan(δ/2)
+    // (p = odległość ognisko-wierzchołek = 0.3) i leci dalej równolegle do osi na wysokości
+    // y = t. Dla dwóch najbliższych osi promieni (δ = width/(2·balls) = 0.125) wychodzi
+    // y = 2·0.3·tan(0.0625) ≈ 0.0375 — MNIEJ niż HOLE_RADIUS ≈ 0.0566. `trace` sprawdza
+    // dołek PRZED każdym odbiciem (zamierzone, nie błąd — patrz `src/core/trace.ts`), więc
+    // przy zwykłym HOLE_RADIUS te dwie piłki wpadałyby do dołka w locie, zanim dotrą do
+    // drugiej paraboli — test dowodziłby czegoś innego, niż deklaruje. HOLE_RADIUS / 3
+    // (≈0.0189) zostawia margines ~2× (0.0375 / 0.0189), więc jedyna droga do dołka to
+    // naprawdę dwa odbicia — dokładnie to, co ten test ma udowodnić.
+    test: { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 },
+  };
+
+  it("rozwiązanie wygrywa, stan startowy nie", () => {
+    const rozw = { ...newGame(poziom), pieces: poziom.pieces.map((p) => p.solution) };
+    expect(startProof(rozw).proof!.solved).toBe(true);
+    expect(startProof(newGame(poziom)).proof!.solved).toBe(false);
+  });
+
+  it("wszystkie osiem odbija się dwa razy — to jest konstrukcja dwustopniowa", () => {
+    const rozw = { ...newGame(poziom), pieces: poziom.pieces.map((p) => p.solution) };
+    for (const b of startProof(rozw).proof!.balls) {
+      expect(b.path).toHaveLength(4); // start, odbicie, odbicie, dołek
+    }
   });
 });

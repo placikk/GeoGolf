@@ -49,7 +49,7 @@ export interface SegmentShape { kind: "odcinek"; from: Vec2; to: Vec2 }
 export type Shape = MovableShape | SegmentShape;
 
 /** Element, którym rusza gracz. Blokady są per element, nie per poziom. */
-export interface PlayerPiece { start: EllipseShape; solution: EllipseShape; locked: Handle[] }
+export interface PlayerPiece { start: MovableShape; solution: MovableShape; locked: Handle[] }
 
 export interface Level {
   id: string;

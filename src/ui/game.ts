@@ -1,5 +1,5 @@
 import { Proof, runProof } from "../core/verify";
-import { EllipseShape, Level, levelCurves, shapeAxisAngle } from "../levels";
+import { Level, MovableShape, levelCurves, shapeAxisAngle } from "../levels";
 
 /** jednostek świata na sekundę — prędkość jest dosłowna, bez krzywych czasu */
 export const BALL_SPEED = 1.2;
@@ -9,7 +9,7 @@ export type Phase = "edycja" | "dowod" | "wygrana" | "porazka";
 export interface GameState {
   level: Level;
   /** bieżący kształt każdego elementu gracza, w kolejności `level.pieces` */
-  pieces: EllipseShape[];
+  pieces: MovableShape[];
   phase: Phase;
   proof: Proof | null;
   /** sekundy od startu dowodu */

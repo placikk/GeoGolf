@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
 import {
-  EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams, circle, ellipse,
-  ellipseParam, ellipsePoint, paramAtLength, perimeter, segment, shapeConic,
+  EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams,
+  circle, ellipse, ellipseParam, ellipsePoint, paramAtLength, perimeter, segment, shapeConic,
 } from "../../src/levels";
 import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
@@ -221,8 +221,13 @@ describe("przyskakiwanie etapu 2", () => {
 
   it("poziom kaskady: ognisko pierwszego łuku daje się postawić w M samym przyskokiem", () => {
     const kaskada = LEVELS.find((l) => l.id === "kaskada")!;
-    const m = kaskada.pieces[0].solution.f2;
-    const targets = snapTargets(kaskada, kaskada.pieces.map((p) => p.start), 0);
+    // poziom kaskady ma same elipsy — `asEllipse` zawęża typ, nie zmienia zachowania
+    const asEllipse = (s: MovableShape): EllipseShape => {
+      if (s.kind !== "elipsa") throw new Error("poziom kaskady ma mieć same elipsy");
+      return s;
+    };
+    const m = asEllipse(kaskada.pieces[0].solution).f2;
+    const targets = snapTargets(kaskada, kaskada.pieces.map((p) => asEllipse(p.start)), 0);
     expect(snapTo(vec(m.x + 0.05, m.y - 0.05), targets, SNAP_RADIUS)).toEqual(m);
   });
 });

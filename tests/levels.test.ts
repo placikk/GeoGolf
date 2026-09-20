@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { add, dist, fromAngle, scale, vec } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeAxisAngle,
-  shapeConic,
+  DIAGONAL, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeAxisAngle,
+  shapeConic, shapeFoci,
 } from "../src/levels";
 import { applyDrag } from "../src/ui/handles";
 
-const proofFor = (level: Level, pieces: EllipseShape[], obstacles: Shape[] = level.obstacles) =>
+const proofFor = (level: Level, pieces: MovableShape[], obstacles: Shape[] = level.obstacles) =>
   runProof({
     ball: level.ball,
     hole: level.hole,
@@ -22,7 +22,7 @@ const proofFor = (level: Level, pieces: EllipseShape[], obstacles: Shape[] = lev
 /** Kształt, którego nie da się skonstruować (a <= c), tym bardziej nie rozwiązuje poziomu.
  *  Bez tego przechwycenia test zmuszałby geometrię poziomów do ustępstw wobec własnej
  *  ułomności (patrz komentarz etapu 1 przy teście przesunięcia ogniska). */
-const solves = (level: Level, pieces: EllipseShape[]): boolean => {
+const solves = (level: Level, pieces: MovableShape[]): boolean => {
   try {
     return proofFor(level, pieces).solved;
   } catch {
@@ -103,6 +103,10 @@ describe("poziomy", () => {
   // się zejdą (`applyDrag`, `lockedA`) — więc rozwiązanie musi używać dokładnie tej wartości.
   it.each(byId)("poziom %s: zablokowane uchwyty zgadzają się między startem a rozwiązaniem", (_id, level) => {
     for (const piece of level.pieces) {
+      // uchwyty "rozmiar"/"ognisko1"/"ognisko2"/"poczatek"/"koniec" są specyficzne dla
+      // elipsy (patrz `Handle`) — dziś każdy element gracza jest elipsą, więc ten warunek
+      // nic nie zmienia, ale bez niego TS nie zawęża `start`/`solution` z `MovableShape`
+      if (piece.start.kind !== "elipsa" || piece.solution.kind !== "elipsa") continue;
       if (piece.locked.includes("rozmiar")) expect(piece.start.a).toBe(piece.solution.a);
       if (piece.locked.includes("ognisko1")) expect(piece.solution.f1).toEqual(piece.start.f1);
       if (piece.locked.includes("ognisko2")) expect(piece.solution.f2).toEqual(piece.start.f2);
@@ -124,6 +128,8 @@ describe("poziomy", () => {
       // gdy oba ogniska są też zablokowane (np. okrąg poziomu 11), nie ma czym objeżdżać
       if (!piece.locked.includes("rozmiar")) return;
       if (piece.locked.includes("ognisko1") || piece.locked.includes("ognisko2")) return;
+      // "rozmiar"/"ognisko1"/"ognisko2" są specyficzne dla elipsy — dziś zawsze prawda
+      if (piece.start.kind !== "elipsa" || piece.solution.kind !== "elipsa") return;
       let shape = piece.start;
       shape = applyDrag(shape, "ognisko2", vec(0.95, 0.95), piece.start.a);
       shape = applyDrag(shape, "ognisko1", piece.solution.f1, piece.start.a);
@@ -139,9 +145,10 @@ describe("poziomy", () => {
   it.each(byId)("poziom %s: każde odblokowane ognisko1 przesunięte o promień przyskakiwania odpada", (_id, level) => {
     level.pieces.forEach((piece, k) => {
       if (piece.locked.includes("ognisko1")) return;
+      // "ognisko1" jest specyficzne dla elipsy — dziś zawsze prawda dla nieblokowanego elementu
       for (let i = 0; i < 8; i++) {
         const moved = solutions(level).map((s, j) =>
-          j === k ? { ...s, f1: add(s.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) } : s);
+          j === k && s.kind === "elipsa" ? { ...s, f1: add(s.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) } : s);
         expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
       }
     });
@@ -155,10 +162,11 @@ describe("poziomy", () => {
   it.each(byId)("poziom %s: każde odblokowane ognisko2 odpada w co najmniej 6 z 8 kierunków", (_id, level) => {
     level.pieces.forEach((piece, k) => {
       if (piece.locked.includes("ognisko2")) return;
+      // "ognisko2" jest specyficzne dla elipsy — dziś zawsze prawda dla nieblokowanego elementu
       let missed = 0;
       for (let i = 0; i < 8; i++) {
         const moved = solutions(level).map((s, j) =>
-          j === k ? { ...s, f2: add(s.f2, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) } : s);
+          j === k && s.kind === "elipsa" ? { ...s, f2: add(s.f2, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) } : s);
         if (!solves(level, moved)) missed++;
       }
       expect(missed, `element ${k}`).toBeGreaterThanOrEqual(6);
@@ -183,7 +191,7 @@ describe("poziomy", () => {
   // i dołek JEST rozwiązaniem.)
   const same = (p: { x: number; y: number }, q: { x: number; y: number }) => dist(p, q) < 1e-12;
   const isCascade = (level: Level) =>
-    solutions(level).some((s) => [s.f1, s.f2].some((f) => !same(f, level.ball) && !same(f, level.hole)));
+    solutions(level).some((s) => shapeFoci(s).some((f) => !same(f, level.ball) && !same(f, level.hole)));
 
   it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16", () => {
     expect(LEVELS.filter(isCascade).map((l) => l.id)).toEqual(
@@ -212,7 +220,8 @@ describe("poziomy", () => {
     const base = level.pieces[0].solution;
     for (let i = 0; i <= 119; i++) {
       const a = 0.62 + 0.02 * i;    // 0.62 … 3.0
-      expect(solves(level, [{ ...base, a }]), `a = ${a.toFixed(2)}`).toBe(false);
+      const resized = { ...base, a };
+      expect(solves(level, [resized]), `a = ${a.toFixed(2)}`).toBe(false);
     }
   });
 });
