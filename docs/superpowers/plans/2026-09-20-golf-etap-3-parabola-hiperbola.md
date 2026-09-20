@@ -850,7 +850,13 @@ git commit -m "feat(levels): dlugosc wzdluz paraboli i hiperboli, kawalek opisan
 
 **Pliki:**
 - Zmiana: `src/levels/shape.ts`, `src/levels/types.ts` (rozszerzenie `Shape`), `src/levels/index.ts`
-- Test: `tests/levels/shape.test.ts`
+- Test: `tests/levels/shape.test.ts`, `tests/levels.test.ts`
+
+**Uwaga o `tests/levels.test.ts`:** rozszerzenie `Shape` ZEPSUJE kompilację tego pliku.
+Jego blok „każdy kształt daje się skonstruować" odsiewa `"odcinek"` i czyta `.a`/`.f1`/
+`.arc`, co było poprawne, dopóki po odsianiu zostawała sama elipsa. Obramuj te asercje
+warunkiem `s.kind === "elipsa"`, zostawiając sprawdzenie `shapeConic(s)` poza bramką —
+ma nadal obejmować wszystkie krzywe.
 
 **Interfejsy:**
 - Konsumuje: `parabolaFromFocusVertex`, `hyperbolaFromFoci` (zadanie 1); `CurveFrame` (zadanie 2); `ParamRange` (zadanie 3); `Span`, `ParabolaShape`, `HyperbolaShape`, `MovableShape` (zadanie 5); `spanRange` (zadanie 6).
