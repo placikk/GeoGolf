@@ -761,9 +761,13 @@ import { Span } from "./types";
  *  tą samą funkcją; wtedy długość i jej odwrotność są swoimi dokładnymi odwrotnościami. */
 const SAMPLES = 512;
 
-/** Zasięg planszy w `trace` to [-2, 2]²; 4 jednostki od wierzchołka wyprowadzają
- *  krzywą poza ten kwadrat z każdego punktu startowego wewnątrz [-1, 1]². */
-const REACH = 4;
+/** Zasięg planszy w `trace` to [-2, 2]². Ile trzeba odjechać od wierzchołka, żeby
+ *  NA PEWNO z niego wyjść? Wierzchołek leży w [-1, 1]², więc wystarczy, by przesunięcie
+ *  `d` dało `max(|dx|, |dy|) > 3`. Najgorszy przypadek to oś po skosie, gdzie
+ *  `max(|dx|, |dy|) = |d|/√2`, czyli potrzeba `|d| > 3√2 ≈ 4.243`.
+ *  Wartość 4 NIE wystarcza — zmierzone: parabola o p = 1000 i wierzchołku w (−1, −1)
+ *  z osią po skosie ma w t = 4 punkt (1.83, 1.83), wciąż wewnątrz planszy. */
+const REACH = 5;
 
 /** Parametr, poza którym krzywa na pewno jest poza planszą — granica tablicy długości.
  *  Dla paraboli odsunięcie prostopadłe to wprost `t`. Dla hiperboli to `b·sinh t`. */
