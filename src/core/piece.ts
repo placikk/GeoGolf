@@ -1,13 +1,22 @@
 import { Vec2, add, dot, len, scale, sub } from "./vec";
 import { Conic, classify } from "./conic";
 import { rayConicAll } from "./intersect";
+import { CurveFrame, frameParam } from "./frame";
 
 /** `via` to dowolny punkt na ZACHOWANEJ części krzywej — wskazuje stronę cięciwy
  *  zamiast flagi, której znak łatwo pomylić. Dla prostej `via` nie jest używany. */
 export interface Arc { from: Vec2; via: Vec2; to: Vec2 }
 
-/** Kawałek krzywej: brak `arc` oznacza całą krzywą. */
-export interface Piece { conic: Conic; arc?: Arc }
+/** Zakres parametru we własnym układzie krzywej — dla krzywych NIEOGRANICZONYCH.
+ *  Rozwiązuje naraz trzy rzeczy, których cięciwa nie umie: skończoność ramion, wybór
+ *  gałęzi hiperboli i odporność na gracza (gdziekolwiek przeciągnie uchwyt, kawałek
+ *  zostaje tym samym kawałkiem tej samej gałęzi). */
+export interface ParamRange { from: number; to: number; frame: CurveFrame }
+
+/** Kawałek krzywej. Brak `arc` i `range` oznacza całą krzywą. Kawałek ma CO NAJWYŻEJ
+ *  JEDEN tryb ograniczenia — `range` wygrywa, gdy ktoś poda oba (patrz test w
+ *  `tests/core/piece.test.ts`, który tego pilnuje w danych poziomów). */
+export interface Piece { conic: Conic; arc?: Arc; range?: ParamRange }
 
 /** Tolerancja przynależności do łuku, w jednostkach świata. Końce liczą się włącznie. */
 export const ARC_EPS = 1e-9;
@@ -20,6 +29,12 @@ const cross = (a: Vec2, b: Vec2): number => a.x * b.y - a.y * b.x;
  *  w co najwyżej dwóch punktach, więc cięciwa from→to dzieli KAŻDĄ stożkową na dwie
  *  części po przeciwnych stronach — wystarczy porównać stronę P ze stroną `via`. */
 export function onPiece(piece: Piece, p: Vec2): boolean {
+  const range = piece.range;
+  if (range !== undefined) {
+    const { t, branch } = frameParam(range.frame, p);
+    if (range.frame.kind === "hiperbola" && branch !== range.frame.branch) return false;
+    return t >= range.from - ARC_EPS && t <= range.to + ARC_EPS;
+  }
   const arc = piece.arc;
   if (arc === undefined) return true;
   const chord = sub(arc.to, arc.from);
