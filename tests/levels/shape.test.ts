@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, scale, vec } from "../../src/core/vec";
+import { add, dist, fromAngle, len, scale, vec } from "../../src/core/vec";
 import { circleConic, classify, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { onPiece, rayPiece } from "../../src/core/piece";
+import { framePoint } from "../../src/core/frame";
 import {
-  BOARD_WALLS, ArcRange, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeAxisAngle,
-  shapeConic, shapeToPiece, Span, LEVELS,
+  BOARD_WALLS, ArcRange, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, hyperbola, isCircle, levelCurves, parabola,
+  segment, shapeAxisAngle, shapeConic, shapeFoci, shapeFrame, shapeToPiece, Span, LEVELS,
 } from "../../src/levels";
 import { trace } from "../../src/core/trace";
 import { runProof } from "../../src/core/verify";
@@ -139,5 +140,62 @@ describe("typy nowych kształtów", () => {
     const arc: ArcRange = { mid: 0, length: 1 };
     const span: Span = arc;
     expect(span).toBe(arc);
+  });
+});
+
+describe("parabola i hiperbola jako kształty poziomu", () => {
+  const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+
+  it("shapeFrame paraboli ma oś jednostkową od wierzchołka do ogniska", () => {
+    const f = shapeFrame(par);
+    expect(f.kind).toBe("parabola");
+    expect(len(f.axis)).toBeCloseTo(1, 12);
+    expect(f.axis.x).toBeCloseTo(1, 12);
+    if (f.kind === "parabola") expect(f.p).toBeCloseTo(0.3, 12);
+  });
+
+  it("shapeFrame hiperboli liczy b z ognisk i a", () => {
+    const f = shapeFrame(hyp);
+    if (f.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(f.a).toBeCloseTo(0.3, 12);
+    expect(f.b).toBeCloseTo(Math.sqrt(0.25 - 0.09), 12);
+    expect(f.branch).toBe(1);
+  });
+
+  it("shapeToPiece nowych krzywych daje range, NIGDY arc", () => {
+    for (const s of [par, hyp]) {
+      const piece = shapeToPiece(s);
+      expect(piece.range).toBeDefined();
+      expect(piece.arc).toBeUndefined();
+    }
+  });
+
+  it("shapeToPiece daje range także przy opisie DŁUGOŚCIĄ", () => {
+    const dlugi = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, length: 0.7 });
+    const piece = shapeToPiece(dlugi);
+    expect(piece.range).toBeDefined();
+    expect(piece.arc).toBeUndefined();
+  });
+
+  it("końce kawałka leżą na postaci kwadratowej", () => {
+    for (const s of [par, hyp]) {
+      const piece = shapeToPiece(s);
+      const r = piece.range!;
+      for (const t of [r.from, (r.from + r.to) / 2, r.to]) {
+        expect(evalConic(piece.conic, framePoint(r.frame, t))).toBeCloseTo(0, 9);
+      }
+    }
+  });
+
+  it("shapeAxisAngle zna wszystkie trzy krzywe", () => {
+    expect(shapeAxisAngle(par)).toBeCloseTo(0, 12);
+    expect(shapeAxisAngle(hyp)).toBeCloseTo(0, 12);
+    expect(shapeAxisAngle(ellipse(vec(-1, 0), vec(1, 0), 2))).toBeCloseTo(0, 12);
+  });
+
+  it("shapeFoci zwraca ogniska każdej krzywej", () => {
+    expect(shapeFoci(par)).toEqual([vec(-0.5, 0)]);
+    expect(shapeFoci(hyp)).toEqual([vec(-0.5, 0), vec(0.5, 0)]);
   });
 });

@@ -46,7 +46,7 @@ export interface HyperbolaShape {
 export type MovableShape = EllipseShape | ParabolaShape | HyperbolaShape;
 
 export interface SegmentShape { kind: "odcinek"; from: Vec2; to: Vec2 }
-export type Shape = EllipseShape | SegmentShape;
+export type Shape = MovableShape | SegmentShape;
 
 /** Element, którym rusza gracz. Blokady są per element, nie per poziom. */
 export interface PlayerPiece { start: EllipseShape; solution: EllipseShape; locked: Handle[] }

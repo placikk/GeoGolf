@@ -1,8 +1,10 @@
 import { Vec2, add, dist, norm, perp, scale, sub, vec } from "../core/vec";
-import { Conic, ellipseFromFoci, lineThrough } from "../core/conic";
+import { Conic, ellipseFromFoci, hyperbolaFromFoci, lineThrough, parabolaFromFocusVertex } from "../core/conic";
 import { Piece } from "../core/piece";
-import { ArcRange, EllipseShape, Level, SegmentShape, Shape } from "./types";
+import { CurveFrame } from "../core/frame";
+import { ArcRange, EllipseShape, HyperbolaShape, Level, MovableShape, ParabolaShape, SegmentShape, Shape, Span } from "./types";
 import { arcFromParams, arcParams } from "./arc";
+import { spanRange } from "./span";
 
 export const ellipse = (f1: Vec2, f2: Vec2, a: number, arc?: ArcRange): EllipseShape =>
   arc === undefined ? { kind: "elipsa", f1, f2, a } : { kind: "elipsa", f1, f2, a, arc };
@@ -19,6 +21,13 @@ export function arcEllipse(
 }
 
 export const segment = (from: Vec2, to: Vec2): SegmentShape => ({ kind: "odcinek", from, to });
+
+export const parabola = (focus: Vec2, vertex: Vec2, span: Span): ParabolaShape =>
+  ({ kind: "parabola", focus, vertex, span });
+
+export const hyperbola = (
+  f1: Vec2, f2: Vec2, a: number, branch: 1 | -1, span: Span,
+): HyperbolaShape => ({ kind: "hiperbola", f1, f2, a, branch, span });
 
 /** Brzeg planszy [-1, 1]² jest ścianą: cztery zwykłe odcinki przez narożniki. Ten sam
  *  kwadrat na każdym ekranie, więc fizyka poziomu nie zależy od urządzenia. */
@@ -37,9 +46,39 @@ export function ellipseAxis(s: EllipseShape): Vec2 {
   return isCircle(s) ? vec(1, 0) : norm(sub(s.f2, s.f1));
 }
 
+/** Układ własny krzywej dla rdzenia. Warstwa poziomów zna ognisko i wierzchołek,
+ *  więc podaje je wprost — rdzeń nie musi ich odzyskiwać z sześciu liczb. */
+export function shapeFrame(s: ParabolaShape | HyperbolaShape): CurveFrame {
+  if (s.kind === "parabola") {
+    const p = dist(s.focus, s.vertex);
+    return { kind: "parabola", vertex: s.vertex, axis: norm(sub(s.focus, s.vertex)), p };
+  }
+  const c = dist(s.f1, s.f2) / 2;
+  return {
+    kind: "hiperbola",
+    center: scale(add(s.f1, s.f2), 0.5),
+    axis: norm(sub(s.f2, s.f1)),
+    a: s.a,
+    // zacisk pod pierwiastkiem jak w `arc.ts`: w trakcie przeciągania bywa a ≥ c
+    b: Math.sqrt(Math.max(0, c * c - s.a * s.a)),
+    branch: s.branch,
+  };
+}
+
+/** Ogniska kształtu — cele przyskakiwania. Okrąg (f1 = f2) zwraca pustą listę:
+ *  jego „ognisko" to środek przeszkody, nigdy nie jest sensownym celem (etap 2). */
+export function shapeFoci(s: MovableShape): Vec2[] {
+  if (s.kind === "parabola") return [s.focus];
+  if (s.kind === "hiperbola") return [s.f1, s.f2];
+  return isCircle(s) ? [] : [s.f1, s.f2];
+}
+
 /** Kąt osi kształtu w układzie świata — kierunek bazowy dowodu 360°. */
-export function shapeAxisAngle(s: EllipseShape): number {
-  const u = ellipseAxis(s);
+export function shapeAxisAngle(s: MovableShape): number {
+  const u =
+    s.kind === "elipsa" ? ellipseAxis(s)
+    : s.kind === "parabola" ? norm(sub(s.focus, s.vertex))
+    : norm(sub(s.f2, s.f1));
   return Math.atan2(u.y, u.x);
 }
 
@@ -66,14 +105,25 @@ export function ellipseParam(s: EllipseShape, p: Vec2): number {
   return Math.atan2(y, x);
 }
 
-export const shapeConic = (s: Shape): Conic =>
-  s.kind === "elipsa" ? ellipseFromFoci(s.f1, s.f2, s.a) : lineThrough(s.from, sub(s.to, s.from));
+export function shapeConic(s: Shape): Conic {
+  if (s.kind === "elipsa") return ellipseFromFoci(s.f1, s.f2, s.a);
+  if (s.kind === "parabola") return parabolaFromFocusVertex(s.focus, s.vertex);
+  if (s.kind === "hiperbola") return hyperbolaFromFoci(s.f1, s.f2, s.a);
+  return lineThrough(s.from, sub(s.to, s.from));
+}
 
-/** Kształt z danych poziomu → kawałek krzywej dla rdzenia. */
+/** Kształt z danych poziomu → kawałek krzywej dla rdzenia.
+ *  Parabola i hiperbola dostają ZAWSZE `range`, nigdy `arc` — także wtedy, gdy twórca
+ *  poziomu opisał kawałek długością. Cięciwa dzieli płaszczyznę, nie krzywą, więc dla
+ *  hiperboli przepuszczałaby trafienia w nieczynną gałąź. */
 export function shapeToPiece(s: Shape): Piece {
   const conic = shapeConic(s);
   if (s.kind === "odcinek") {
     return { conic, arc: { from: s.from, via: scale(add(s.from, s.to), 0.5), to: s.to } };
+  }
+  if (s.kind === "parabola" || s.kind === "hiperbola") {
+    const frame = shapeFrame(s);
+    return { conic, range: { ...spanRange(frame, s.span), frame } };
   }
   if (s.arc === undefined) return { conic };
   const { start, end } = arcParams(s, s.arc);
@@ -84,7 +134,7 @@ export function shapeToPiece(s: Shape): Piece {
 }
 
 /** Elementy gracza, potem przeszkody, na końcu ściany brzegu planszy. */
-export const levelCurves = (level: Level, pieces: EllipseShape[]): Piece[] => [
+export const levelCurves = (level: Level, pieces: MovableShape[]): Piece[] => [
   ...pieces.map(shapeToPiece),
   ...level.obstacles.map(shapeToPiece),
   ...BOARD_WALLS.map(shapeToPiece),

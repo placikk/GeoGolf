@@ -78,11 +78,16 @@ describe("poziomy", () => {
         expect(dist(s.from, s.to)).toBeGreaterThan(0);
         continue;
       }
-      expect(s.a).toBeGreaterThan(dist(s.f1, s.f2) / 2);
       expect(() => shapeConic(s)).not.toThrow();
-      if (s.arc !== undefined) {
-        expect(s.arc.length).toBeGreaterThanOrEqual(MIN_ARC_LENGTH);
-        expect(s.arc.length).toBeLessThanOrEqual(perimeter(s) - MIN_ARC_LENGTH);
+      // pola f1/f2/a/arc są specyficzne dla elipsy — parabola i hiperbola (jeszcze
+      // nieużywane przez żaden poziom) mają własny, inny zestaw pól sprawdzany przez
+      // `shapeFrame`/`shapeToPiece` w `tests/levels/shape.test.ts`.
+      if (s.kind === "elipsa") {
+        expect(s.a).toBeGreaterThan(dist(s.f1, s.f2) / 2);
+        if (s.arc !== undefined) {
+          expect(s.arc.length).toBeGreaterThanOrEqual(MIN_ARC_LENGTH);
+          expect(s.arc.length).toBeLessThanOrEqual(perimeter(s) - MIN_ARC_LENGTH);
+        }
       }
     }
     if (level.sector !== undefined) {
