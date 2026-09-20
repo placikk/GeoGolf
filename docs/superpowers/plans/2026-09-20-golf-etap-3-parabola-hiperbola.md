@@ -1296,7 +1296,11 @@ brakuje tylko możliwości chwycenia jej palcem.
 
 **Pliki:**
 - Zmiana: `src/levels/types.ts`, `src/ui/game.ts`, `src/ui/screens.ts`
-- Test: `tests/ui/game.test.ts`
+- Test: `tests/ui/game.test.ts`, `tests/levels.test.ts`, `tests/ui/handles.test.ts`
+
+**Uwaga:** poszerzenie `PlayerPiece` zepsuje zawężanie typu także w `tests/levels.test.ts`
+i `tests/ui/handles.test.ts`. Napraw bramką `kind === "elipsa"` albo pomocnikiem
+`shapeFoci`, bez rzutowań.
 
 **Interfejsy:**
 - Produkuje: `PlayerPiece.start` i `.solution` typu `MovableShape`; `GameState.pieces: MovableShape[]`.
@@ -1318,7 +1322,15 @@ describe("gra z krzywą nieograniczoną", () => {
     }],
     obstacles: [parabola(vec(0.5, 0), vec(0.8, 0), { mid: 0, span: 1.2 })],
     sector: { center: Math.PI, width: 2 },
-    test: { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS },
+    // DOŁEK TRZY RAZY MNIEJSZY niż w prawdziwych poziomach, i to jest istotne.
+    // Piłka wystrzelona pod kątem δ od osi trafia parabolę w punkcie o parametrze
+    // t = 2p·tan(δ/2), a odbita biegnie równolegle na wysokości y = t. Przy wachlarzu
+    // szerokości 2 i ośmiu piłkach dwie środkowe mają δ = 0.125, czyli y = 0.0375 —
+    // MNIEJ niż HOLE_RADIUS = 0.0566. `trace` sprawdza dołek przed każdym odbiciem,
+    // więc te dwie wpadłyby po JEDNYM odbiciu, nie dotykając drugiej paraboli, i test
+    // dwóch odbić by nie przeszedł. Mniejszy dołek wymusza prawdziwą drogę dwustopniową,
+    // czyli dokładnie to, co ten test ma udowodnić. Zapas: 0.0375 / 0.0189 ≈ 2×.
+    test: { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 },
   };
 
   it("rozwiązanie wygrywa, stan startowy nie", () => {
@@ -1979,6 +1991,17 @@ startowe muszą być dalej niż 0.1414 od swoich celów.
 
 Run: `npx tsc --noEmit && npm test`
 Expected: PASS.
+
+**Ryzyko odkryte w zadaniu 9 — dotyczy WSZYSTKICH poziomów parabolicznych 17–20.**
+Gdy piłka, dołek i oś paraboli są współliniowe, piłki lecące blisko osi wpadają do dołka
+po JEDNYM odbiciu, nie dotykając drugiego lustra: promień pod kątem δ od osi odbija się
+na wysokość `y = 2p·tan(δ/2)`, a przy małym δ to mniej niż promień dołka. Zmierzone dla
+`p = 0.3`, wachlarza 2 i ośmiu piłek: dwie środkowe lecą na `y = 0.0375` wobec promienia
+`0.0566`. Poziom nadal WYGRYWA — ale te dwie piłki niczego nie dowodzą, a co gorsza mogą
+wpadać także przy źle ustawionej paraboli, **osłabiając kryterium 5%**. Jeśli kryterium
+odpadnie na poziomach 17–20, to jest pierwszy podejrzany; lekarstwem jest obniżenie
+`holeRadius` tego poziomu (spec §9 i tak każe schodzić z promieniem, nie z kryterium).
+Żeby żadna piłka nie skracała, najbliższy promień musi mieć `δ > 2·arctan(r/2p)`.
 
 Znany punkt ryzyka: na `teleskop` kryterium 5% liczy się **per element**, a dwa elementy
 mogą się nawzajem ratować (przesunięcie ogniska A o 5% psuje wiązkę, ale lustro B jest
