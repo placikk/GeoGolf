@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { ellipseFromFoci, evalConic, lineThrough } from "../../src/core/conic";
+import { ellipseFromFoci, evalConic, hyperbolaFromFoci, lineThrough, parabolaFromFocusVertex } from "../../src/core/conic";
 import { makeCamera } from "../../src/render/camera";
 import { conicPolyline, piecePolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
 import { arcEllipse, ellipse, ellipsePoint, segment, shapeToPiece } from "../../src/levels";
+import { CurveFrame, framePoint } from "../../src/core/frame";
 
 describe("kamera", () => {
   it("środek świata trafia w środek ekranu", () => {
@@ -97,5 +98,41 @@ describe("polilinia kawałka krzywej", () => {
     const k = ellipseFromFoci(vec(-0.3, 0.2), vec(0.4, -0.1), 0.75);
     const piece: Piece = whole(k);
     expect(piecePolyline(piece, 32)).toEqual(conicPolyline(k, 32));
+  });
+});
+
+describe("łamana kawałka z zakresem parametru", () => {
+  const frame: CurveFrame = {
+    kind: "hiperbola", center: vec(0, 0), axis: vec(1, 0), a: 0.3, b: 0.4, branch: 1,
+  };
+  const piece: Piece = {
+    conic: hyperbolaFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.3),
+    range: { from: -1.2, to: 0.8, frame },
+  };
+
+  it("zaczyna się i kończy DOKŁADNIE na końcach zakresu", () => {
+    const pts = piecePolyline(piece, 32);
+    expect(pts[0].x).toBeCloseTo(framePoint(frame, -1.2).x, 12);
+    expect(pts[0].y).toBeCloseTo(framePoint(frame, -1.2).y, 12);
+    expect(pts[pts.length - 1].x).toBeCloseTo(framePoint(frame, 0.8).x, 12);
+    expect(pts[pts.length - 1].y).toBeCloseTo(framePoint(frame, 0.8).y, 12);
+  });
+
+  it("wszystkie punkty leżą na krzywej i na czynnej gałęzi", () => {
+    for (const p of piecePolyline(piece, 32)) {
+      expect(evalConic(piece.conic, p)).toBeCloseTo(0, 9);
+      expect(p.x).toBeGreaterThan(0); // prawa gałąź
+    }
+  });
+
+  it("parabola też się rysuje", () => {
+    const pf: CurveFrame = { kind: "parabola", vertex: vec(-0.8, 0), axis: vec(1, 0), p: 0.3 };
+    const pp: Piece = {
+      conic: parabolaFromFocusVertex(vec(-0.5, 0), vec(-0.8, 0)),
+      range: { from: -0.6, to: 0.6, frame: pf },
+    };
+    const pts = piecePolyline(pp, 16);
+    expect(pts).toHaveLength(17);
+    for (const p of pts) expect(evalConic(pp.conic, p)).toBeCloseTo(0, 9);
   });
 });

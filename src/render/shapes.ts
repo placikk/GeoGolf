@@ -1,6 +1,7 @@
 import { Vec2, add, dot, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, classify, ellipseGeometry } from "../core/conic";
 import { Piece } from "../core/piece";
+import { framePoint } from "../core/frame";
 
 export const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
 const TAU = 2 * Math.PI;
@@ -28,6 +29,15 @@ export function conicPolyline(k: Conic, steps = 128): Vec2[] {
  *  kierunku, który przechodzi przez `via`; końce łuku leżą w łamanej DOKŁADNIE.
  *  Odcinek: dwa punkty. Brak łuku: jak `conicPolyline`. */
 export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
+  const range = piece.range;
+  if (range !== undefined) {
+    // krzywa nieograniczona: równe kroki parametru. Dla paraboli parametr to odsunięcie
+    // prostopadłe, więc punkty wychodzą równomiernie; dla hiperboli gęstnieją przy
+    // wierzchołku, czyli tam, gdzie krzywizna jest największa — dokładnie gdzie trzeba.
+    const n = Math.max(2, steps);
+    return Array.from({ length: n + 1 }, (_, i) =>
+      framePoint(range.frame, range.from + ((range.to - range.from) * i) / n));
+  }
   const arc = piece.arc;
   if (arc === undefined) return conicPolyline(piece.conic, steps);
   if (classify(piece.conic) === "prosta") return [arc.from, arc.to];
