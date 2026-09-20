@@ -74,6 +74,17 @@ describe("konstrukcja dwustopniowa ma STAŁĄ długość drogi", () => {
 
       expect(drogi.length).toBeGreaterThan(8);
       expect(Math.max(...drogi) - Math.min(...drogi)).toBeLessThan(1e-6);
+
+      // Rozrzut sam w sobie nie wystarcza: łapie tylko niezgodność między kierunkami,
+      // nie złapałby błędu JEDNAKOWEGO w obu parabolach (np. źle policzone `p`), bo
+      // wtedy wszystkie dwanaście dróg nadal byłyby sobie równe, tylko równe źle. Wartość
+      // niezależna od śledzenia: z definicji ognisko-kierownica droga to odległość między
+      // kierownicami, bo składowe x punktów przecięcia się znoszą — nie zależy od kierunku
+      // strzału. Kierownica A leży w VA.x − pa, kierownica B w VB.x + pb.
+      const oczekiwanaDroga = (VB.x + pb) - (VA.x - pa);
+      for (const droga of drogi) {
+        expect(droga).toBeCloseTo(oczekiwanaDroga, 9);
+      }
     }
   });
 });
