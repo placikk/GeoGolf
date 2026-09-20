@@ -128,4 +128,26 @@ describe("kawałek ograniczony zakresem parametru", () => {
     expect(onPiece(piece, framePoint(frame, 1))).toBe(true);
     expect(onPiece(piece, framePoint(frame, -1))).toBe(true);
   });
+
+  it("range wygrywa nad arc — punkt wewnątrz zakresu należy mimo bycia poza łukiem", () => {
+    // Konstruujemy piece z oboma ograniczeniami: arc od t=0.2 do t=0.8, range od t=-1 do t=1.
+    // Test point at t=0 jest wewnątrz range ale poza arc (przed cięciwą).
+    // Jeśli range wygrywa, punkt należy; gdyby arc wygrywa, punkt nie należy.
+    const testPoint = framePoint(frame, 0);
+    const arcPiece: Piece = {
+      conic: piece.conic,
+      arc: {
+        from: framePoint(frame, 0.2),
+        via: framePoint(frame, 0.5),
+        to: framePoint(frame, 0.8),
+      },
+      range: piece.range,
+    };
+    // Sprawdzenie: punkt jest wewnątrz range
+    expect(onPiece({ conic: piece.conic, range: piece.range }, testPoint)).toBe(true);
+    // Sprawdzenie: punkt byłby poza arc (przed cięciwą, po drugiej stronie niż via)
+    expect(onPiece({ conic: piece.conic, arc: arcPiece.arc }, testPoint)).toBe(false);
+    // Conclusive: z oboma, range wygrywa i punkt należy
+    expect(onPiece(arcPiece, testPoint)).toBe(true);
+  });
 });

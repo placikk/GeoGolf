@@ -14,8 +14,8 @@ export interface Arc { from: Vec2; via: Vec2; to: Vec2 }
 export interface ParamRange { from: number; to: number; frame: CurveFrame }
 
 /** Kawałek krzywej. Brak `arc` i `range` oznacza całą krzywą. Kawałek ma CO NAJWYŻEJ
- *  JEDEN tryb ograniczenia — `range` wygrywa, gdy ktoś poda oba (patrz test w
- *  `tests/core/piece.test.ts`, który tego pilnuje w danych poziomów). */
+ *  JEDEN tryb ograniczenia — `range` wygrywa, gdy ktoś poda oba (patrz test
+ *  "range wygrywa nad arc" w `tests/core/piece.test.ts`). */
 export interface Piece { conic: Conic; arc?: Arc; range?: ParamRange }
 
 /** Tolerancja przynależności do łuku, w jednostkach świata. Końce liczą się włącznie. */
@@ -25,9 +25,14 @@ export const whole = (conic: Conic): Piece => ({ conic });
 
 const cross = (a: Vec2, b: Vec2): number => a.x * b.y - a.y * b.x;
 
-/** Czy punkt P LEŻĄCY NA krzywej należy do zachowanej części. Prosta przecina stożkową
- *  w co najwyżej dwóch punktach, więc cięciwa from→to dzieli KAŻDĄ stożkową na dwie
- *  części po przeciwnych stronach — wystarczy porównać stronę P ze stroną `via`. */
+/** Czy punkt P LEŻĄCY NA krzywej należy do zachowanej części.
+ *
+ *  Tryb `range` (krzywe nieograniczone) sprawdza parametr i gałąź — patrz `ParamRange`.
+ *
+ *  Tryb `arc` porównuje stronę P ze stroną `via` względem cięciwy from→to. Działa dla
+ *  elipsy i odcinka, bo prosta przecina je w co najwyżej dwóch punktach i cięciwa dzieli
+ *  je na dwie części po przeciwnych stronach. Dla HIPERBOLI to zawodzi — druga gałąź
+ *  wypada po tej samej stronie co wierzchołek pierwszej — i dlatego istnieje `range`. */
 export function onPiece(piece: Piece, p: Vec2): boolean {
   const range = piece.range;
   if (range !== undefined) {
