@@ -524,8 +524,15 @@ na `baseAngle: shapeAxisAngle(pieces[0]),` i popraw listę importów.
 - [ ] **Krok 4: Uruchom wszystko**
 
 Run: `npx tsc --noEmit && npm test`
-Expected: PASS — wszystkie 331 testów. Żaden wynik gry się nie zmienia, bo dla elipsy
-`shapeAxisAngle` zwraca dokładnie to, co zwracało `ellipseGeometry(...).angle`.
+Expected: PASS — cała suita (liczba testów rośnie z każdym zadaniem; zmierz ją przed
+zmianą i porównaj po). Żaden wynik gry się nie zmienia, ale NIE dlatego, że kąt jest ten
+sam: `ellipseGeometry` odzyskuje oś z wektora własnego, którego znak zależy od danych,
+więc dla części elips nowy kąt różni się od starego o **dokładnie π** (zmierzone: 8 z 34
+kształtów w poziomach 1–16). To nie zmienia wyniku, bo `launchAngles` rozkłada `count`
+kierunków równo po pełnym okręgu, a π to dokładnie `count/2` kroków, gdy `count` jest
+parzyste — czyli ten sam ZBIÓR kierunków, tylko inaczej ponumerowany. Wszystkie poziomy
+mają `balls: 8`, podgląd ma 2. **Niezmiennik do utrzymania: liczba piłek musi być
+parzysta.** Przy nieparzystej ten refaktor zmieniłby zbiór kierunków.
 
 - [ ] **Krok 5: Commit**
 
