@@ -1569,9 +1569,15 @@ const keepApart = (moved: Vec2, other: Vec2, fallbackAxis: Vec2): Vec2 => {
 };
 
 function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaShape {
+  // OBA brzegi zjeżdżają razem z `c`. Stała podłoga na którymkolwiek z nich staje się
+  // większa od `c`, gdy ogniska się zbliżą, i wypycha `a` poza dozwolony przedział —
+  // dokładnie tak powstał pierwotny błąd tego zacisku. Dla każdego c > 0 zachodzi
+  // 0 < lo ≤ hi < c.
   const fit = (x: HyperbolaShape): HyperbolaShape => {
     const c = dist(x.f1, x.f2) / 2;
-    return { ...x, a: clamp(x.a, MIN_GAP, Math.max(MIN_GAP * 2, c - MIN_GAP)) };
+    const hi = c - Math.min(MIN_GAP, c / 2);
+    const lo = Math.min(MIN_GAP, hi);
+    return { ...x, a: clamp(x.a, lo, hi) };
   };
   if (handle === "ognisko1") {
     return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))) });
