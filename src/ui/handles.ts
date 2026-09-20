@@ -136,11 +136,22 @@ const keepApart = (moved: Vec2, other: Vec2, fallbackAxis: Vec2): Vec2 => {
 
 /** Hiperbola istnieje tylko przy 0 < a < c, więc KAŻDE przeciągnięcie kończy się
  *  zaciśnięciem `a` do tego przedziału. Gałąź jest daną poziomu — uchwyt rozmiaru
- *  bierze z palca tylko ODLEGŁOŚĆ od środka wzdłuż osi, nigdy stronę. */
+ *  bierze z palca tylko ODLEGŁOŚĆ od środka wzdłuż osi, nigdy stronę.
+ *
+ *  Oba brzegi zacisku muszą kurczyć się razem z `c`, nie tylko górny: STAŁA dolna
+ *  (czy górna) granica prędzej czy później staje się większa niż samo `c`, gdy
+ *  ogniska są blisko siebie — to dokładnie stąd wziął się pierwotny defekt (stała
+ *  `MIN_GAP * 2` jako sufit przy `c → 0`). Zamiast stałej używamy ułamka `c`: górny
+ *  brzeg to `c` pomniejszone o mniejsze z (MIN_GAP, c/2), więc zawsze zostaje
+ *  ściśle mniejszy od `c` i nie mniejszy niż `c/2`; dolny brzeg to mniejsze z
+ *  (MIN_GAP, górny brzeg), więc nigdy go nie przekracza. Dla każdego c > 0 daje to
+ *  0 < lo ≤ hi < c. */
 function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaShape {
   const fit = (x: HyperbolaShape): HyperbolaShape => {
     const c = dist(x.f1, x.f2) / 2;
-    return { ...x, a: clamp(x.a, MIN_GAP, Math.max(MIN_GAP * 2, c - MIN_GAP)) };
+    const hi = c - Math.min(MIN_GAP, c / 2);
+    const lo = Math.min(MIN_GAP, hi);
+    return { ...x, a: clamp(x.a, lo, hi) };
   };
   if (handle === "ognisko1") {
     return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))) });

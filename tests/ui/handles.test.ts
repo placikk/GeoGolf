@@ -302,4 +302,17 @@ describe("uchwyty hiperboli", () => {
     const lvl = { ball: vec(0, 0), hole: vec(1, 1), obstacles: [] } as unknown as Level;
     expect(snapTargets(lvl, [hyp, par], 0)).toContainEqual(vec(-0.5, 0));
   });
+
+  it("NIEZMIENNIK: a zostaje w (0, c) nawet gdy c ciasne z danych poziomu, nie z przeciągnięcia ogniska", () => {
+    // c = 0.0005, poniżej dawnego stałego sufitu MIN_GAP*2 = 0.002 — `rozmiar` nigdy
+    // nie dotyka ognisk (więc `keepApart` go nie chroni), a mimo to sufit musi być
+    // ściśle mniejszy od tego ciasnego c
+    const tight = hyperbola(vec(-0.0005, 0), vec(0.0005, 0), 0.0002, 1, { mid: 0, span: 2 });
+    const next = applyDrag(tight, "rozmiar", vec(5, 0));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    const c = dist(next.f1, next.f2) / 2;
+    expect(next.a).toBeGreaterThan(0);
+    expect(next.a).toBeLessThan(c);
+    expect(() => shapeConic(next)).not.toThrow();
+  });
 });
