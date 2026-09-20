@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { vec, dist } from "../../src/core/vec";
-import { EllipseShape, Level, LEVELS, MIN_ARC, SNAP_RADIUS, circle, ellipse, ellipseParam, segment, shapeConic } from "../../src/levels";
+import {
+  EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams, circle, ellipse,
+  ellipseParam, ellipsePoint, paramAtLength, perimeter, segment, shapeConic,
+} from "../../src/levels";
 import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
@@ -95,78 +98,99 @@ describe("uchwyty wielu elementów", () => {
   });
 });
 
-describe("uchwyty łuku", () => {
+describe("uchwyty łuku (łuk opisany długością)", () => {
+  // elipsa niesymetryczna wokół zera; łuk „od 1 do 3” w parametrze, zapisany długością
+  const shape = arcEllipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6, 1, 3);
+  const ends = (s: EllipseShape) => arcParams(s, s.arc!);
+  const lengthOf = (s: EllipseShape) => { const e = ends(s); return arcLengthBetween(s, e.start, e.end); };
+
   it("końce łuku są uchwytami tylko wtedy, gdy łuk istnieje; rozmiar siedzi w środku łuku", () => {
     expect(handlePositions(state).map((h) => h.id)).toEqual(["ognisko1", "ognisko2", "rozmiar"]);
-    const arc = ellipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6, { start: 1, end: 3 });
-    const hs = handlePositions(arc);
+    const hs = handlePositions(shape);
     expect(hs.map((h) => h.id)).toEqual(["ognisko1", "ognisko2", "rozmiar", "poczatek", "koniec"]);
-    expect(ellipseParam(arc, hs[2].pos)).toBeCloseTo(2, 12);
-    expect(ellipseParam(arc, hs[3].pos)).toBeCloseTo(1, 12);
-    expect(ellipseParam(arc, hs[4].pos)).toBeCloseTo(3, 12);
+    expect(ellipseParam(shape, hs[2].pos)).toBeCloseTo(shape.arc.mid, 9);
+    expect(ellipseParam(shape, hs[3].pos)).toBeCloseTo(1, 9);
+    expect(ellipseParam(shape, hs[4].pos)).toBeCloseTo(3, 9);
   });
 
-  it("uchwyt końca łuku po przeciągnięciu leży na krzywej, pod kątem palca", () => {
-    const arc = ellipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6, { start: 1, end: 3 });
+  it("uchwyt końca łuku po przeciągnięciu leży na krzywej pod kątem palca, a drugi koniec stoi", () => {
     const finger = vec(-0.2, 0.9);   // poza krzywą
-    const next = applyDrag(arc, "koniec", finger);
+    const next = applyDrag(shape, "koniec", finger);
     const end = handlePositions(next).find((h) => h.id === "koniec")!.pos;
     expect(evalConic(shapeConic(next), end)).toBeCloseTo(0, 12);
-    expect(next.arc!.end).toBeCloseTo(ellipseParam(arc, finger), 12);
-    expect(next.f1).toBe(arc.f1);
-    expect(next.arc!.start).toBe(1);
+    expect(dist(end, ellipsePoint(shape, ellipseParam(shape, finger)))).toBeLessThan(1e-9);
+    expect(ends(next).start).toBeCloseTo(1, 9);
+    expect(next.f1).toBe(shape.f1);
   });
 
   it("minimalna długość łuku: dokładnie na granicy przechodzi, dalej jest zaciskana", () => {
-    // start 0 i koniec 1: wrap(t − 0) = t, więc granica początku liczy się bez zaokrągleń
-    const arc = { start: 0, end: 1 };
-    expect(moveArcEnd(arc, "poczatek", 1 - MIN_ARC).start).toBe(1 - MIN_ARC);
-    expect(moveArcEnd(arc, "poczatek", 1 - MIN_ARC / 2).start).toBe(1 - MIN_ARC);
-    // dla końca 1 + (t − 1) nie jest dokładne w liczbach zmiennoprzecinkowych — tu tolerancja
-    expect(moveArcEnd(arc, "koniec", MIN_ARC).end).toBeCloseTo(MIN_ARC, 15);
-    expect(moveArcEnd(arc, "koniec", MIN_ARC / 2).end).toBe(MIN_ARC);
+    // koniec dokładnie MIN_ARC_LENGTH za początkiem: zostaje pod palcem
+    const edge = paramAtLength(shape, 1, MIN_ARC_LENGTH);
+    const atEdge = { ...shape, arc: moveArcEnd(shape, "koniec", edge) };
+    expect(lengthOf(atEdge)).toBeCloseTo(MIN_ARC_LENGTH, 9);
+    expect(ends(atEdge).end).toBeCloseTo(edge, 9);
+    // koniec jeszcze bliżej początku: zaciśnięty do MIN_ARC_LENGTH, początek stoi
+    const closer = { ...shape, arc: moveArcEnd(shape, "koniec", paramAtLength(shape, 1, MIN_ARC_LENGTH / 2)) };
+    expect(lengthOf(closer)).toBeCloseTo(MIN_ARC_LENGTH, 9);
+    expect(ends(closer).start).toBeCloseTo(1, 9);
   });
 
   it("końce nie mogą się minąć: początek przeciągnięty za koniec zatrzymuje się przed nim", () => {
-    const arc = { start: 0, end: 1 };
-    const moved = moveArcEnd(arc, "poczatek", 1.5);
-    expect(moved.end - moved.start).toBeGreaterThanOrEqual(MIN_ARC);
-    expect(moved.start).toBeLessThan(moved.end);
-    // w drugą stronę łuk nie może urosnąć ponad 2π − MIN_ARC
-    const grown = moveArcEnd(arc, "koniec", -0.01);
-    expect(grown.end - grown.start).toBeLessThanOrEqual(2 * Math.PI - MIN_ARC + 1e-12);
+    const moved = { ...shape, arc: moveArcEnd(shape, "poczatek", 3.5) };
+    expect(lengthOf(moved)).toBeCloseTo(MIN_ARC_LENGTH, 9);
+    expect(ends(moved).end).toBeCloseTo(3, 9);
+    expect(ends(moved).start).toBeLessThan(ends(moved).end);
   });
 
-  it("maksymalna długość łuku: 2π − MIN_ARC, sprawdzona na długim łuku", () => {
-    // Na długim łuku {start: 0, end: 5.5} możemy faktycznie dosięgnąć górnej granicy zacisku.
-    // koniec przesunięty do 8.5: wrap(8.5 - 5.5) = wrap(3) = 3, więc 5.5 + 3 = 8.5,
-    // a to > 2π − MIN_ARC, więc zostaje zaciśnięte.
-    const longArc = { start: 0, end: 5.5 };
-    const maxEnd = moveArcEnd(longArc, "koniec", 8.5);
-    expect(maxEnd.end).toBe(2 * Math.PI - MIN_ARC);
-    expect(maxEnd.start).toBe(0);
-    expect(maxEnd.end - maxEnd.start).toBeCloseTo(2 * Math.PI - MIN_ARC, 12);
+  it("maksymalna długość łuku: obwód − MIN_ARC_LENGTH, sprawdzona na długim łuku", () => {
+    // na łuku od 0 do 5.5 koniec przeciągnięty do 8.5 (wrap(3) = 3) przekracza granicę
+    const long = arcEllipse(vec(0.1, 0.2), vec(0.5, 0.6), 0.6, 0, 5.5);
+    const max = { ...long, arc: moveArcEnd(long, "koniec", 8.5) };
+    expect(lengthOf(max)).toBeCloseTo(perimeter(long) - MIN_ARC_LENGTH, 9);
+    expect(ends(max).start).toBeCloseTo(0, 9);
+    const maxStart = { ...long, arc: moveArcEnd(long, "poczatek", -3) };
+    expect(lengthOf(maxStart)).toBeCloseTo(perimeter(long) - MIN_ARC_LENGTH, 9);
+    expect(ends(maxStart).end).toBeCloseTo(5.5, 9);
+    // tuż poniżej granicy: bez zacisku, koniec pod palcem
+    const below = { ...long, arc: moveArcEnd(long, "koniec", 5.9) };
+    expect(ends(below).end).toBeCloseTo(5.9, 9);
+  });
 
-    // początek przesunięty do -3: wrap(-3 - 0) = -3 < 5.5 - 2π + MIN_ARC,
-    // więc zostaje zaciśnięty na dolną granicę względem końca
-    const maxStart = moveArcEnd(longArc, "poczatek", -3);
-    expect(maxStart.start).toBeCloseTo(5.5 - 2 * Math.PI + MIN_ARC, 15);
-    expect(maxStart.end).toBe(5.5);
-    expect(maxStart.end - maxStart.start).toBeCloseTo(2 * Math.PI - MIN_ARC, 12);
-
-    // Punkt tuż poniżej granicy nie będzie zaciśnięty
-    const justBelow = moveArcEnd(longArc, "koniec", 5.9);
-    expect(justBelow.end).toBeCloseTo(5.9, 15);
-    expect(justBelow.start).toBe(0);
+  it("łuk zachowuje długość, gdy elipsa rośnie, i obejmuje wtedy mniejszy zakres parametru", () => {
+    const bigger = applyDrag(shape, "rozmiar", vec(2, 2));
+    expect(bigger.a).toBeGreaterThan(2 * shape.a);
+    expect(bigger.arc).toBe(shape.arc);
+    expect(lengthOf(bigger)).toBeCloseTo(shape.arc.length, 9);
+    expect(ends(bigger).end - ends(bigger).start).toBeLessThan(ends(shape).end - ends(shape).start);
   });
 
   it("przeciągnięcie końca łuku bez łuku nic nie zmienia", () => {
     expect(applyDrag(state, "koniec", vec(0, 1))).toBe(state);
   });
+
+  it("ognisk nic nie ogranicza: przy dalekim przeciągnięciu rozmiar rośnie, ognisko jest pod palcem", () => {
+    const far = vec(-3, 0.2);
+    const next = applyDrag(shape, "ognisko1", far);
+    expect(next.f1).toBe(far);
+    expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
+    expect(next.arc).toBe(shape.arc);
+  });
+
+  it("z zablokowanym rozmiarem (lockedA) powiększone a wraca do wartości poziomu, gdy ognisko wróci na miejsce", () => {
+    const lockedA = shape.a;
+    const far = vec(-3, 0.2);
+    const away = applyDrag(shape, "ognisko1", far, lockedA);
+    expect(away.a).toBeGreaterThan(shape.a);
+    const back = applyDrag(away, "ognisko1", shape.f1, lockedA);
+    expect(back.a).toBe(shape.a);
+    // bez blokady ten sam powrót zostawia rozmiar powiększony — gracz utknąłby
+    const backNoLock = applyDrag(away, "ognisko1", shape.f1);
+    expect(backNoLock.a).toBeGreaterThan(shape.a);
+  });
 });
 
 describe("przyskakiwanie etapu 2", () => {
-  const fixed = ellipse(vec(-0.1, 0.1), vec(0.5, 0.1), 0.4, { start: -3, end: -0.7 });
+  const fixed = arcEllipse(vec(-0.1, 0.1), vec(0.5, 0.1), 0.4, -3, -0.7);
   const round = circle(vec(0.3, -0.6), 0.1);
   const level: Level = {
     id: "t", title: "t", hint: "t", ball: vec(-0.6, 0.1), hole: vec(0.5, 0.1),

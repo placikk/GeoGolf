@@ -42,6 +42,20 @@ Ruling: `applyDrag` podnosi `a`, gdy ognisko odjedzie za daleko, także na pozio
   niż zaczynał — bez wpływu na rozwiązanie.
 ```
 
+**PRZYWRÓCONE** (2026-09-19) — po krótkim odwołaniu (poprawki po etapie 2, pkt 5) to
+zachowanie znów obowiązuje: kaskad nie da się już przejść jedną elipsą, bo łuk ma stałą
+długość (`decyzje-etap-2.md`, „Łuk opisany długością”).
+
+**SPROSTOWANE** (2026-09-19, końcowy przegląd) — teza „poziom pozostaje rozwiązywalny
+przy każdym `a`” z uzasadnienia wyżej NIE jest prawdziwa: ściany planszy poziomu 1
+przegrywają powyżej `a ≈ 1,005`, a poziomy 9 i 13–15 przegrywają tuż powyżej swojego `a`
+rozwiązania (zmierzone maksima w `decyzje-etap-2.md`, „Poprawki po przeglądzie
+końcowym”). Gracz z zablokowanym uchwytem rozmiaru, który odciągnął ognisko za daleko
+(`a` urosło), utykał z elipsą za dużą, żeby wygrać, i „Jeszcze raz” tego nie cofało.
+Obecne zachowanie: `a` rośnie, gdy ogniska się rozjadą (bez zmian), a przy zablokowanym
+uchwycie rozmiaru WRACA do wartości poziomu, gdy ogniska znów się zejdą (`lockedA` w
+`applyDrag`, `decyzje-etap-2.md`, sekcja dodana w tej poprawce).
+
 ## 4. `scripts/task-brief` ze skilla wymaga nagłówków "Task N", a plan ma
 
 ```

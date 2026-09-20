@@ -4,8 +4,11 @@ import { circleConic, classify, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { onPiece, rayPiece } from "../../src/core/piece";
 import {
-  circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic, shapeToPiece, LEVELS,
+  BOARD_WALLS, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic,
+  shapeToPiece, LEVELS,
 } from "../../src/levels";
+import { trace } from "../../src/core/trace";
+import { runProof } from "../../src/core/verify";
 
 // ogniska nieosiowe i niesymetryczne wokół zera
 const e = ellipse(vec(-0.2, 0.3), vec(0.5, -0.1), 0.6);
@@ -29,12 +32,12 @@ describe("kształty poziomu", () => {
     for (const t of [-2.9, -1, 0, 0.4, 1.7, 3.1]) expect(ellipseParam(e, ellipsePoint(e, t))).toBeCloseTo(t, 12);
   });
 
-  it("łuk z parametrów: końce i `via` w środku zakresu", () => {
-    const arc = ellipse(e.f1, e.f2, e.a, { start: 2, end: 5 });
+  it("łuk z parametrów: końce w zadanych parametrach, `via` w środku długości", () => {
+    const arc = arcEllipse(e.f1, e.f2, e.a, 2, 5);
     const p = shapeToPiece(arc);
-    expect(p.arc!.from).toEqual(ellipsePoint(arc, 2));
-    expect(p.arc!.to).toEqual(ellipsePoint(arc, 5));
-    expect(p.arc!.via).toEqual(ellipsePoint(arc, 3.5));
+    expect(dist(p.arc!.from, ellipsePoint(arc, 2))).toBeLessThan(1e-9);
+    expect(dist(p.arc!.to, ellipsePoint(arc, 5))).toBeLessThan(1e-9);
+    expect(p.arc!.via).toEqual(ellipsePoint(arc, arc.arc.mid));
     expect(onPiece(p, ellipsePoint(arc, 4.5))).toBe(true);
     expect(onPiece(p, ellipsePoint(arc, 1))).toBe(false);
     expect(onPiece(p, ellipsePoint(arc, 5.5))).toBe(false);
@@ -65,12 +68,47 @@ describe("kształty poziomu", () => {
     expect(rayPiece(vec(0.8, 0), vec(0, 1), p)).toBeNull();
   });
 
-  it("levelCurves: najpierw elementy gracza, potem przeszkody", () => {
+  it("levelCurves: najpierw elementy gracza, potem przeszkody, na końcu cztery ściany planszy", () => {
     const level = LEVELS.find((l) => l.id === "dwie-przeszkody")!;
     const pieces = level.pieces.map((p) => p.solution);
     const curves = levelCurves(level, pieces);
-    expect(curves).toHaveLength(pieces.length + level.obstacles.length);
+    const n = pieces.length + level.obstacles.length;
+    expect(curves).toHaveLength(n + 4);
     expect(curves[0]).toEqual(shapeToPiece(pieces[0]));
-    expect(curves[curves.length - 1]).toEqual(shapeToPiece(level.obstacles[level.obstacles.length - 1]));
+    expect(curves[n - 1]).toEqual(shapeToPiece(level.obstacles[level.obstacles.length - 1]));
+    expect(curves.slice(n)).toEqual(BOARD_WALLS.map(shapeToPiece));
+  });
+
+  it("ściany planszy to kwadrat [-1, 1]² zamknięty w obwód", () => {
+    expect(BOARD_WALLS).toHaveLength(4);
+    BOARD_WALLS.forEach((w, i) => {
+      expect(Math.abs(w.from.x)).toBe(1);
+      expect(Math.abs(w.from.y)).toBe(1);
+      expect(w.to).toEqual(BOARD_WALLS[(i + 1) % 4].from);
+    });
+  });
+
+  it("piłka puszczona prostopadle w ścianę wraca po tym samym torze", () => {
+    // start niesymetryczny: odbicie liczone od złej ściany albo złą normalną by się ujawniło
+    const r = trace(vec(0.25, 0.5), vec(1, 0), {
+      curves: BOARD_WALLS.map(shapeToPiece), hole: vec(9, 9), holeRadius: 0, maxBounces: 1, maxLength: 100,
+    });
+    expect(r.path[1]).toEqual(vec(1, 0.5));
+    expect(r.path[2].x).toBeCloseTo(-1, 12);
+    expect(r.path[2].y).toBeCloseTo(0.5, 12);
+  });
+
+  it("piłka, która przedtem przepadała poza planszą, teraz odbija się od ramki", () => {
+    // start poziomu 8: piłka leży poza małą elipsą startową, więc piłki lecą w brzeg planszy
+    // (bez ścian przepadały za nim; zmierzone: wszystkie osiem trafia w ramkę)
+    const level = LEVELS.find((l) => l.id === "zwienczenie")!;
+    const pieces = level.pieces.map((p) => p.start);
+    const proof = runProof({
+      ball: level.ball, hole: level.hole, holeRadius: level.test.holeRadius,
+      maxBounces: level.test.maxBounces, curves: levelCurves(level, pieces), aimCurve: shapeConic(pieces[0]),
+    });
+    const onFrame = (q: { x: number; y: number }) =>
+      Math.abs(Math.abs(q.x) - 1) < 1e-9 || Math.abs(Math.abs(q.y) - 1) < 1e-9;
+    expect(proof.balls.some((b) => b.path.slice(1, -1).some(onFrame))).toBe(true);
   });
 });

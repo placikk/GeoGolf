@@ -3,18 +3,23 @@ import { vec } from "../../src/core/vec";
 import { ellipseFromFoci } from "../../src/core/conic";
 import { whole } from "../../src/core/piece";
 import { makeCamera } from "../../src/render/camera";
-import { drawPiece, sectorWedge } from "../../src/render/draw";
-import { ellipse, shapeToPiece } from "../../src/levels";
+import { FRAME_RADIUS, SECTOR_REACH, boardFrame, drawPiece, sectorWedge } from "../../src/render/draw";
+import { arcEllipse, shapeToPiece } from "../../src/levels";
 
 function recordingCtx() {
-  const calls: { op: string; args?: number[] }[] = [];
+  const calls: { op: string; args?: number[]; style?: string; lineWidth?: number }[] = [];
   const ctx = {
     lineCap: "", lineJoin: "", lineWidth: 0, strokeStyle: "", fillStyle: "",
     beginPath() {}, moveTo() {}, lineTo() {},
     closePath() { calls.push({ op: "closePath" }); },
     arc(...args: number[]) { calls.push({ op: "arc", args }); },
-    stroke() { calls.push({ op: "stroke" }); },
-    fill() { calls.push({ op: "fill" }); },
+    rect(...args: number[]) { calls.push({ op: "rect", args }); },
+    roundRect(...args: number[]) { calls.push({ op: "roundRect", args }); },
+    save() { calls.push({ op: "save" }); },
+    restore() { calls.push({ op: "restore" }); },
+    clip() { calls.push({ op: "clip" }); },
+    stroke() { calls.push({ op: "stroke", style: String(ctx.strokeStyle), lineWidth: ctx.lineWidth }); },
+    fill() { calls.push({ op: "fill", style: String(ctx.fillStyle) }); },
   };
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
 }
@@ -28,18 +33,46 @@ describe("rysowanie kawałków", () => {
     expect(full.calls.filter((c) => c.op === "closePath")).toHaveLength(2);
 
     const arc = recordingCtx();
-    drawPiece(arc.ctx, cam, shapeToPiece(ellipse(vec(-0.3, 0), vec(0.3, 0), 0.5, { start: 0, end: 2 })), "k", "p", 2);
+    drawPiece(arc.ctx, cam, shapeToPiece(arcEllipse(vec(-0.3, 0), vec(0.3, 0), 0.5, 0, 2)), "k", "p", 2);
     expect(arc.calls.filter((c) => c.op === "closePath")).toHaveLength(0);
     expect(arc.calls.filter((c) => c.op === "stroke")).toHaveLength(2);   // poświata + linia
   });
 
   it("wachlarz to jedno wypełnienie bez obrysu, kąty świata odwrócone na ekran", () => {
     const { ctx, calls } = recordingCtx();
-    sectorWedge(ctx, cam, vec(0.1, -0.2), { center: 1, width: 0.5 }, 3, "klin");
+    sectorWedge(ctx, cam, vec(0.1, -0.2), { center: 1, width: 0.5 }, SECTOR_REACH, "klin");
     expect(calls.filter((c) => c.op === "fill")).toHaveLength(1);
     expect(calls.filter((c) => c.op === "stroke")).toHaveLength(0);
     const arc = calls.find((c) => c.op === "arc")!;
+    expect(arc.args![2]).toBeCloseTo(SECTOR_REACH * cam.scale, 12);
     expect(arc.args![3]).toBeCloseTo(-1.25, 12);
     expect(arc.args![4]).toBeCloseTo(-0.75, 12);
+  });
+
+  it("wachlarz jest mały i przycięty do planszy: przycięcie przed wypełnieniem, potem przywrócenie", () => {
+    expect(SECTOR_REACH).toBe(0.4);
+    const { ctx, calls } = recordingCtx();
+    sectorWedge(ctx, cam, vec(0.9, 0.9), { center: 0.5, width: 1 }, SECTOR_REACH, "klin");
+    const ops = calls.map((c) => c.op);
+    expect(ops.indexOf("clip")).toBeGreaterThan(ops.indexOf("rect"));
+    expect(ops.indexOf("fill")).toBeGreaterThan(ops.indexOf("clip"));
+    expect(ops[0]).toBe("save");
+    expect(ops[ops.length - 1]).toBe("restore");
+    // przycięcie to dokładnie kwadrat planszy [-1, 1]²
+    const tl = cam.toScreen(vec(-1, 1)), br = cam.toScreen(vec(1, -1));
+    expect(calls.find((c) => c.op === "rect")!.args).toEqual([tl.x, tl.y, br.x - tl.x, br.y - tl.y]);
+  });
+
+  it("ramka: tło planszy, potem szeroka poświata pod cienką linią, zaokrąglone rogi na brzegu planszy", () => {
+    const { ctx, calls } = recordingCtx();
+    boardFrame(ctx, cam, "tlo", "linia", "poswiata", 1);
+    expect(calls.filter((c) => c.op === "fill").map((c) => c.style)).toEqual(["tlo"]);
+    const strokes = calls.filter((c) => c.op === "stroke");
+    expect(strokes.map((s) => s.style)).toEqual(["poswiata", "linia"]);
+    expect(strokes[0].lineWidth!).toBeGreaterThan(strokes[1].lineWidth!);
+    const tl = cam.toScreen(vec(-1, 1)), br = cam.toScreen(vec(1, -1));
+    for (const r of calls.filter((c) => c.op === "roundRect")) {
+      expect(r.args).toEqual([tl.x, tl.y, br.x - tl.x, br.y - tl.y, FRAME_RADIUS]);
+    }
   });
 });

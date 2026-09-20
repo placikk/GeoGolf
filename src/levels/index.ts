@@ -5,6 +5,7 @@ import { STAGE_2 } from "./stage2";
 
 export * from "./types";
 export * from "./shape";
+export * from "./arc";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
