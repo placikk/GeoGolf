@@ -709,7 +709,11 @@ describe("długość wzdłuż krzywej nieograniczonej", () => {
   });
 
   it("spanRange po parametrze przepisuje zakres wprost", () => {
-    expect(spanRange(PAR, { mid: 0.2, span: 1.4 })).toEqual({ from: -0.5, to: 0.9 });
+    // toBeCloseTo, nie toEqual: 0.2 − 1.4/2 daje −0.49999999999999994, a 0.2 + 1.4/2
+    // daje 0.8999999999999999. Równość bitowa jest tu nieosiągalna i nie o nią chodzi.
+    const r = spanRange(PAR, { mid: 0.2, span: 1.4 });
+    expect(r.from).toBeCloseTo(-0.5, 9);
+    expect(r.to).toBeCloseTo(0.9, 9);
   });
 
   it("spanRange po długości daje kawałek o zadanej długości", () => {
