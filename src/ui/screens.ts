@@ -7,7 +7,10 @@ import {
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
-import { ACTION_BAND, MENU_BUTTON, hitRect, hitTile, menuLayout, playArea, winAction, winLabels } from "./menu";
+import {
+  MENU_BUTTON, editAction, hitRect, hitTile, menuLayout, playArea, settingsButton, settingsLayout, winAction, winLabels,
+} from "./menu";
+import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
 
 const TRAIL = 0.35;
@@ -20,6 +23,8 @@ export function mount(canvas: HTMLCanvasElement): void {
   let levelIndex = progress.last;
   let game: GameState = newGame(LEVELS[levelIndex]);
   let menuOpen = false;
+  let settings = loadSettings(store);
+  let settingsOpen = false;
   let dragging: HandleRef | null = null;
   let pointer: Vec2 | null = null;
   let consumedReset = false;
@@ -60,8 +65,16 @@ export function mount(canvas: HTMLCanvasElement): void {
 
   function toggleMenu(): void {
     menuOpen = !menuOpen;
+    settingsOpen = false;
     // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
     if (menuOpen && game.phase === "dowod") game = retry(game);
+  }
+
+  function toggleSettings(): void {
+    settingsOpen = !settingsOpen;
+    menuOpen = false;
+    // jak menu poziomów: ustawienia przerywają trwający dowód
+    if (settingsOpen && game.phase === "dowod") game = retry(game);
   }
 
   /** Zawija tekst po słowach. Wymaga ustawionego wcześniej `ctx.font`. */
@@ -85,6 +98,22 @@ export function mount(canvas: HTMLCanvasElement): void {
     const p = toScreenPoint(e);
     if (hitRect(MENU_BUTTON, p)) {
       toggleMenu();
+      consumedReset = true;
+      return;
+    }
+    if (hitRect(settingsButton(viewW()), p)) {
+      toggleSettings();
+      consumedReset = true;
+      return;
+    }
+    if (settingsOpen) {
+      // wiersz przełącza ustawienie (ekran zostaje otwarty), tło zamyka ustawienia
+      const i = hitTile(settingsLayout(viewW(), viewH(), SETTING_ROWS.length), p);
+      if (i === null) settingsOpen = false;
+      else {
+        settings = toggleSetting(settings, SETTING_ROWS[i].key);
+        saveSettings(store, settings);
+      }
       consumedReset = true;
       return;
     }
@@ -150,15 +179,17 @@ export function mount(canvas: HTMLCanvasElement): void {
     consumedReset = false;
     endDrag();
     if (wasDragging || afterReset || game.phase !== "edycja") return;
-    const r = canvas.getBoundingClientRect();
-    if (e.clientY - r.top > r.height * ACTION_BAND) game = startProof(game);
+    // dolny pas: „Reset" (stan startowy poziomu) po lewej, „Sprawdź" po prawej
+    const action = editAction(toScreenPoint(e), viewW(), viewH());
+    if (action === "reset") game = newGame(game.level);
+    if (action === "sprawdz") game = startProof(game);
   });
 
   function frame(now: number): void {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     time = now / 1000;
-    if (!menuOpen) {
+    if (!menuOpen && !settingsOpen) {
       const before = game.phase;
       game = advance(game, dt);
       if (before === "dowod" && game.phase === "wygrana") {
@@ -214,9 +245,11 @@ export function mount(canvas: HTMLCanvasElement): void {
           ringHandle(ctx, c, h.pos, PALETTE.handle, PALETTE.handleGlow, r);
         }
       });
-      // podgląd na żywo: dwie piłki, blade tory
-      for (const b of preview(game).balls) {
-        glowPolyline(ctx, c, b.path, "rgba(226,232,240,0.28)", "rgba(226,232,240,0.06)", 1);
+      // podgląd na żywo: dwie piłki, blade tory — tylko gdy gracz włączył to w ustawieniach
+      if (settings.previewPaths) {
+        for (const b of preview(game).balls) {
+          glowPolyline(ctx, c, b.path, "rgba(226,232,240,0.28)", "rgba(226,232,240,0.06)", 1);
+        }
       }
       if (dragging !== null && pointer !== null) {
         // znacznik odsunięty od palca, żeby nie zasłaniał tego, co przesuwasz
@@ -225,7 +258,7 @@ export function mount(canvas: HTMLCanvasElement): void {
         ctx.font = "13px system-ui, sans-serif";
         ctx.fillText(`${pointer.x.toFixed(2)}, ${pointer.y.toFixed(2)}`, s.x + 26, s.y - 26);
       }
-      banner(level.title, level.hint, "Sprawdź");
+      banner(level.title, settings.hints ? level.hint : "", ["Reset", "Sprawdź"]);
     } else if (game.proof !== null) {
       const s = game.elapsed * BALL_SPEED;
       for (const b of game.proof.balls) {
@@ -237,17 +270,10 @@ export function mount(canvas: HTMLCanvasElement): void {
         for (const b of game.proof.balls) {
           glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
         }
-        // Zdanie o jednoczesności wolno wypisać tylko wtedy, gdy faktycznie zaszła.
-        // Warunkiem zwycięstwa jest "wszystkie wpadły", nie "wpadły razem" — a istnieją
-        // rozwiązania, w których dołek leży na cięciwie zamiast w ognisku i piłki
-        // przybywają w odstępie kilku sekund. Chwalenie się wtedy "tą samą chwilą"
-        // byłoby kłamstwem gry wobec gracza.
+        // pod tytułem tylko dopisek ostatniego poziomu; na pozostałych — nic
         const allSolved = LEVELS.every((l) => progress.solved.includes(l.id));
         const { right, note } = winLabels(isLast(), allSolved);
-        const summary = game.proof.simultaneous
-          ? "Osiem torów, jedno miejsce, ta sama chwila."
-          : "Osiem torów, jedno miejsce.";
-        banner("Wpadły wszystkie", note === null ? summary : `${summary} ${note}`, ["Jeszcze raz", right]);
+        banner("Wpadły wszystkie", note ?? "", ["Jeszcze raz", right]);
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
         banner("Nie wszystkie", `Chybiło ${missed} z ${game.proof.balls.length}. Zobacz, którędy.`, "Jeszcze raz");
@@ -255,7 +281,9 @@ export function mount(canvas: HTMLCanvasElement): void {
     }
 
     if (menuOpen) drawMenu();
+    if (settingsOpen) drawSettings();
     drawMenuButton();
+    drawSettingsButton();
 
     function banner(title: string, hint: string, action: string | [string, string]): void {
       const w = viewW();
@@ -296,6 +324,53 @@ export function mount(canvas: HTMLCanvasElement): void {
       for (let i = -1; i <= 1; i++) {
         ctx.fillRect(b.x + b.w / 2 - 10, b.y + b.h / 2 + i * 6 - 1, 20, 2);
       }
+    }
+
+    /** Zębatka rysowana liniami — nie polegamy na glifie ⚙ w czcionce telefonu. */
+    function drawSettingsButton(): void {
+      const b = settingsButton(viewW());
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      ctx.strokeStyle = settingsOpen ? PALETTE.curve : PALETTE.text;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+      ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const t = (i * Math.PI) / 4;
+        ctx.beginPath();
+        ctx.moveTo(cx + 8 * Math.cos(t), cy + 8 * Math.sin(t));
+        ctx.lineTo(cx + 11 * Math.cos(t), cy + 11 * Math.sin(t));
+        ctx.stroke();
+      }
+    }
+
+    function drawSettings(): void {
+      const w = viewW();
+      const h = viewH();
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.fillRect(0, 0, w, h);
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText("Ustawienia", w / 2, 34);
+      settingsLayout(w, h, SETTING_ROWS.length).forEach((r, i) => {
+        const on = settings[SETTING_ROWS[i].key];
+        ctx.beginPath();
+        ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+        ctx.fillStyle = PALETTE.tile;
+        ctx.fill();
+        ctx.lineWidth = on ? 2 : 1;
+        ctx.strokeStyle = on ? PALETTE.curve : PALETTE.tileEdge;
+        ctx.stroke();
+        ctx.font = "16px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillStyle = PALETTE.text;
+        ctx.fillText(SETTING_ROWS[i].label, r.x + 16, r.y + r.h / 2 + 6);
+        ctx.textAlign = "right";
+        ctx.fillStyle = on ? PALETTE.curve : PALETTE.muted;
+        ctx.fillText(on ? "wł." : "wył.", r.x + r.w - 16, r.y + r.h / 2 + 6);
+      });
+      ctx.textAlign = "left";
     }
 
     function drawMenu(): void {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
   ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, editAction, hitRect, hitTile, menuLayout, playArea, settingsButton,
@@ -174,5 +175,12 @@ describe("dolny pas w edycji", () => {
     expect(editAction(vec(50, h * 0.5), w, h)).toBeNull();
     expect(editAction(vec(340, h * ACTION_BAND - 1), w, h)).toBeNull();
     expect(editAction(vec(340, h * ACTION_BAND), w, h)).toBe("sprawdz");
+  });
+});
+
+describe("tekst ekranu wygranej", () => {
+  it("nie ma już zdania o ośmiu torach (decyzja właściciela)", () => {
+    const src = readFileSync("src/ui/screens.ts", "utf8");
+    expect(src.includes("Osiem torów")).toBe(false);
   });
 });
