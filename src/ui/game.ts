@@ -1,5 +1,5 @@
 import { Proof, runProof } from "../core/verify";
-import { EllipseShape, Level, levelCurves, shapeConic } from "../levels";
+import { EllipseShape, Level, levelCurves, shapeAxisAngle } from "../levels";
 
 /** jednostek świata na sekundę — prędkość jest dosłowna, bez krzywych czasu */
 export const BALL_SPEED = 1.2;
@@ -28,7 +28,7 @@ const proofFor = (state: GameState, count: number): Proof =>
     maxBounces: state.level.test.maxBounces,
     curves: levelCurves(state.level, state.pieces),
     // kierunek bazowy dowodu 360° to oś pierwszego elementu gracza — jak w etapie 1
-    aimCurve: shapeConic(state.pieces[0]),
+    baseAngle: shapeAxisAngle(state.pieces[0]),
     sector: state.level.sector,
     count,
   });

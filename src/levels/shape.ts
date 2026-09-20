@@ -37,6 +37,12 @@ export function ellipseAxis(s: EllipseShape): Vec2 {
   return isCircle(s) ? vec(1, 0) : norm(sub(s.f2, s.f1));
 }
 
+/** Kąt osi kształtu w układzie świata — kierunek bazowy dowodu 360°. */
+export function shapeAxisAngle(s: EllipseShape): number {
+  const u = ellipseAxis(s);
+  return Math.atan2(u.y, u.x);
+}
+
 export const ellipseCenter = (s: EllipseShape): Vec2 => scale(add(s.f1, s.f2), 0.5);
 
 export function semiMinor(s: EllipseShape): number {

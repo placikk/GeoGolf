@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { add, dist, fromAngle, scale, vec } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeConic,
+  DIAGONAL, EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeAxisAngle,
+  shapeConic,
 } from "../src/levels";
 import { applyDrag } from "../src/ui/handles";
 
@@ -13,7 +14,7 @@ const proofFor = (level: Level, pieces: EllipseShape[], obstacles: Shape[] = lev
     holeRadius: level.test.holeRadius,
     maxBounces: level.test.maxBounces,
     curves: levelCurves({ ...level, obstacles }, pieces),
-    aimCurve: shapeConic(pieces[0]),
+    baseAngle: shapeAxisAngle(pieces[0]),
     sector: level.sector,
     count: level.test.balls,
   });

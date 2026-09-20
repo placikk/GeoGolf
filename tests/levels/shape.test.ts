@@ -4,8 +4,8 @@ import { circleConic, classify, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { onPiece, rayPiece } from "../../src/core/piece";
 import {
-  BOARD_WALLS, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic,
-  shapeToPiece, LEVELS,
+  BOARD_WALLS, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeAxisAngle,
+  shapeConic, shapeToPiece, LEVELS,
 } from "../../src/levels";
 import { trace } from "../../src/core/trace";
 import { runProof } from "../../src/core/verify";
@@ -105,7 +105,7 @@ describe("kształty poziomu", () => {
     const pieces = level.pieces.map((p) => p.start);
     const proof = runProof({
       ball: level.ball, hole: level.hole, holeRadius: level.test.holeRadius,
-      maxBounces: level.test.maxBounces, curves: levelCurves(level, pieces), aimCurve: shapeConic(pieces[0]),
+      maxBounces: level.test.maxBounces, curves: levelCurves(level, pieces), baseAngle: shapeAxisAngle(pieces[0]),
     });
     const onFrame = (q: { x: number; y: number }) =>
       Math.abs(Math.abs(q.x) - 1) < 1e-9 || Math.abs(Math.abs(q.y) - 1) < 1e-9;
