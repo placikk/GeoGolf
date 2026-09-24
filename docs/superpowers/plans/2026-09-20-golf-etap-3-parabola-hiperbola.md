@@ -1935,6 +1935,67 @@ obejście testu.
 
 ---
 
+## Zadanie 11c: Zablokowany rozmiar hiperboli wraca do wartości poziomu
+
+**Zadanie dopisane w trakcie realizacji** (rozstrzygnięcie kontrolera z 2026-09-24), po
+znalezisku wykonawcy zadania 11b.
+
+**Błąd:** `applyDrag` przyjmuje `lockedA`, ale gałąź hiperboli woła
+`dragHyperbola(state, handle, to)` BEZ niego, a `screens.ts` i tak liczy `lockedA` tylko dla
+elipsy. Skutek, zmierzony na geometrii zaplanowanego poziomu 22 (zablokowane `ognisko1`
+i `rozmiar`, `a = 0.18`, wolne ognisko M):
+
+```
+start:                          a = 0.1800
+M przeciągnięte blisko dołka:   a = 0.0240
+M z powrotem na rozwiązaniu:    a = 0.0240   (rozwiązanie wymaga 0.18)
+```
+
+Zacisk `0 < a < c` słusznie obniża `a`, gdy ogniska się zbliżają — ale potem nic go nie
+podnosi, a uchwyt rozmiaru jest zablokowany. **Gracz utyka na poziomie, którego nie da się
+już wygrać, bez żadnego sygnału dlaczego.** To dokładnie ta sama pułapka, którą poprawki
+etapu 2 usunęły dla elipsy („zablokowany rozmiar wraca do wartości poziomu"), i dotyczy
+obu zaplanowanych poziomów 22 i 23.
+
+**Pliki:**
+- Zmiana: `src/ui/handles.ts`, `src/ui/screens.ts`
+- Test: `tests/ui/handles.test.ts`, `tests/levels.test.ts`
+
+- [ ] **Krok 1: Testy**
+
+W `tests/ui/handles.test.ts`, w bloku „uchwyty hiperboli", dopisz test odtwarzający objazd
+z tabeli wyżej: hiperbola z `a = 0.18`, przeciągnięcie `ognisko2` blisko `ognisko1` z
+`lockedA = 0.18`, potem z powrotem na miejsce z tym samym `lockedA` — `a` ma wrócić do
+`0.18`. Dopisz też przypadek BEZ `lockedA`: wtedy `a` zostaje przycięte i nie wraca samo
+(gracz ma wolny uchwyt rozmiaru i sam je poprawi) — tak jak dla elipsy.
+
+W `tests/levels.test.ts` uogólnij test „zablokowany rozmiar wraca do wartości poziomu po
+objeździe ogniskiem" na hiperbolę (ma te same uchwyty `ognisko1`/`ognisko2`/`rozmiar`) i usuń
+z niego komentarz „dziś zawsze prawda". Parabola ma być wyłączona JAWNIE, z powodem: nie
+ma uchwytu rozmiaru. Objazd dla elementu z zablokowanym `ognisko1` ciągnie tylko `ognisko2`
+— obecny test w ogóle pomija takie elementy (`return` przy zablokowanym dowolnym ognisku),
+co na poziomach 22–23 wyłączyłoby go dokładnie tam, gdzie jest potrzebny. Popraw to tak, żeby
+objazd ciągnął te ogniska, które są WOLNE.
+
+Uruchom — testy mają paść na obecnym kodzie.
+
+- [ ] **Krok 2: Implementacja**
+
+`dragHyperbola` przyjmuje `lockedA?: number` i przy przeciąganiu ogniska stosuje
+`a: lockedA ?? s.a` przed zaciskiem `fit`. Zacisk nadal pilnuje `0 < a < c`, więc gdy ogniska
+są blisko, `a` jest przycięte; gdy się rozejdą, wraca do `lockedA`. `applyDrag` przekazuje
+`lockedA` do `dragHyperbola`.
+
+W `src/ui/screens.ts` warunek liczący `lockedA` ma obejmować także hiperbolę (ma pole `a`),
+nie tylko elipsę. Zaktualizuj komentarz nad nim — obecny mówi, że hiperbola ignoruje
+`lockedA`, co po tej zmianie będzie nieprawdą.
+
+- [ ] **Krok 3: Uruchom wszystko** — `npx tsc --noEmit && npm test`, oczekiwane PASS.
+
+- [ ] **Krok 4: Commit** — polski temat, pusta linia, treść, trailer.
+
+---
+
 ## Zadanie 12: Narzędzie kalibracji + poziomy 17 i 18
 
 Poziomy to dane, ale dane wyliczone. Współrzędne poniżej są **wyprowadzone
