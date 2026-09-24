@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { add, dist, fromAngle, scale, vec } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, levelCurves, perimeter, shapeAxisAngle,
-  shapeConic, shapeFoci,
+  DIAGONAL, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves, perimeter,
+  shapeAxisAngle, shapeConic, shapeFoci,
 } from "../src/levels";
 import { applyDrag } from "../src/ui/handles";
 
@@ -103,17 +103,34 @@ describe("poziomy", () => {
   // się zejdą (`applyDrag`, `lockedA`) — więc rozwiązanie musi używać dokładnie tej wartości.
   it.each(byId)("poziom %s: zablokowane uchwyty zgadzają się między startem a rozwiązaniem", (_id, level) => {
     for (const piece of level.pieces) {
-      // uchwyty "rozmiar"/"ognisko1"/"ognisko2"/"poczatek"/"koniec" są specyficzne dla
-      // elipsy (patrz `Handle`) — dziś każdy element gracza jest elipsą, więc ten warunek
-      // nic nie zmienia, ale bez niego TS nie zawęża `start`/`solution` z `MovableShape`
-      if (piece.start.kind !== "elipsa" || piece.solution.kind !== "elipsa") continue;
-      if (piece.locked.includes("rozmiar")) expect(piece.start.a).toBe(piece.solution.a);
-      if (piece.locked.includes("ognisko1")) expect(piece.solution.f1).toEqual(piece.start.f1);
-      if (piece.locked.includes("ognisko2")) expect(piece.solution.f2).toEqual(piece.start.f2);
+      const { start, solution: sol, locked } = piece;
+      // rodzaj krzywej należy do poziomu, nie do gracza — nie ma uchwytu, który by go zmienił
+      expect(sol.kind).toBe(start.kind);
+      if (start.kind === "parabola" && sol.kind === "parabola") {
+        if (locked.includes("ognisko")) expect(sol.focus).toEqual(start.focus);
+        if (locked.includes("wierzcholek")) expect(sol.vertex).toEqual(start.vertex);
+        // kawałek opisuje poziom, nie palec — gracz nie ma jak go zmienić
+        expect(sol.span).toEqual(start.span);
+        continue;
+      }
+      if (start.kind === "hiperbola" && sol.kind === "hiperbola") {
+        if (locked.includes("rozmiar")) expect(sol.a).toBe(start.a);
+        if (locked.includes("ognisko1")) expect(sol.f1).toEqual(start.f1);
+        if (locked.includes("ognisko2")) expect(sol.f2).toEqual(start.f2);
+        // gałąź i kawałek należą do poziomu — uchwyt rozmiaru bierze z palca tylko odległość
+        expect(sol.branch).toBe(start.branch);
+        expect(sol.span).toEqual(start.span);
+        continue;
+      }
+      // tu zostaje elipsa: rodzaje startu i rozwiązania są równe, sprawdzone wyżej
+      if (start.kind !== "elipsa" || sol.kind !== "elipsa") continue;
+      if (locked.includes("rozmiar")) expect(start.a).toBe(sol.a);
+      if (locked.includes("ognisko1")) expect(sol.f1).toEqual(start.f1);
+      if (locked.includes("ognisko2")) expect(sol.f2).toEqual(start.f2);
       // łuk opisany środkiem i długością: końce nie są niezależne, więc blokada obu końców
       // oznacza ten sam łuk
-      if (piece.locked.includes("poczatek") && piece.locked.includes("koniec")) {
-        expect(piece.start.arc).toEqual(piece.solution.arc);
+      if (locked.includes("poczatek") && locked.includes("koniec")) {
+        expect(start.arc).toEqual(sol.arc);
       }
     }
   });
@@ -144,11 +161,12 @@ describe("poziomy", () => {
   // w KAŻDYM z ośmiu kierunków — dokładnie ten sam test co w etapie 1.
   it.each(byId)("poziom %s: każde odblokowane ognisko1 przesunięte o promień przyskakiwania odpada", (_id, level) => {
     level.pieces.forEach((piece, k) => {
-      if (piece.locked.includes("ognisko1")) return;
-      // "ognisko1" jest specyficzne dla elipsy — dziś zawsze prawda dla nieblokowanego elementu
+      const sol = piece.solution;
+      // parabola nie ma uchwytu `ognisko1` — jej jedyne ognisko sprawdza osobny test niżej
+      if (piece.locked.includes("ognisko1") || sol.kind === "parabola") return;
       for (let i = 0; i < 8; i++) {
-        const moved = solutions(level).map((s, j) =>
-          j === k && s.kind === "elipsa" ? { ...s, f1: add(s.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) } : s);
+        const shifted: MovableShape = { ...sol, f1: add(sol.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
         expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
       }
     });
@@ -161,27 +179,60 @@ describe("poziomy", () => {
   // zmierzone: żaden poziom nie ma więcej niż dwóch wyjątków i leżą one na osi elementu.
   it.each(byId)("poziom %s: każde odblokowane ognisko2 odpada w co najmniej 6 z 8 kierunków", (_id, level) => {
     level.pieces.forEach((piece, k) => {
-      if (piece.locked.includes("ognisko2")) return;
-      // "ognisko2" jest specyficzne dla elipsy — dziś zawsze prawda dla nieblokowanego elementu
+      const sol = piece.solution;
+      // parabola nie ma uchwytu `ognisko2` — jej jedyne ognisko sprawdza osobny test niżej
+      if (piece.locked.includes("ognisko2") || sol.kind === "parabola") return;
       let missed = 0;
       for (let i = 0; i < 8; i++) {
-        const moved = solutions(level).map((s, j) =>
-          j === k && s.kind === "elipsa" ? { ...s, f2: add(s.f2, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) } : s);
+        const shifted: MovableShape = { ...sol, f2: add(sol.f2, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
         if (!solves(level, moved)) missed++;
       }
       expect(missed, `element ${k}`).toBeGreaterThanOrEqual(6);
     });
   });
 
-  // Skracamy tylko łuki elips (o 0.02 długości z każdej strony — dawny 1° parametru na
-  // elipsie a ≈ 1 to ok. 0.017). Odcinki celowo zostają nietknięte: ściany tylko
-  // ograniczają rozmiar/pozycję elementów gracza; żadne zapisane rozwiązanie nie opiera
-  // się na końcu odcinka — sprawdzone przez usunięcie wszystkich odcinków z tego testu.
+  // Parabola ma jedno ognisko i obowiązuje dla niego surowa postać kryterium — pudło
+  // w każdym z ośmiu kierunków, jak `ognisko1`. Wierzchołka nie przesuwamy: spec §8 wiąże
+  // promień przyskakiwania z tolerancją dla ognisk, a wierzchołek nie przyskakuje.
+  // Uwaga na ryzyko z zadania 9: przy współliniowej geometrii piłki blisko osi mogą
+  // wpadać po jednym odbiciu także przy przesuniętym ognisku. Jeśli ten test padnie na
+  // poziomie parabolicznym, to jest pierwszy podejrzany.
+  it.each(byId)("poziom %s: każde odblokowane ognisko paraboli przesunięte o promień przyskakiwania odpada", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      if (piece.locked.includes("ognisko") || sol.kind !== "parabola") return;
+      for (let i = 0; i < 8; i++) {
+        const shifted: MovableShape = { ...sol, focus: add(sol.focus, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
+        expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
+      }
+    });
+  });
+
+  // Skracamy o 0.02 z każdej strony — dawny 1° parametru na elipsie a ≈ 1 to ok. 0.017.
+  // Elipsa: tylko jeśli ma łuk (`arc`). Parabola/hiperbola: `span` jest OBOWIĄZKOWY
+  // (parabola jest nieograniczona), więc kawałek zawsze się skraca — wariant `length`
+  // wprost o 2d, wariant `span` też o 2d, ale w innej walucie: dla paraboli parametr
+  // krzywej to odsunięcie prostopadłe od ogniska, więc 2d jest tam wprost długością;
+  // dla hiperboli parametr jest bezwymiarowy, więc to samo 2d skraca kawałek SŁABIEJ
+  // niż na paraboli czy elipsie — i tak wystarcza, żeby rozwiązanie oparte na samej
+  // krawędzi kawałka przestało się mieścić. Odcinki celowo zostają nietknięte: ściany
+  // tylko ograniczają rozmiar/pozycję elementów gracza; żadne zapisane rozwiązanie nie
+  // opiera się na końcu odcinka — sprawdzone przez usunięcie wszystkich odcinków z tego testu.
+  const shrinkSpan = (span: Span, d: number): Span =>
+    "length" in span ? { ...span, length: span.length - 2 * d } : { ...span, span: span.span - 2 * d };
+  const shrinkMovable = (s: MovableShape, d: number): MovableShape =>
+    s.kind === "elipsa"
+      ? (s.arc === undefined ? s : { ...s, arc: { ...s.arc, length: s.arc.length - 2 * d } })
+      : { ...s, span: shrinkSpan(s.span, d) };
+  const shrinkShape = (s: Shape, d: number): Shape => (s.kind === "odcinek" ? s : shrinkMovable(s, d));
+
   it.each(byId)("poziom %s: rozwiązanie nie opiera się na krawędzi łuku (skrócenie o 0.02 z obu stron)", (_id, level) => {
     const d = 0.02;
-    const shrink = <S extends Shape>(s: S): S =>
-      s.kind === "elipsa" && s.arc !== undefined ? { ...s, arc: { ...s.arc, length: s.arc.length - 2 * d } } : s;
-    expect(proofFor(level, solutions(level).map(shrink), level.obstacles.map(shrink)).solved).toBe(true);
+    expect(
+      proofFor(level, solutions(level).map((s) => shrinkMovable(s, d)), level.obstacles.map((s) => shrinkShape(s, d))).solved,
+    ).toBe(true);
   });
 
   // Kaskada: w zapisanym rozwiązaniu jakieś ognisko leży poza piłką i dołkiem. Na takim
@@ -206,8 +257,13 @@ describe("poziomy", () => {
       // nie kawałek nad nią — sweep ćwiczy też ten wąski, wcześniej nieobjęty zakres
       const a0 = dist(level.ball, level.hole) / 2 + 1e-3;
       level.pieces.forEach((piece, k) => {
+        const sol = piece.solution;
+        // Gracz nie zmienia rodzaju krzywej: jedyna elipsa, jaką może postawić przez piłkę
+        // i dołek, to jego WŁASNA elipsa. Parabola ani hiperbola nie staną się elipsą,
+        // więc dla nich tego obejścia nie ma czym wykonać.
+        if (sol.kind !== "elipsa") return;
         for (let a = a0; a <= 3; a += 0.04) {
-          const one = { ...piece.solution, f1: level.ball, f2: level.hole, a };
+          const one = { ...sol, f1: level.ball, f2: level.hole, a };
           const pieces = level.pieces.map((q, j) => (j === k ? one : q.start));
           expect(solves(level, pieces), `element ${k}, a = ${a.toFixed(2)}`).toBe(false);
         }
