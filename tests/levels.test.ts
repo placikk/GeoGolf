@@ -141,18 +141,45 @@ describe("poziomy", () => {
   // zablokowany rozmiar musi wrócić do wartości poziomu (`lockedA` w `applyDrag`).
   it.each(byId)("poziom %s: zablokowany rozmiar wraca do wartości poziomu po objeździe ogniskiem", (_id, level) => {
     level.pieces.forEach((piece, k) => {
-      // pułapka dotyczy tylko elementów, gdzie gracz naprawdę może ognisko odciągnąć —
-      // gdy oba ogniska są też zablokowane (np. okrąg poziomu 11), nie ma czym objeżdżać
       if (!piece.locked.includes("rozmiar")) return;
-      if (piece.locked.includes("ognisko1") || piece.locked.includes("ognisko2")) return;
-      // "rozmiar"/"ognisko1"/"ognisko2" są specyficzne dla elipsy — dziś zawsze prawda
-      if (piece.start.kind !== "elipsa" || piece.solution.kind !== "elipsa") return;
-      let shape = piece.start;
-      shape = applyDrag(shape, "ognisko2", vec(0.95, 0.95), piece.start.a);
-      shape = applyDrag(shape, "ognisko1", piece.solution.f1, piece.start.a);
-      shape = applyDrag(shape, "ognisko2", piece.solution.f2, piece.start.a);
-      expect(shape.a, `element ${k}`).toBe(piece.solution.a);
-      const pieces = level.pieces.map((q, j) => (j === k ? shape : q.solution));
+      const start = piece.start;
+      const sol = piece.solution;
+      // parabola nie ma uchwytu rozmiaru — nie ma czego przywracać
+      if (start.kind === "parabola" || sol.kind === "parabola") return;
+      // pułapka dotyczy tylko ognisk, którymi gracz naprawdę może objechać — objazd
+      // ciągnie WOLNE ogniska; gdy oba są też zablokowane (np. okrąg poziomu 11),
+      // nie ma czym objeżdżać. Na poziomach z zablokowanym tylko jednym ogniskiem
+      // (np. planowane 22–23: zablokowane `ognisko1` i `rozmiar`) objazd musi ciągnąć
+      // to DRUGIE, wolne ognisko — inaczej test wyłączałby się dokładnie tam, gdzie
+      // pułapka jest realna.
+      const freeFoci = (["ognisko1", "ognisko2"] as const).filter((h) => !piece.locked.includes(h));
+      if (freeFoci.length === 0) return;
+      const lockedA = start.a;
+      const solTarget = (h: "ognisko1" | "ognisko2") => (h === "ognisko1" ? sol.f1 : sol.f2);
+      // dragHyperbola/dragEllipse nigdy nie zmieniają `kind`; parabola już wykluczona
+      // wyżej — to tylko odzyskuje dla TypeScriptu zawężenie zgubione przez ogólne
+      // przeciążenie applyDrag (zwraca MovableShape)
+      const narrow = (s: MovableShape) => {
+        if (s.kind === "parabola") throw new Error("zły rodzaj");
+        return s;
+      };
+
+      // Elipsa i hiperbola bronią zacisku na przeciwnych krańcach: elipsie `a` rośnie
+      // bez ograniczeń, gdy ogniska się rozjadą (róg planszy jest tu najgorszym
+      // przypadkiem), a hiperboli `a` jest ścinane do zera, gdy ogniska się zejdą
+      // (najgorszy przypadek to drugie ognisko TEGO SAMEGO elementu). Jeden objazd nie
+      // złapałby obu błędów naraz, więc sprawdzamy oba kierunki osobno.
+      let stretched: MovableShape = start;
+      for (const h of freeFoci) stretched = applyDrag(stretched, h, vec(0.95, 0.95), lockedA);
+      for (const h of freeFoci) stretched = applyDrag(stretched, h, solTarget(h), lockedA);
+      expect(narrow(stretched).a, `element ${k}, róg planszy`).toBe(sol.a);
+
+      let squeezed: MovableShape = start;
+      for (const h of freeFoci) squeezed = applyDrag(squeezed, h, h === "ognisko1" ? start.f2 : start.f1, lockedA);
+      for (const h of freeFoci) squeezed = applyDrag(squeezed, h, solTarget(h), lockedA);
+      expect(narrow(squeezed).a, `element ${k}, ogniska sklejone`).toBe(sol.a);
+
+      const pieces = level.pieces.map((q, j) => (j === k ? squeezed : q.solution));
       expect(solves(level, pieces), `element ${k}`).toBe(true);
     });
   });

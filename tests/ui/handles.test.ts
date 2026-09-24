@@ -315,4 +315,24 @@ describe("uchwyty hiperboli", () => {
     expect(next.a).toBeLessThan(c);
     expect(() => shapeConic(next)).not.toThrow();
   });
+
+  // Ta sama pułapka co dla elipsy (patrz test wyżej w "uchwyty"): poziom blokuje uchwyt
+  // rozmiaru i liczy na to, że `a` wraca do wartości poziomu, gdy ogniska znów się zejdą.
+  // Bez `lockedA` w `dragHyperbola` zacisk `0 < a < c` obniża `a`, gdy ogniska są blisko,
+  // ale nic go potem nie podnosi — gracz utyka na poziomie, którego nie da się wygrać.
+  it("z zablokowanym rozmiarem (lockedA) a wraca do wartości poziomu, gdy ognisko wróci na miejsce", () => {
+    const lockedA = hyp.a;
+    const near = vec(-0.49, 0); // blisko ognisko1 — c się zaciska do 0.005, a razem z nim
+    const away = applyDrag(hyp, "ognisko2", near, lockedA);
+    if (away.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(away.a).toBeLessThan(hyp.a);
+    const back = applyDrag(away, "ognisko2", hyp.f2, lockedA);
+    if (back.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(back.a).toBe(hyp.a);
+    // bez blokady a zostaje przycięte i NIE wraca samo — gracz ma wolny uchwyt rozmiaru
+    // i sam je poprawi, tak jak dla elipsy (patrz komentarz w `applyDrag`)
+    const backNoLock = applyDrag(away, "ognisko2", hyp.f2);
+    if (backNoLock.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(backNoLock.a).toBeLessThan(hyp.a);
+  });
 });

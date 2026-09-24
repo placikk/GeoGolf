@@ -145,8 +145,15 @@ const keepApart = (moved: Vec2, other: Vec2, fallbackAxis: Vec2): Vec2 => {
  *  brzeg to `c` pomniejszone o mniejsze z (MIN_GAP, c/2), więc zawsze zostaje
  *  ściśle mniejszy od `c` i nie mniejszy niż `c/2`; dolny brzeg to mniejsze z
  *  (MIN_GAP, górny brzeg), więc nigdy go nie przekracza. Dla każdego c > 0 daje to
- *  0 < lo ≤ hi < c. */
-function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaShape {
+ *  0 < lo ≤ hi < c.
+ *
+ *  `lockedA`: `a` ze startu poziomu, gdy uchwyt „rozmiar” tego elementu jest zablokowany —
+ *  patrz komentarz przy `applyDrag`. Przy przeciąganiu ogniska podstawiamy ją PRZED
+ *  zaciskiem `fit`, więc `a` wraca do wartości poziomu, gdy ogniska się rozejdą z powrotem;
+ *  gdy są blisko, `fit` i tak przytnie ją do (0, c) — zacisk ma pierwszeństwo, bo hiperbola
+ *  bez niego przestałaby istnieć. Bez `lockedA` zachowanie jest jak dawniej: `a` startu
+ *  bieżącego stanu, tylko przycięte. */
+function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2, lockedA?: number): HyperbolaShape {
   const fit = (x: HyperbolaShape): HyperbolaShape => {
     const c = dist(x.f1, x.f2) / 2;
     const hi = c - Math.min(MIN_GAP, c / 2);
@@ -154,10 +161,10 @@ function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaSh
     return { ...x, a: clamp(x.a, lo, hi) };
   };
   if (handle === "ognisko1") {
-    return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))) });
+    return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))), a: lockedA ?? s.a });
   }
   if (handle === "ognisko2") {
-    return fit({ ...s, f2: keepApart(to, s.f1, norm(sub(s.f2, s.f1))) });
+    return fit({ ...s, f2: keepApart(to, s.f1, norm(sub(s.f2, s.f1))), a: lockedA ?? s.a });
   }
   if (handle !== "rozmiar") return s;
   const center = scale(add(s.f1, s.f2), 0.5);
@@ -177,7 +184,7 @@ export function applyDrag(
   state: MovableShape, handle: Handle, to: Vec2, lockedA?: number,
 ): MovableShape {
   if (state.kind === "parabola") return dragParabola(state, handle, to);
-  if (state.kind === "hiperbola") return dragHyperbola(state, handle, to);
+  if (state.kind === "hiperbola") return dragHyperbola(state, handle, to, lockedA);
   if (handle === "poczatek" || handle === "koniec") {
     // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej
     if (state.arc === undefined) return state;

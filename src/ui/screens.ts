@@ -170,9 +170,11 @@ export function mount(canvas: HTMLCanvasElement): void {
       : w;
     const def = game.level.pieces[piece];
     // przy zablokowanym uchwycie rozmiaru rozmiar wraca do wartości poziomu, gdy ogniska
-    // znów się zejdą — patrz komentarz w `applyDrag`. To zachowanie ma dziś sens tylko
-    // dla elipsy: `dragHyperbola`/`dragParabola` nie przyjmują `lockedA` i go ignorują.
-    const lockedA = def.locked.includes("rozmiar") && def.start.kind === "elipsa" ? def.start.a : undefined;
+    // znów się zejdą — patrz komentarz w `applyDrag`/`dragHyperbola`. Dotyczy elipsy i
+    // hiperboli (obie mają pole `a`); parabola nie ma uchwytu rozmiaru, więc nie ma go czym
+    // zablokować.
+    const lockedA = def.locked.includes("rozmiar") && (def.start.kind === "elipsa" || def.start.kind === "hiperbola")
+      ? def.start.a : undefined;
     const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped, lockedA) : s));
     game = { ...game, pieces };
   });
