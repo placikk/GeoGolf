@@ -1776,6 +1776,165 @@ git commit -m "feat(render): otwarty obrys krzywej nieograniczonej, kierownica i
 
 ---
 
+## Zadanie 11b: Testy poziomów znają wszystkie krzywe
+
+**Zadanie dopisane w trakcie realizacji** (rozstrzygnięcie kontrolera z 2026-09-24). Plan
+w pierwotnej postaci zakładał, że testy w `tests/levels.test.ts` same obejmą nowe poziomy.
+Nie obejmą: pięć z nich zakłada elipsę. Specyfikacja §8 wymaga kryterium 5% dla KAŻDEGO
+elementu ruchomego, więc bez tego zadania poziomy 17–24 albo wywalają suitę, albo — co gorsze
+— przechodzą testy, które ich w ogóle nie sprawdzają.
+
+Co dziś nie działa dla paraboli i hiperboli:
+
+| Test | Co się dzieje |
+|---|---|
+| zablokowane uchwyty zgadzają się | dla nowych krzywych `continue` — po cichu nic nie sprawdza |
+| ognisko1 odpada (5%) | przesuwa tylko `f1` elipsy; parabolę zostawia bez zmian, więc rozwiązanie nadal wygrywa i test **pada** |
+| ognisko2 odpada (5%) | jak wyżej |
+| brak ognisko paraboli (5%) | **nie istnieje** — ognisko paraboli nie jest w ogóle sprawdzane |
+| rozwiązanie nie opiera się na krawędzi łuku | skraca tylko łuki elips; kawałki `span` zostają nietknięte |
+| jedna elipsa przez piłkę i dołek nie wygrywa | rozsmarowuje kształt gracza; dla hiperboli buduje hiperbolę, nie elipsę |
+
+Ostatni wiersz jest ważniejszy, niż wygląda. Ten test chroni przed obejściem, które na
+poziomie 21 byłoby katastrofalne: gracz ustawia ogniska swojej elipsy na piłce i dołku,
+elipsa sama zbiera wszystko w dołku, a hiperbola — cały temat poziomu — nie jest potrzebna.
+
+**Pliki:**
+- Zmiana: `tests/levels.test.ts`
+
+**Zasada:** żadnego cichego pominięcia. Każde `return`/`continue` dla danego rodzaju krzywej
+musi mieć komentarz mówiący, DLACZEGO ten rodzaj nie podlega sprawdzeniu (bo nie ma takiego
+uchwytu, bo gracz nie może zmienić rodzaju krzywej) — a nie „bo TypeScript nie zawęża".
+
+- [ ] **Krok 1: Zgodność zablokowanych uchwytów dla wszystkich krzywych**
+
+Zastąp ciało testu „zablokowane uchwyty zgadzają się między startem a rozwiązaniem":
+
+```ts
+    for (const piece of level.pieces) {
+      const { start, solution: sol, locked } = piece;
+      // rodzaj krzywej należy do poziomu, nie do gracza — nie ma uchwytu, który by go zmienił
+      expect(sol.kind).toBe(start.kind);
+      if (start.kind === "parabola" && sol.kind === "parabola") {
+        if (locked.includes("ognisko")) expect(sol.focus).toEqual(start.focus);
+        if (locked.includes("wierzcholek")) expect(sol.vertex).toEqual(start.vertex);
+        // kawałek opisuje poziom, nie palec — gracz nie ma jak go zmienić
+        expect(sol.span).toEqual(start.span);
+        continue;
+      }
+      if (start.kind === "hiperbola" && sol.kind === "hiperbola") {
+        if (locked.includes("rozmiar")) expect(sol.a).toBe(start.a);
+        if (locked.includes("ognisko1")) expect(sol.f1).toEqual(start.f1);
+        if (locked.includes("ognisko2")) expect(sol.f2).toEqual(start.f2);
+        // gałąź i kawałek należą do poziomu — uchwyt rozmiaru bierze z palca tylko odległość
+        expect(sol.branch).toBe(start.branch);
+        expect(sol.span).toEqual(start.span);
+        continue;
+      }
+      // tu zostaje elipsa: rodzaje startu i rozwiązania są równe, sprawdzone wyżej
+      if (start.kind !== "elipsa" || sol.kind !== "elipsa") continue;
+      // …dotychczasowe asercje dla elipsy, bez zmian
+    }
+```
+
+- [ ] **Krok 2: Kryterium 5% dla ognisk elipsy i hiperboli**
+
+W testach „każde odblokowane ognisko1…" i „…ognisko2…" zamień przesuwanie tak, żeby
+obejmowało hiperbolę (ma te same pola `f1`/`f2`), a parabolę pomijało JAWNIE:
+
+```ts
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      // parabola nie ma uchwytu `ognisko1` — jej jedyne ognisko sprawdza osobny test niżej
+      if (piece.locked.includes("ognisko1") || sol.kind === "parabola") return;
+      for (let i = 0; i < 8; i++) {
+        const shifted: MovableShape = { ...sol, f1: add(sol.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
+        expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
+      }
+    });
+```
+
+Analogicznie dla `ognisko2` z `f2` i warunkiem `missed >= 6`.
+
+- [ ] **Krok 3: Kryterium 5% dla ogniska paraboli — nowy test**
+
+```ts
+  // Parabola ma jedno ognisko i obowiązuje dla niego surowa postać kryterium — pudło
+  // w każdym z ośmiu kierunków, jak `ognisko1`. Wierzchołka nie przesuwamy: spec §8 wiąże
+  // promień przyskakiwania z tolerancją dla ognisk, a wierzchołek nie przyskakuje.
+  // Uwaga na ryzyko z zadania 9: przy współliniowej geometrii piłki blisko osi mogą
+  // wpadać po jednym odbiciu także przy przesuniętym ognisku. Jeśli ten test padnie na
+  // poziomie parabolicznym, to jest pierwszy podejrzany.
+  it.each(byId)("poziom %s: każde odblokowane ognisko paraboli przesunięte o promień przyskakiwania odpada", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      if (piece.locked.includes("ognisko") || sol.kind !== "parabola") return;
+      for (let i = 0; i < 8; i++) {
+        const shifted: MovableShape = { ...sol, focus: add(sol.focus, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
+        expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
+      }
+    });
+  });
+```
+
+- [ ] **Krok 4: Krawędź kawałka także dla paraboli i hiperboli**
+
+Rozszerz `shrink` w teście „rozwiązanie nie opiera się na krawędzi łuku" o kawałki `span`:
+wariant długościowy skraca `length` o `2d`, wariant parametryczny skraca `span` o `2d`.
+Dla paraboli parametr to odsunięcie prostopadłe, więc `2d` jest tam wprost długością;
+dla hiperboli to parametr bezwymiarowy i skrócenie jest słabsze — zapisz to w komentarzu.
+Jeśli generyczna sygnatura `<S extends Shape>` nie przejdzie `tsc` bez rzutowania, rozbij
+na dwie funkcje (dla `MovableShape` i dla `Shape`). **Bez rzutowań.**
+
+- [ ] **Krok 5: Obejście „jedna elipsa przez piłkę i dołek" — tylko tam, gdzie ma sens**
+
+W teście sweepu dla kaskad dopisz na początku pętli po elementach:
+
+```ts
+        // Gracz nie zmienia rodzaju krzywej: jedyna elipsa, jaką może postawić przez piłkę
+        // i dołek, to jego WŁASNA elipsa. Parabola ani hiperbola nie staną się elipsą,
+        // więc dla nich tego obejścia nie ma czym wykonać.
+        if (piece.solution.kind !== "elipsa") return;
+```
+
+i zbuduj `one` z zawężonego `piece.solution` (spread elipsy zachowuje jej łuk).
+
+- [ ] **Krok 6: Dowód, że zmienione testy naprawdę obejmują nowe krzywe**
+
+Żaden z 16 wydanych poziomów nie ma paraboli ani hiperboli, więc sama suita nie pokaże,
+czy nowe gałęzie działają. Udowodnij to TYMCZASOWO: dopisz na końcu listy `byId` (tylko
+lokalnie, nie commituj) syntetyczny poziom z dwiema parabolami z `tests/ui/game.test.ts`
+(zadanie 9) — wraz z jego `holeRadius: HOLE_RADIUS / 3` — i uruchom `tests/levels.test.ts`.
+
+Pokaż w raporcie: (a) że PRZED zmianami testy `ognisko1`/`ognisko2` padają na tym poziomie,
+bo przesunięcie paraboli było bez skutku; (b) że PO zmianach test ogniska paraboli
+faktycznie wykonuje się na tym poziomie i przechodzi; (c) że test zgodności uchwytów
+wykrywa rozjechanie — zmień tymczasowo `vertex` w starcie przy zablokowanym `wierzcholek`
+i pokaż, że pada. Potem usuń syntetyczny poziom i zmiany tymczasowe.
+
+- [ ] **Krok 7: Uruchom wszystko**
+
+Run: `npx tsc --noEmit && npm test`
+Expected: PASS, liczba testów NIE maleje (nowy test paraboli dodaje 16 przypadków
+`it.each`, po jednym na poziom).
+
+- [ ] **Krok 8: Commit**
+
+```bash
+git add tests/levels.test.ts
+git commit -m "test(levels): testy poziomow znaja parabole i hiperbole" -m "…treść…" -m "Co-Authored-By: …"
+```
+
+**Uwaga dla zadań 14 i 15:** test „kaskady istnieją tam, gdzie powinny" ma sztywną listę
+`["kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"]`. Poziomy 21–24 też są
+kaskadami (mają ognisko we wspólnym punkcie M, poza piłką i dołkiem), więc przy ich
+dodawaniu trzeba tę listę rozszerzyć o ich identyfikatory — i to jest zamierzone, nie
+obejście testu.
+
+---
+
 ## Zadanie 12: Narzędzie kalibracji + poziomy 17 i 18
 
 Poziomy to dane, ale dane wyliczone. Współrzędne poniżej są **wyprowadzone
