@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { vec } from "../../src/core/vec";
-import { ellipseFromFoci } from "../../src/core/conic";
-import { whole } from "../../src/core/piece";
+import { Vec2, vec } from "../../src/core/vec";
+import { ellipseFromFoci, parabolaFromFocusVertex } from "../../src/core/conic";
+import { Piece, whole } from "../../src/core/piece";
 import { makeCamera } from "../../src/render/camera";
 import { FRAME_RADIUS, SECTOR_REACH, boardFrame, drawPiece, sectorWedge } from "../../src/render/draw";
-import { arcEllipse, shapeToPiece } from "../../src/levels";
+import { curveHints } from "../../src/render/shapes";
+import { arcEllipse, hyperbola, parabola, shapeToPiece } from "../../src/levels";
 
 function recordingCtx() {
   const calls: { op: string; args?: number[]; style?: string; lineWidth?: number }[] = [];
@@ -74,5 +75,41 @@ describe("rysowanie kawałków", () => {
     for (const r of calls.filter((c) => c.op === "roundRect")) {
       expect(r.args).toEqual([tl.x, tl.y, br.x - tl.x, br.y - tl.y, FRAME_RADIUS]);
     }
+  });
+});
+
+describe("obrys kawałka z zakresem nie domyka się", () => {
+  it("parabola rysuje się jako łamana otwarta", () => {
+    const pp: Piece = {
+      conic: parabolaFromFocusVertex(vec(-0.5, 0), vec(-0.8, 0)),
+      range: {
+        from: -0.6, to: 0.6,
+        frame: { kind: "parabola", vertex: vec(-0.8, 0), axis: vec(1, 0), p: 0.3 },
+      },
+    };
+    const { ctx, calls } = recordingCtx();
+    drawPiece(ctx, cam, pp, "#fff", "#000", 2);
+    expect(calls.filter((c) => c.op === "closePath")).toHaveLength(0);
+  });
+});
+
+describe("podpowiedzi krzywych", () => {
+  it("parabola ma jedną podpowiedź: kierownicę, prostopadłą do osi", () => {
+    const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
+    const h = curveHints(par);
+    expect(h).toHaveLength(1);
+    // kierownica leży p za wierzchołkiem, po przeciwnej stronie niż ognisko
+    for (const p of h[0]) expect(p.x).toBeCloseTo(-1.1, 9);
+  });
+
+  it("hiperbola ma dwie podpowiedzi: asymptoty przez środek", () => {
+    const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+    const h = curveHints(hyp);
+    expect(h).toHaveLength(2);
+    // obie przechodzą przez środek (0,0) o nachyleniach ±b/a
+    const nachylenie = (l: Vec2[]) => (l[1].y - l[0].y) / (l[1].x - l[0].x);
+    const b = Math.sqrt(0.25 - 0.09);
+    expect(Math.abs(nachylenie(h[0]))).toBeCloseTo(b / 0.3, 9);
+    expect(nachylenie(h[0])).toBeCloseTo(-nachylenie(h[1]), 9);
   });
 });

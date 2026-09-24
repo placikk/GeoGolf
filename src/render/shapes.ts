@@ -1,7 +1,8 @@
-import { Vec2, add, dot, norm, perp, scale, sub, vec } from "../core/vec";
+import { Vec2, add, dist, dot, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, classify, ellipseGeometry } from "../core/conic";
 import { Piece } from "../core/piece";
 import { framePoint } from "../core/frame";
+import { HyperbolaShape, ParabolaShape } from "../levels/types";
 
 export const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
 const TAU = 2 * Math.PI;
@@ -62,5 +63,28 @@ export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
     if (i === n) return arc.to;
     const t = t0 + (span * i) / n;
     return add(g.center, add(scale(u, g.a * Math.cos(t)), scale(v, g.b * Math.sin(t))));
+  });
+}
+
+/** Linie pomocnicze krzywej: kierownica paraboli (jej definicja) i asymptoty hiperboli
+ *  (wyjaśniają kształt gałęzi). Rysujemy je tylko przy włączonych podpowiedziach —
+ *  to pomoc dydaktyczna, nie ozdoba, więc należy tam, gdzie reszta pomocy. */
+export function curveHints(s: ParabolaShape | HyperbolaShape): Vec2[][] {
+  if (s.kind === "parabola") {
+    const p = dist(s.focus, s.vertex);
+    const u = norm(sub(s.focus, s.vertex));
+    const stopa = add(s.vertex, scale(u, -p));
+    const n = perp(u);
+    return [[add(stopa, scale(n, -SPAN)), add(stopa, scale(n, SPAN))]];
+  }
+  const c = dist(s.f1, s.f2) / 2;
+  const b = Math.sqrt(Math.max(0, c * c - s.a * s.a));
+  const center = scale(add(s.f1, s.f2), 0.5);
+  const u = norm(sub(s.f2, s.f1));
+  const n = perp(u);
+  // asymptota: kierunek a·u ± b·n, znormalizowany i przedłużony na całą planszę
+  return [1, -1].map((znak) => {
+    const d = norm(add(scale(u, s.a), scale(n, znak * b)));
+    return [add(center, scale(d, -SPAN)), add(center, scale(d, SPAN))];
   });
 }

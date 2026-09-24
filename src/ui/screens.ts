@@ -1,9 +1,10 @@
 import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
+import { LEVELS, SNAP_RADIUS, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
 } from "../render/draw";
+import { curveHints } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
@@ -228,16 +229,25 @@ export function mount(canvas: HTMLCanvasElement): void {
     }
 
     for (const o of level.obstacles) {
+      if (settings.hints && (o.kind === "parabola" || o.kind === "hiperbola")) {
+        for (const linia of curveHints(o)) {
+          glowPolyline(ctx, c, linia, PALETTE.hint, "rgba(0,0,0,0)", 1);
+        }
+      }
       drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
-      // ogniska stałych elips blado — lekcje kaskad to „trafić ogniskiem w to ognisko";
-      // okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
-      if (o.kind === "elipsa" && !isCircle(o)) {
-        glowDot(ctx, c, o.f1, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
-        glowDot(ctx, c, o.f2, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+      // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
+      // ogniskiem w to ognisko"; okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
+      if (o.kind !== "odcinek") {
+        for (const f of shapeFoci(o)) glowDot(ctx, c, f, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
       }
     }
 
     for (const s of game.pieces) {
+      if (settings.hints && (s.kind === "parabola" || s.kind === "hiperbola")) {
+        for (const linia of curveHints(s)) {
+          glowPolyline(ctx, c, linia, PALETTE.hint, "rgba(0,0,0,0)", 1);
+        }
+      }
       drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
     }
 
