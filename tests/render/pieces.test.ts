@@ -103,7 +103,8 @@ describe("podpowiedzi krzywych", () => {
   });
 
   it("hiperbola ma dwie podpowiedzi: asymptoty przez środek", () => {
-    const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+    const f1 = vec(-0.5, 0), f2 = vec(0.5, 0);
+    const hyp = hyperbola(f1, f2, 0.3, 1, { mid: 0, span: 2 });
     const h = curveHints(hyp);
     expect(h).toHaveLength(2);
     // obie przechodzą przez środek (0,0) o nachyleniach ±b/a
@@ -111,5 +112,16 @@ describe("podpowiedzi krzywych", () => {
     const b = Math.sqrt(0.25 - 0.09);
     expect(Math.abs(nachylenie(h[0]))).toBeCloseTo(b / 0.3, 9);
     expect(nachylenie(h[0])).toBeCloseTo(-nachylenie(h[1]), 9);
+    // nachylenie samo w sobie nie wykrywa złego zaczepienia (jest niezmiennicze na
+    // przesunięcie) — sprawdzamy osobno, że linia przechodzi przez ŚRODEK (nie np.
+    // przez f1), licząc go niezależnie od implementacji, z ognisk fixtury
+    const center = vec((f1.x + f2.x) / 2, (f1.y + f2.y) / 2);
+    for (const linia of h) {
+      const [start, end] = linia;
+      const kierunek = vec(end.x - start.x, end.y - start.y);
+      const doSrodka = vec(center.x - start.x, center.y - start.y);
+      const cross = kierunek.x * doSrodka.y - kierunek.y * doSrodka.x;
+      expect(cross).toBeCloseTo(0, 9);
+    }
   });
 });
