@@ -39,12 +39,19 @@ const STAGE_1_IDS = [
 
 describe("poziomy", () => {
   it("liczba poziomów i unikalne identyfikatory", () => {
-    expect(LEVELS).toHaveLength(16);
+    expect(LEVELS).toHaveLength(18);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(LEVELS.length);
   });
 
   it("identyfikatory etapu 1 zostały, w tej samej kolejności — zapisany postęp przetrwa", () => {
     expect(LEVELS.slice(0, 8).map((l) => l.id)).toEqual(STAGE_1_IDS);
+  });
+
+  it("identyfikatory etapu 2 zostały, w tej samej kolejności", () => {
+    expect(LEVELS.slice(8, 16).map((l) => l.id)).toEqual([
+      "polelipsa", "bandy", "przycinanie", "wspologniskowe",
+      "kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2",
+    ]);
   });
 
   it("niezmiennik: promień przyskakiwania nie jest mniejszy od pasa tolerancji", () => {
