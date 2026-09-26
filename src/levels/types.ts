@@ -39,9 +39,12 @@ export interface ParabolaShape { kind: "parabola"; focus: Vec2; vertex: Vec2; sp
 
 /** Hiperbola: dwa ogniska, połowa osi rzeczywistej (0 < a < c), wybrana gałąź i kawałek.
  *  `branch` należy do danych poziomu, nie do palca gracza — uchwyt rozmiaru nie
- *  przeskakuje między gałęziami. */
+ *  przeskakuje między gałęziami.
+ *  `twin`: rysuj blado także drugą gałąź (ten sam zakres parametru, `twinPolyline`). To
+ *  tylko rysunek — `shapeToPiece` flagi nie czyta, więc druga gałąź nie odbija. Dana
+ *  poziomu jak `branch`; przeciąganie ją zachowuje (`dragHyperbola` rozkłada `...s`). */
 export interface HyperbolaShape {
-  kind: "hiperbola"; f1: Vec2; f2: Vec2; a: number; branch: 1 | -1; span: Span;
+  kind: "hiperbola"; f1: Vec2; f2: Vec2; a: number; branch: 1 | -1; span: Span; twin?: true;
 }
 
 /** Czym gracz może ruszać. Odcinki są stałe — jak w etapie 2. */

@@ -1,8 +1,10 @@
 import { Vec2, add, dist, dot, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, classify, ellipseGeometry } from "../core/conic";
 import { Piece } from "../core/piece";
-import { framePoint } from "../core/frame";
-import { HyperbolaShape, ParabolaShape } from "../levels/types";
+import { CurveFrame, framePoint } from "../core/frame";
+import { HyperbolaShape, ParabolaShape, Shape } from "../levels/types";
+import { shapeFrame } from "../levels/shape";
+import { spanRange } from "../levels/span";
 
 export const SPAN = 3; // wystarczy, żeby przeciąć planszę [-1,1]² na wylot
 const TAU = 2 * Math.PI;
@@ -38,9 +40,7 @@ export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
     // wierzchołku, gdzie krzywizna jest największa — dokładnie gdzie polylinii trzeba
     // największej gęstości. Dla paraboli tylko składowa prostopadła zmienia się równomiernie,
     // co jest ważne na poziomie 18 (szerokość wiązki odbitej = zakres t niezależnie od p).
-    const n = Math.max(2, steps);
-    return Array.from({ length: n + 1 }, (_, i) =>
-      framePoint(range.frame, range.from + ((range.to - range.from) * i) / n));
+    return rangePolyline(range.frame, range.from, range.to, steps);
   }
   const arc = piece.arc;
   if (arc === undefined) return conicPolyline(piece.conic, steps);
@@ -87,4 +87,22 @@ export function curveHints(s: ParabolaShape | HyperbolaShape): Vec2[][] {
     const d = norm(add(scale(u, s.a), scale(n, znak * b)));
     return [add(center, scale(d, -SPAN)), add(center, scale(d, SPAN))];
   });
+}
+
+/** Równe kroki parametru od `from` do `to` — patrz komentarz w `piecePolyline`. */
+function rangePolyline(frame: CurveFrame, from: number, to: number, steps: number): Vec2[] {
+  const n = Math.max(2, steps);
+  return Array.from({ length: n + 1 }, (_, i) => framePoint(frame, from + ((to - from) * i) / n));
+}
+
+/** Łamana DRUGIEJ gałęzi hiperboli z flagą `twin`: ta sama rama z przeciwną gałęzią i ten
+ *  sam zakres parametru co czynny kawałek. Tylko do rysowania — nie jest `Piece`, więc
+ *  nie trafia do `trace` i nie odbija. Bez flagi (i dla innych krzywych) `undefined`. */
+export function twinPolyline(s: Shape, steps = 128): Vec2[] | undefined {
+  if (s.kind !== "hiperbola" || s.twin !== true) return undefined;
+  // zakres z CZYNNEJ ramy, jak w `shapeToPiece`; gałęzie są swoimi lustrami, więc ten
+  // sam zakres wycina na drugiej gałęzi kawałek tej samej długości
+  const { from, to } = spanRange(shapeFrame(s), s.span);
+  const druga = shapeFrame({ ...s, branch: s.branch === 1 ? -1 : 1 });
+  return rangePolyline(druga, from, to, steps);
 }

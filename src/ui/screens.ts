@@ -4,7 +4,7 @@ import { makeCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
 } from "../render/draw";
-import { curveHints } from "../render/shapes";
+import { curveHints, twinPolyline } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
@@ -234,8 +234,17 @@ export function mount(canvas: HTMLCanvasElement): void {
       }
     };
 
+    /** Druga gałąź hiperboli z flagą `twin` (dziś tylko poziom 23): blado, tak jak linie
+     *  pomocnicze, ale NIEZALEŻNIE od podpowiedzi — tam jest częścią poziomu, nie pomocą.
+     *  Rysowana przed samą krzywą, żeby krzywa leżała na wierzchu. */
+    const drawTwin = (s: Shape): void => {
+      const druga = twinPolyline(s);
+      if (druga !== undefined) glowPolyline(ctx, c, druga, PALETTE.hint, "rgba(0,0,0,0)", 1);
+    };
+
     for (const o of level.obstacles) {
       drawHints(o);
+      drawTwin(o);
       drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
       // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
       // ogniskiem w to ognisko"; okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
@@ -246,6 +255,7 @@ export function mount(canvas: HTMLCanvasElement): void {
 
     for (const s of game.pieces) {
       drawHints(s);
+      drawTwin(s);
       drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
     }
 

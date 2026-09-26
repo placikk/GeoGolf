@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
 import { ellipseFromFoci, evalConic, hyperbolaFromFoci, lineThrough, parabolaFromFocusVertex } from "../../src/core/conic";
 import { makeCamera } from "../../src/render/camera";
-import { conicPolyline, piecePolyline } from "../../src/render/shapes";
+import { conicPolyline, piecePolyline, twinPolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
-import { arcEllipse, ellipse, ellipsePoint, segment, shapeToPiece } from "../../src/levels";
+import { arcEllipse, ellipse, ellipsePoint, hyperbola, parabola, segment, shapeFrame, shapeToPiece } from "../../src/levels";
 import { CurveFrame, frameParam, framePoint } from "../../src/core/frame";
 
 describe("kamera", () => {
@@ -162,6 +162,36 @@ describe("łamana kawałka z zakresem parametru", () => {
         const { t: prevT } = frameParam(pf, pts[i - 1]);
         expect(t).toBeGreaterThan(prevT - 1e-9);
       }
+    }
+  });
+});
+
+describe("druga gałąź hiperboli (tylko rysunek)", () => {
+  // span opisany DŁUGOŚCIĄ i z mid ≠ 0 — gdyby druga gałąź liczyła zakres po swojemu
+  // albo gubiła `mid`, różnica by wyszła
+  const hyp = hyperbola(vec(-0.5, 0.1), vec(0.6, -0.2), 0.3, 1, { mid: 0.2, length: 0.9 });
+
+  it("bez flagi `twin` nie ma czego rysować; parabola i elipsa też nie", () => {
+    expect(twinPolyline(hyp)).toBeUndefined();
+    expect(twinPolyline(parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 }))).toBeUndefined();
+    expect(twinPolyline(ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8))).toBeUndefined();
+  });
+
+  it("z flagą: ta sama rama z przeciwną gałęzią i TEN SAM zakres parametru co czynny kawałek", () => {
+    const s = { ...hyp, twin: true as const };
+    const pts = twinPolyline(s, 16);
+    if (pts === undefined) throw new Error("brak drugiej gałęzi");
+    expect(pts).toHaveLength(17);
+    const range = shapeToPiece(s).range;
+    if (range === undefined) throw new Error("hiperbola ma zawsze zakres");
+    const druga = { ...shapeFrame(s), branch: -1 as const };
+    expect(pts[0].x).toBeCloseTo(framePoint(druga, range.from).x, 12);
+    expect(pts[0].y).toBeCloseTo(framePoint(druga, range.from).y, 12);
+    expect(pts[16].x).toBeCloseTo(framePoint(druga, range.to).x, 12);
+    expect(pts[16].y).toBeCloseTo(framePoint(druga, range.to).y, 12);
+    for (const p of pts) {
+      expect(evalConic(shapeToPiece(s).conic, p)).toBeCloseTo(0, 9);
+      expect(frameParam(shapeFrame(s), p).branch).toBe(-1);
     }
   });
 });

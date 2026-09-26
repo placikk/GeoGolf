@@ -209,18 +209,20 @@ export const STAGE_3: Level[] = [
     test: t21_23,
   },
   {
-    // Jedyny poziom, na którym OBIE gałęzie są widoczne. Czynna jest ta wskazana przez
-    // `branch`; druga jest narysowana i NIE odbija. Wygląda to jak usterka, więc mówi
-    // o tym podpowiedź — a gracz uczy się, że gałąź należy do swojego ogniska.
-    // `c` jest tu duże (ogniska daleko), więc obie gałęzie mieszczą się na planszy.
+    // Jedyny poziom, na którym OBIE gałęzie są widoczne: flaga `twin` (decyzja właściciela
+    // z 2026-09-26). Nie z powodu geometrii — druga gałąź zmieściłaby się na planszy także
+    // na 21, 22 i 24 — tylko dlatego, że tu jest lekcją. Czynna jest ta wskazana przez
+    // `branch`; druga jest tylko rysunkiem (blado, bez względu na podpowiedzi) i NIE odbija.
+    // Wygląda to jak usterka, więc mówi o tym podpowiedź — a gracz uczy się, że gałąź
+    // należy do swojego ogniska.
     // Start f2=(0.2, 0.35) z planu wygrywał 3/8 (za blisko rozwiązania) — przesunięty
     // na (0.3, 0.2), dalej od M=(0.4, 0.6), wygrywa 0/8 (sprawdzone `sprawdz-poziom.ts`).
     id: "ktora-galaz", title: "Która gałąź",
     hint: "Odbija tylko ta gałąź, która obejmuje swoje ognisko. Druga jest tylko rysunkiem.",
     ball: vec(-0.55, -0.55), hole: vec(-0.25, 0.25),
     pieces: [{
-      start: hyperbola(vec(-0.25, 0.25), vec(0.3, 0.2), 0.2, 1, { mid: 0, span: 1.8 }),
-      solution: hyperbola(vec(-0.25, 0.25), vec(0.4, 0.6), 0.2, 1, { mid: 0, span: 1.8 }),
+      start: { ...hyperbola(vec(-0.25, 0.25), vec(0.3, 0.2), 0.2, 1, { mid: 0, span: 1.8 }), twin: true },
+      solution: { ...hyperbola(vec(-0.25, 0.25), vec(0.4, 0.6), 0.2, 1, { mid: 0, span: 1.8 }), twin: true },
       locked: ["ognisko1", "rozmiar"],
     }],
     obstacles: [arcEllipse(vec(-0.55, -0.55), vec(0.4, 0.6), 0.8, deg(150), deg(260))],

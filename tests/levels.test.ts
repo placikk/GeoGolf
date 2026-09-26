@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { Vec2, add, dist, fromAngle, len, norm, scale, sub, vec } from "../src/core/vec";
-import { onPiece, rayPiece } from "../src/core/piece";
+import { rayPiece } from "../src/core/piece";
 import { runProof } from "../src/core/verify";
 import {
   DIAGONAL, Handle, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
-import { piecePolyline } from "../src/render/shapes";
+import { piecePolyline, twinPolyline } from "../src/render/shapes";
 import { applyDrag, handlePositions, lockedSize } from "../src/ui/handles";
 
 const proofFor = (level: Level, pieces: MovableShape[], obstacles: Shape[] = level.obstacles) =>
@@ -152,6 +152,8 @@ describe("poziomy", () => {
         // gałąź i kawałek należą do poziomu — uchwyt rozmiaru bierze z palca tylko odległość
         expect(sol.branch).toBe(start.branch);
         expect(sol.span).toEqual(start.span);
+        // rysowanie drugiej gałęzi to też dana poziomu, nie stan gracza
+        expect(sol.twin).toBe(start.twin);
         continue;
       }
       // tu zostaje elipsa: rodzaje startu i rozwiązania są równe, sprawdzone wyżej
@@ -363,22 +365,67 @@ describe("poziomy", () => {
     },
   );
 
-  it("poziom 23 ma na planszy obie gałęzie, ale odbija tylko jedna", () => {
-    const l = LEVELS.find((x) => x.id === "ktora-galaz")!;
-    const gracz = l.pieces[0].solution;
-    if (gracz.kind !== "hiperbola") throw new Error("zły rodzaj");
-    const bliznjak = { ...gracz, branch: (gracz.branch === 1 ? -1 : 1) as 1 | -1 };
-    // nieczynna gałąź leży na planszy...
-    const p = shapeToPiece(bliznjak);
-    const pts = piecePolyline(p, 32);
-    expect(pts.some((q) => Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1)).toBe(true);
-    // ...ale żadne odbicie rozwiązania nie wypada na niej
-    const czynna = shapeToPiece(gracz);
-    for (const b of proofFor(l, [gracz]).balls) {
+  // Poziom 23 („Która gałąź") rysuje blado drugą gałąź hiperboli gracza — decyzja
+  // właściciela z 2026-09-26: tylko tu, pod flagą `twin` w danych poziomu. Druga gałąź
+  // zmieściłaby się na planszy także na 21, 22 i 24, ale tam jej nie ma. Jest wyłącznie
+  // rysunkiem (`twinPolyline`); do `shapeToPiece` i fizyki nie trafia.
+  const ktoraGalaz = (): Level => {
+    const l = LEVELS.find((x) => x.id === "ktora-galaz");
+    if (l === undefined) throw new Error("brak poziomu ktora-galaz");
+    return l;
+  };
+
+  it.each(["start", "solution"] as const)(
+    "poziom 23 (%s): druga gałąź jest rysowana — cała na planszy, po drugiej stronie niż czynna",
+    (ktory) => {
+      const s = ktoraGalaz().pieces[0][ktory];
+      if (s.kind !== "hiperbola") throw new Error("zły rodzaj");
+      const druga = twinPolyline(s);
+      expect(druga, "brak łamanej drugiej gałęzi").toBeDefined();
+      const pts = druga ?? [];
+      expect(pts.length).toBeGreaterThan(2);
+      // |P f1| − |P f2| = 2a·branch na czynnej gałęzi; na drugiej ten sam moduł, znak przeciwny
+      const roznica = (p: Vec2) => dist(p, s.f1) - dist(p, s.f2);
+      for (const p of piecePolyline(shapeToPiece(s), 32)) expect(roznica(p)).toBeCloseTo(2 * s.a * s.branch, 9);
+      for (const p of pts) {
+        expect(roznica(p)).toBeCloseTo(-2 * s.a * s.branch, 9);
+        expect(Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1, `(${p.x.toFixed(3)}, ${p.y.toFixed(3)}) poza planszą`).toBe(true);
+      }
+    },
+  );
+
+  it("druga gałąź jest rysowana tylko na poziomie 23 — na 21, 22 i 24 (i wszystkich innych) nie", () => {
+    const zDrugaGalezia = LEVELS.filter((l) =>
+      [...l.pieces.flatMap((p) => [p.start, p.solution]), ...l.obstacles].some((s) => twinPolyline(s) !== undefined),
+    ).map((l) => l.id);
+    expect(zDrugaGalezia).toEqual(["ktora-galaz"]);
+  });
+
+  it("poziom 23: flaga drugiej gałęzi przeżywa przeciąganie (applyDrag, każdy uchwyt)", () => {
+    const piece = ktoraGalaz().pieces[0];
+    const cel = piece.solution.kind === "hiperbola" ? piece.solution.f2 : vec(0.4, 0.6);
+    for (const h of handlePositions(piece.start)) {
+      const moved = applyDrag(piece.start, h.id, cel, lockedSize(piece));
+      expect(moved.kind === "hiperbola" && moved.twin, `uchwyt ${h.id}`).toBe(true);
+      expect(twinPolyline(moved), `uchwyt ${h.id}`).toBeDefined();
+    }
+  });
+
+  it("poziom 23: odbija tylko czynna gałąź — żadne odbicie rozwiązania nie leży na drugiej", () => {
+    const l = ktoraGalaz();
+    const s = l.pieces[0].solution;
+    if (s.kind !== "hiperbola") throw new Error("zły rodzaj");
+    const roznica = (p: Vec2) => dist(p, s.f1) - dist(p, s.f2);
+    let naCzynnej = 0;
+    for (const b of proofFor(l, [s]).balls) {
       for (const odbicie of b.path.slice(1, -1)) {
-        if (onPiece(p, odbicie)) expect(onPiece(czynna, odbicie)).toBe(true);
+        if (Math.abs(roznica(odbicie) - 2 * s.a * s.branch) < 1e-6) naCzynnej++;
+        expect(Math.abs(roznica(odbicie) + 2 * s.a * s.branch), `odbicie (${odbicie.x.toFixed(3)}, ${odbicie.y.toFixed(3)})`)
+          .toBeGreaterThan(1e-6);
       }
     }
+    // bez tego test przeszedłby pusto, gdyby hiperbola nie odbijała niczego
+    expect(naCzynnej).toBeGreaterThan(0);
   });
 
   // Poziom 24 to dwie drogi do jednego dołka (para parabol oraz elipsa z hiperbolą).
