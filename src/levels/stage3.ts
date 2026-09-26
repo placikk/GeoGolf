@@ -32,6 +32,35 @@ const t17 = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 };
  *  (do piłki i do M), a wierzchołek A jest przybity. Dołek rysuje się zawsze jako 9 px. */
 const t24 = { balls: 8, maxBounces: 3, holeRadius: HOLE_RADIUS / 5 };
 
+/** Poziomy 21–23 mają dołek HOLE_RADIUS / 1000 i najwyżej 3 odbicia z tego samego powodu
+ *  co poziom 24: przy standardowym dołku istniała SZARA STREFA. Optyka hiperboli zmniejsza
+ *  błąd ustawienia M, więc ognisko postawione daleko poza promieniem przyskakiwania
+ *  (0.1414) nadal wygrywało — gęsty przegląd (krok 0.002, pierścień do 0.6 wokół celu
+ *  każdego wolnego ogniska, położenia przeliczone przez `applyDrag` jak w grze) znalazł
+ *  wygrane aż po brzeg pierścienia na wszystkich trzech poziomach.
+ *
+ *  Dlaczego aż /1000, a nie /5: na poziomie 21 gracz rusza elipsą o zablokowanym rozmiarze,
+ *  a gra przy rozsuniętych ogniskach podnosi `a` do c + MIN_GAP. M odciągnięte dalej wzdłuż
+ *  prostej piłka–M (od ok. 0.18 za M) albo na prostą piłka–dołek (ok. 0.43 od M) robi
+ *  z elipsy „igłę" z wierzchołkiem 0.001 za piłką: cały wachlarz odbija się tuż przy piłce i leci wzdłuż osi igły — przez
+ *  M (a hiperbola kieruje go do dołka) albo wprost przez dołek. Taki tor chybia środka
+ *  dołka tylko o ułamek MIN_GAP; najmniejsze chybienie w pierścieniu, znalezione metodą
+ *  Neldera–Meada z każdego lokalnego minimum siatki, to ≈ 0.0049 × HOLE_RADIUS, więc /1000
+ *  zostawia zapas prawie pięciokrotny. Na poziomach 22 i 23 najgroźniejsze są tory z trzecim
+ *  odbiciem od górnej ściany: ≈ 0.033 i ≈ 0.012 × HOLE_RADIUS, zapas 33× i 12×.
+ *
+ *  Limit 3 odbić: rozwiązanie potrzebuje dokładnie dwóch (elipsa, hiperbola), trzy
+ *  zostawiają zapas jednego, jak na poziomie 24. Przy czterech poziom 21 ma tor igła →
+ *  hiperbola → dwie ściany, chybiający o ≈ 0.00002 × HOLE_RADIUS — żaden dołek go nie usuwa.
+ *
+ *  To nic gracza nie kosztuje: każdy wolny uchwyt tych poziomów to ognisko, które
+ *  przyskakuje DOKŁADNIE (do M, a drugie ognisko elipsy poziomu 21 do piłki), więc
+ *  rozwiązanie trafia w środek dołka z dokładnością błędu zaokrąglenia. Dołek rysuje się
+ *  zawsze jako 9 px. Poza pierścieniem, poza planszą (ok. 1.27 od M) poziom 21 ma jeszcze
+ *  DOKŁADNE rozwiązania „igła + ściana" (drugie ognisko w lustrzanym odbiciu dołka) —
+ *  tych żaden dołek nie usuwa; to osobne zadanie, razem z samą igłą. */
+const t21_23 = { balls: 8, maxBounces: 3, holeRadius: HOLE_RADIUS / 1000 };
+
 /** Wachlarz poziomów parabolicznych. Piłka stoi w ognisku i strzela w lustro; kierunki
  *  poza wachlarzem nie mają w co trafić. Szerokość 2 rad, a nie π: przy pełnym π skrajne
  *  piłki lecą wzdłuż latus rectum i każde POWIĘKSZENIE paraboli sprawia, że wychodzą
@@ -159,7 +188,8 @@ export const STAGE_3: Level[] = [
     }],
     obstacles: [hyperbola(vec(-0.2, 0.3), vec(0.35, 0.55), 0.18, 1, { mid: 0, span: 1.6 })],
     sector: { center: deg(215), width: 1.4 },
-    test: t,
+    // mniejszy dołek i krótszy limit odbić — patrz `t21_23` na górze pliku
+    test: t21_23,
   },
   {
     // Ta sama geometria od drugiej strony: elipsa stała, gracz rusza HIPERBOLĄ.
@@ -175,7 +205,8 @@ export const STAGE_3: Level[] = [
     }],
     obstacles: [arcEllipse(vec(-0.6, -0.45), vec(0.35, 0.55), 0.78, deg(150), deg(260))],
     sector: { center: deg(215), width: 1.4 },
-    test: t,
+    // mniejszy dołek i krótszy limit odbić — patrz `t21_23` na górze pliku
+    test: t21_23,
   },
   {
     // Jedyny poziom, na którym OBIE gałęzie są widoczne. Czynna jest ta wskazana przez
@@ -194,7 +225,8 @@ export const STAGE_3: Level[] = [
     }],
     obstacles: [arcEllipse(vec(-0.55, -0.55), vec(0.4, 0.6), 0.8, deg(150), deg(260))],
     sector: { center: deg(215), width: 1.4 },
-    test: t,
+    // mniejszy dołek i krótszy limit odbić — patrz `t21_23` na górze pliku
+    test: t21_23,
   },
   {
     // DWIE DROGI DO JEDNEGO DOŁKA. Łańcuch parabola → elipsa → hiperbola jest niewykonalny:

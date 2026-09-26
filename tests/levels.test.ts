@@ -3,7 +3,7 @@ import { Vec2, add, dist, fromAngle, len, norm, scale, sub, vec } from "../src/c
 import { onPiece, rayPiece } from "../src/core/piece";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
+  DIAGONAL, Handle, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
 import { piecePolyline } from "../src/render/shapes";
@@ -406,47 +406,73 @@ describe("poziomy", () => {
     expect([...odbite].filter((j) => j < 0 || j >= ileLuster), "odbicia od ścian").toEqual([]);
   });
 
-  // Szara strefa poziomu 24: niezmiennik §8 etapu 1 mówi, że promień przyskakiwania nie
-  // jest mniejszy od pasa, w którym niedokładne ustawienie jeszcze wygrywa. Test 5%
-  // próbkuje tylko 8 kierunków DOKŁADNIE na SNAP_RADIUS i przepuścił przy standardowym
-  // dołku plamę wygranych do ok. 0.19 od piłki oraz osobny pasek ok. 0.23 od niej (piłka 0
-  // wpadała tam po jednym odbiciu). Tu próbkujemy cały pierścień SNAP_RADIUS … 0.35 wokół
-  // celu każdego wolnego ogniska (180 kierunków × 40 promieni = 7200 położeń na ognisko) —
-  // żadne położenie spoza zasięgu przyskakiwania nie może wygrać. Tylko poziom 24: czy inne
-  // poziomy mają szare strefy, to osobne pytanie.
-  it("poziom 24: żadne wolne ognisko ustawione poza promieniem przyskakiwania nie wygrywa", () => {
-    const l = LEVELS.find((x) => x.id === "zwienczenie-3");
-    if (l === undefined) throw new Error("brak poziomu zwienczenie-3");
-    const KIERUNKI = 180;
-    const PROMIENIE = 40;
-    const R_MAX = 0.35;
+  // Szara strefa: niezmiennik §8 etapu 1 mówi, że promień przyskakiwania nie jest mniejszy
+  // od pasa, w którym niedokładne ustawienie jeszcze wygrywa. Test 5% próbkuje tylko 8
+  // kierunków DOKŁADNIE na SNAP_RADIUS i przepuścił przy standardowym dołku wygrane daleko
+  // poza zasięgiem przyskakiwania: na poziomie 24 plamę do ok. 0.19 od piłki i pasek ok. 0.23
+  // od niej, na poziomach 21–23 wygrane aż po 0.6 od M (i dalej). Tu próbkujemy cały
+  // pierścień SNAP_RADIUS … 0.6 wokół celu każdego wolnego ogniska — żadne położenie spoza
+  // zasięgu przyskakiwania nie może wygrać.
+  //
+  // Położenie przeliczamy przez `applyDrag`, dokładnie jak gra (z `lockedA`, gdy rozmiar jest
+  // zablokowany), a nie przez samo podstawienie ogniska. Różnica jest istotna na poziomie 21:
+  // podstawienie zostawia `a` bez zmian, więc daleko od M elipsa albo się nie konstruuje
+  // (test milczałby), albo przy c tuż pod a robi się dowolnie cienka — kształty, których
+  // gracz nie umie ustawić. Gra zamiast tego podnosi `a` do c + MIN_GAP i to tę „igłę"
+  // trzeba sprawdzić (patrz `t21_23` w `src/levels/stage3.ts`).
+  //
+  // Tylko te cztery poziomy — decyzja właściciela: tu każdy wolny uchwyt jest ogniskiem,
+  // które przyskakuje dokładnie, więc naprawiono je mniejszym dołkiem bez kosztu dla gracza.
+  // Szare strefy pozostałych poziomów (18 i 20 z wierzchołkiem ciągniętym palcem, wydane
+  // 1–16) to osobne, odłożone zadanie; ten test ich celowo nie obejmuje.
+  //
+  // Druga liczba to liczba wolnych ognisk poziomu — test sprawdza, że przejrzał je wszystkie
+  // (21: oba ogniska elipsy, 22–23: M, 24: ognisko paraboli A i dalsze ognisko hiperboli).
+  const BEZ_SZAREJ_STREFY: [string, number][] = [
+    ["wspolne-ognisko", 2], ["druga-strona", 1], ["ktora-galaz", 1], ["zwienczenie-3", 2],
+  ];
+
+  /** Położenia wolnych ognisk poziomu w pierścieniu SNAP_RADIUS … rMax, które wygrywają. */
+  const szaraStrefa = (level: Level, kierunki: number, promienie: number, rMax: number) => {
+    const wygrane: string[] = [];
     let sprawdzone = 0;
-    l.pieces.forEach((piece, k) => {
+    level.pieces.forEach((piece, k) => {
       const sol = piece.solution;
-      // każde wolne ognisko elementu razem z funkcją, która je przestawia
-      const wolne: { cel: Vec2; przestaw: (f: Vec2) => MovableShape }[] = [];
-      if (sol.kind === "parabola") {
-        if (!piece.locked.includes("ognisko")) wolne.push({ cel: sol.focus, przestaw: (f) => ({ ...sol, focus: f }) });
-      } else {
-        if (!piece.locked.includes("ognisko1")) wolne.push({ cel: sol.f1, przestaw: (f) => ({ ...sol, f1: f }) });
-        if (!piece.locked.includes("ognisko2")) wolne.push({ cel: sol.f2, przestaw: (f) => ({ ...sol, f2: f }) });
-      }
-      for (const { cel, przestaw } of wolne) {
-        const wygrane: string[] = [];
-        for (let i = 0; i < KIERUNKI; i++) {
-          for (let j = 0; j < PROMIENIE; j++) {
-            const r = SNAP_RADIUS + ((R_MAX - SNAP_RADIUS) * (j + 0.5)) / PROMIENIE;
-            const f = add(cel, scale(fromAngle((2 * Math.PI * i) / KIERUNKI), r));
-            const moved = solutions(l).map((s, q) => (q === k ? przestaw(f) : s));
+      const lockedA = piece.locked.includes("rozmiar") && (piece.start.kind === "elipsa" || piece.start.kind === "hiperbola")
+        ? piece.start.a : undefined;
+      // każde wolne ognisko elementu razem z jego celem
+      const wolne: { uchwyt: Handle; cel: Vec2 }[] = sol.kind === "parabola"
+        ? [{ uchwyt: "ognisko", cel: sol.focus }]
+        : [{ uchwyt: "ognisko1", cel: sol.f1 }, { uchwyt: "ognisko2", cel: sol.f2 }];
+      for (const { uchwyt, cel } of wolne) {
+        if (piece.locked.includes(uchwyt)) continue;
+        for (let i = 0; i < kierunki; i++) {
+          for (let j = 0; j < promienie; j++) {
+            const r = SNAP_RADIUS + ((rMax - SNAP_RADIUS) * (j + 0.5)) / promienie;
+            const f = add(cel, scale(fromAngle((2 * Math.PI * i) / kierunki), r));
+            const moved = solutions(level).map((s, q) => (q === k ? applyDrag(sol, uchwyt, f, lockedA) : s));
             sprawdzone++;
-            if (solves(l, moved)) wygrane.push(`(${f.x.toFixed(3)}, ${f.y.toFixed(3)}) r = ${r.toFixed(3)}`);
+            if (solves(level, moved)) {
+              wygrane.push(`element ${k} ${uchwyt}: (${f.x.toFixed(3)}, ${f.y.toFixed(3)}) r = ${r.toFixed(3)}`);
+            }
           }
         }
-        expect(wygrane, `element ${k}: wygrane poza zasięgiem przyskakiwania`).toEqual([]);
       }
     });
-    // parabola A (ognisko) i hiperbola (dalsze ognisko) — dwa wolne ogniska
-    expect(sprawdzone).toBe(2 * KIERUNKI * PROMIENIE);
+    return { wygrane, sprawdzone };
+  };
+
+  it.each(BEZ_SZAREJ_STREFY)("poziom %s: żadne wolne ognisko ustawione poza promieniem przyskakiwania nie wygrywa", (id, ileWolnych) => {
+    const l = LEVELS.find((x) => x.id === id);
+    if (l === undefined) throw new Error(`brak poziomu ${id}`);
+    // 240 × 64: przy brzegu pierścienia próbki co ok. 0.016 wzdłuż okręgu i co ok. 0.007
+    // w promieniu. Gęstszy przegląd kosztuje sekundy CI na każdy poziom, a łapie tylko
+    // wąskie wyspy; zapas dołka dobierano osobnym, gęstym pomiarem (patrz `t21_23`, `t24`).
+    const KIERUNKI = 240;
+    const PROMIENIE = 64;
+    const { wygrane, sprawdzone } = szaraStrefa(l, KIERUNKI, PROMIENIE, 0.6);
+    expect(wygrane, "wygrane poza zasięgiem przyskakiwania").toEqual([]);
+    expect(sprawdzone).toBe(ileWolnych * KIERUNKI * PROMIENIE);
   }, 30_000);
 
   it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
