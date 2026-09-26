@@ -2457,6 +2457,22 @@ git commit -m "feat(levels): poziomy 21 Wspolne ognisko i 22 Druga strona - ukla
 
 ## Zadanie 15: Poziomy 23 „Która gałąź" i 24 „Zwieńczenie"
 
+**Wnioski z zadania 14 (dopisane w trakcie realizacji) — przeczytaj przed danymi niżej.**
+
+1. **Łuk elipsy o różnych ogniskach w starcie i rozwiązaniu.** `arcEllipse(f1, f2, a, od, do)`
+   liczy `{mid, length}` z tych samych kątów INACZEJ dla różnych ognisk (inna mimośrodowość).
+   Przy zablokowanych końcach łuku test zgodności uchwytów żąda równości, więc start
+   i rozwiązanie muszą dzielić JEDEN łuk. W `src/levels/stage3.ts` jest już pomocnik
+   `withSolutionArc` (ten sam wzorzec co w `stage2.ts`) — użyj go dla elipsy poziomu 24.
+2. **Dane hiperboli muszą dać się skonstruować** (`0 < a < c`) — także w stanie startowym.
+   W zadaniu 14 start poziomu 22 miał `a > c` i rzucał wyjątkiem. Sprawdź start i rozwiązanie.
+3. **Test „jedna elipsa przez piłkę i dołek nie wygrywa"** sprawdza przy zablokowanym rozmiarze
+   tylko rozmiar osiągalny w grze (`max(start.a, c + 1e-3)`), przy wolnym — pełny przegląd.
+   Jeśli padnie, to poziom jest do przebudowy, nie test.
+4. **Start nie może być prawie-rozwiązaniem**: celuj w 0–1 z 8 piłek w stanie startowym.
+5. **Menu** układa kafelki dynamicznie od zadania 14 — 24 poziomy powinny się zmieścić, ale
+   sprawdź `tests/ui/menu.test.ts`.
+
 
 **Uwaga dopisana w trakcie realizacji (dotyczy zadań 14 i 15).** Test „kaskady istnieją
 tam, gdzie powinny" w `tests/levels.test.ts` ma sztywną listę `["kaskada",
