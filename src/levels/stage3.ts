@@ -16,6 +16,22 @@ const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
  *  jako 9 px, więc gracz nie widzi żadnej różnicy. */
 const t17 = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 };
 
+/** Poziom 24 ma dołek HOLE_RADIUS / 5 i najwyżej 3 odbicia, bo przy standardowym dołku
+ *  istniała SZARA STREFA: ognisko paraboli A postawione dalej niż promień przyskakiwania
+ *  (0.1414) od piłki — więc bez przyskoczenia — nadal wygrywało. Zmierzone gęstym
+ *  przeglądem (krok ≤ 0.0025, do 0.35–0.5 od piłki): spójna plama wzdłuż osi do ok. 0.19,
+ *  osobny pasek przy (−0.27, −0.14) (piłka 0 wpada po JEDNYM odbiciu, z pominięciem B)
+ *  i cienki pasek tuż przy wierzchołku A (ok. 0.29 od piłki). Ten ostatni to przypadkowe
+ *  tory przez ścianę, z czterema odbiciami — nie znika przy ŻADNYM rozmiarze dołka (jest
+ *  jeszcze przy HOLE_RADIUS / 5), znika dopiero przy limicie 3 odbić. Rozwiązanie
+ *  potrzebuje dokładnie 2 odbić każdej piłki, więc 3 zostawia zapas jednego.
+ *  Przy limicie 3 granica bezpieczeństwa dołka leży między 0.36 a 0.38 × HOLE_RADIUS;
+ *  1/5 (≈ 0.0113) jest daleko w środku bezpiecznego zakresu. Wtedy najdalsza wygrana
+ *  pozycja ogniska A leży ≈ 0.061 od piłki, a dalszego ogniska hiperboli ≈ 0.019 od M.
+ *  To nic gracza nie kosztuje: oba wolne uchwyty to ogniska, które przyskakują dokładnie
+ *  (do piłki i do M), a wierzchołek A jest przybity. Dołek rysuje się zawsze jako 9 px. */
+const t24 = { balls: 8, maxBounces: 3, holeRadius: HOLE_RADIUS / 5 };
+
 /** Wachlarz poziomów parabolicznych. Piłka stoi w ognisku i strzela w lustro; kierunki
  *  poza wachlarzem nie mają w co trafić. Szerokość 2 rad, a nie π: przy pełnym π skrajne
  *  piłki lecą wzdłuż latus rectum i każde POWIĘKSZENIE paraboli sprawia, że wychodzą
@@ -214,9 +230,7 @@ export const STAGE_3: Level[] = [
     // była, gracz mógłby postawić jej ogniska na piłce i dołku i posłać połowę wachlarza
     // prosto do dołka, z pominięciem hiperboli.
     //
-    // Dołek standardowy: oba wolne uchwyty to ogniska przyskakujące dokładnie (do piłki
-    // i do M), a kryterium 5% przechodzi bez zmniejszania — najbliższa osi piłka mija
-    // środek dołka o 0.079 > HOLE_RADIUS, więc i tak odbija się od B.
+    // Mniejszy dołek i krótszy limit odbić — patrz `t24` na górze pliku.
     id: "zwienczenie-3", title: "Zwieńczenie",
     hint: "Wachlarz dzieli się na dwie drogi do jednego dołka: część piłek leci przez dwie parabole, reszta przez elipsę i hiperbolę. Ognisko paraboli posadź na piłce, a dalsze ognisko hiperboli w drugim ognisku elipsy.",
     ball: vec(-0.5, -0.2), hole: vec(0.35, -0.2),
@@ -240,6 +254,6 @@ export const STAGE_3: Level[] = [
     ],
     // osiem piłek co 15°, od 195° do 300°
     sector: { center: deg(247.5), width: deg(120) },
-    test: t,
+    test: t24,
   },
 ];
