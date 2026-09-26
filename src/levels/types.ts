@@ -22,8 +22,11 @@ export type Handle =
  *  `span` — zakres parametru: rośnie razem z krzywą, ale za to jest odporny na to,
  *  gdzie gracz przeciągnie uchwyt, i jako jedyny wybiera gałąź hiperboli.
  *  Unia rozróżniana OBECNOŚCIĄ pola, nie znacznikiem — dzięki temu dane poziomów
- *  etapu 2 kompilują się bez ani jednej zmiany. */
-export type Span = { mid: number; length: number } | { mid: number; span: number };
+ *  etapu 2 kompilują się bez ani jednej zmiany. Wyłączna: `?: never` zabrania podać
+ *  oba pola naraz (inaczej `{ mid, length, span }` przechodziłby po cichu jako długość). */
+export type Span =
+  | { mid: number; length: number; span?: never }
+  | { mid: number; span: number; length?: never };
 
 /** Nazwa z etapu 2 dla wariantu długościowego. */
 export type ArcRange = { mid: number; length: number };

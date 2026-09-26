@@ -136,6 +136,14 @@ describe("typy nowych kształtów", () => {
     expect("length" in parametr).toBe(false);
   });
 
+  it("Span jest wyłączny: ani oba pola naraz, ani żadne", () => {
+    // @ts-expect-error — `length` i `span` naraz: nie wiadomo, który opis obowiązuje
+    const oba: Span = { mid: 0.2, length: 0.9, span: 1.4 };
+    // @ts-expect-error — sam środek bez zakresu nie opisuje kawałka
+    const zaden: Span = { mid: 0.2 };
+    expect([oba, zaden]).toHaveLength(2);
+  });
+
   it("ArcRange etapu 2 jest wariantem długościowym Span", () => {
     const arc: ArcRange = { mid: 0, length: 1 };
     const span: Span = arc;

@@ -280,7 +280,7 @@ describe("poziomy", () => {
   // tylko ograniczają rozmiar/pozycję elementów gracza; żadne zapisane rozwiązanie nie
   // opiera się na końcu odcinka — sprawdzone przez usunięcie wszystkich odcinków z tego testu.
   const shrinkSpan = (span: Span, d: number): Span =>
-    "length" in span ? { ...span, length: span.length - 2 * d } : { ...span, span: span.span - 2 * d };
+    span.length !== undefined ? { ...span, length: span.length - 2 * d } : { ...span, span: span.span - 2 * d };
   const shrinkMovable = (s: MovableShape, d: number): MovableShape =>
     s.kind === "elipsa"
       ? (s.arc === undefined ? s : { ...s, arc: { ...s.arc, length: s.arc.length - 2 * d } })

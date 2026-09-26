@@ -57,9 +57,9 @@ export function frameLengthBetween(f: CurveFrame, t0: number, t1: number): numbe
 
 /** Zakres parametru kawałka. Opis długościowy jest TU przeliczany na parametryczny —
  *  dalej w dół (`Piece.range`, render, `onPiece`) istnieje już tylko zakres parametru.
- *  Gdy oba pola są obecne, długość ma pierwszeństwo (sprawdzana pierwszy w `"length" in span`). */
+ *  Oba pola naraz wyklucza już typ `Span`, więc wariant rozpoznaje sam brak `length`. */
 export function spanRange(f: CurveFrame, span: Span): { from: number; to: number } {
-  if (!("length" in span)) {
+  if (span.length === undefined) {
     return { from: span.mid - span.span / 2, to: span.mid + span.span / 2 };
   }
   const { cum, T } = cumulative(f);
