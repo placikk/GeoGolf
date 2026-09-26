@@ -2662,6 +2662,32 @@ przeciągany palcem — mniejszy dołek utrudniłby celowanie) oraz wydane pozio
 
 ---
 
+## Zadanie 15c: Uchwyty nie wychodzą poza planszę
+
+**Zadanie dopisane w trakcie realizacji** (rozstrzygnięcie kontrolera z 2026-09-26, po
+znalezisku w zadaniu 15b).
+
+Nic dziś nie przycina przeciąganego uchwytu do planszy: uchwyt idzie za palcem, także poza
+kwadrat `[-1, 1]²`, gdy ekran jest wyższy niż plansza. Na poziomie 21 istnieją DOKŁADNE
+rozwiązania z ogniskiem poza planszą (np. `(-0.2, 1.7)`, „igła + ściana"), których żaden
+dołek nie usunie — to obejście lekcji. Sprawdzone: żaden z poziomów 1–24 nie ma ogniska ani
+wierzchołka poza planszą w starcie, rozwiązaniu ani przeszkodach, więc przycięcie niczego
+nie psuje.
+
+**Pliki:** `src/ui/handles.ts` (i ewentualnie `src/ui/screens.ts`), `tests/ui/handles.test.ts`,
+`tests/levels.test.ts`.
+
+- [ ] **Krok 1:** Każda pozycja uchwytu, jaką może wytworzyć przeciąganie, leży w `[-1, 1]²`.
+  Przycięcie umieść tak, żeby obejmowało wszystkich wywołujących i żeby testy przez
+  `applyDrag` modelowały je tak jak gra.
+- [ ] **Krok 2:** Test jednostkowy: przeciągnięcie ogniska, wierzchołka i uchwytu rozmiaru
+  daleko poza planszę kończy się w planszy; ogniska nadal przyskakują do celów przy brzegu.
+- [ ] **Krok 3:** Test regresyjny: dokładne rozwiązanie poziomu 21 z ogniskiem poza planszą
+  NIE jest osiągalne przez `applyDrag`. Udowodnij, że test pada bez przycięcia.
+- [ ] **Krok 4:** Wszystkie testy zielone, w tym test szarej strefy poziomów 21–24.
+
+---
+
 ## Zadanie 16: Weryfikacja końcowa
 
 Nic nowego nie powstaje; zadanie potwierdza, że etap jest skończony, i spisuje decyzje.
