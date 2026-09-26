@@ -7,7 +7,7 @@ import {
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
 import { piecePolyline } from "../src/render/shapes";
-import { applyDrag, lockedSize } from "../src/ui/handles";
+import { applyDrag, handlePositions, lockedSize } from "../src/ui/handles";
 
 const proofFor = (level: Level, pieces: MovableShape[], obstacles: Shape[] = level.obstacles) =>
   runProof({
@@ -165,6 +165,17 @@ describe("poziomy", () => {
         expect(start.arc).toEqual(sol.arc);
       }
     }
+  });
+
+  // `Handle` to płaska unia wszystkich uchwytów wszystkich krzywych, więc np. `locked:
+  // ["ognisko"]` przy elipsie kompiluje się i po cichu nic nie blokuje. Każda blokada musi
+  // więc nazywać uchwyt, który ten element naprawdę ma — ten sam zestaw, który gra rysuje
+  // i łapie (`handlePositions`).
+  it.each(byId)("poziom %s: każdy zablokowany uchwyt istnieje w swoim elemencie", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      const ids = handlePositions(piece.start).map((h) => h.id);
+      for (const id of piece.locked) expect(ids, `element ${k}, blokada "${id}"`).toContain(id);
+    });
   });
 
   // Pułapka z końcowego przeglądu: przy zablokowanym uchwycie rozmiaru gracz, który
