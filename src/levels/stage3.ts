@@ -4,6 +4,16 @@ import { parabola } from "./shape";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
+/** Poziom 17 ma mniejszy dołek, żeby piłki lecące blisko osi nie skróciły się do jednego
+ *  odbicia. Promień wiązki około 0.2 rad daje y ≈ 0.0375 (przy p=0.3, wzór 2p·tan(δ/2)),
+ *  co mieści się w standardowym HOLE_RADIUS ≈ 0.0566. Dołek zmniejszony do HOLE_RADIUS / 3
+ *  ≈ 0.0189 zapewnia, że wszystkie osiem pilek odbija się dwa razy i ląduje jednocześnie.
+ *  To jest bezpieczne tutaj, bo jedynym wolnym uchwytem jest ognisko, które przylegnie
+ *  dokładnie do piłki. Poziomy 18–20 mają dołek standardowy, bo tam wierzchołek jest
+ *  uruchamiany ręcznie. Dołek jest rysowany zawsze 9 px, więc gracz widzi różnicę
+ *  (ani jedną stronę). */
+const t17 = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 };
+
 /** Wachlarz poziomów parabolicznych. Piłka stoi w ognisku i strzela w lustro; kierunki
  *  poza wachlarzem nie mają w co trafić. Szerokość 2 rad, a nie π: przy pełnym π skrajne
  *  piłki lecą wzdłuż latus rectum i każde POWIĘKSZENIE paraboli sprawia, że wychodzą
@@ -30,7 +40,7 @@ export const STAGE_3: Level[] = [
     }],
     obstacles: [parabola(vec(0.5, 0), vec(0.8, 0), KAWALEK)],
     sector: WACHLARZ_W_LEWO,
-    test: t,
+    test: t17,
   },
   {
     // To samo, ale wierzchołek zwolniony, a rozwiązanie ma INNĄ ogniskową (0.22 zamiast
