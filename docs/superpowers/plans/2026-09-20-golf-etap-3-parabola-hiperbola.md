@@ -2622,6 +2622,46 @@ git commit -m "feat(levels): poziomy 23 Ktora galaz i 24 Zwienczenie"
 
 ---
 
+## Zadanie 15b: Szare strefy na poziomach 21–23
+
+**Zadanie dopisane w trakcie realizacji — decyzja właściciela z 2026-09-26.**
+
+Niezmiennik §8 etapu 1: promień przyskakiwania ma być nie mniejszy niż pas, w którym
+niedokładne ustawienie jeszcze wygrywa — inaczej powstaje „szara strefa": ognisko za daleko,
+żeby przyskoczyć, a gracz i tak wygrywa niedokładnym rozwiązaniem. Kryterium 5% z etapu 1
+sprawdza tylko 8 kierunków w jednej odległości i tego NIE egzekwuje. Gęsty skan kontrolera
+(krok 0.005, pierścień SNAP_RADIUS..0.35) pokazał szare strefy prawie wszędzie:
+
+| Poziom | Wolne ognisko | Punkty wygranej poza SNAP | Najdalej |
+|---|---|---|---|
+| 21 `wspolne-ognisko` | ognisko2 (M) | 696 | 0.350 (granica skanu) |
+| 22 `druga-strona` | ognisko2 (M) | 267 | 0.347 |
+| 23 `ktora-galaz` | ognisko2 (M) | 706 | 0.350 (granica skanu) |
+
+Na tych trzech poziomach wszystkie wolne uchwyty to ogniska, które przyskakują dokładnie,
+więc mniejszy dołek nic gracza nie kosztuje — zgodnie z polityką właściciela. Poziom 24
+naprawiono tak samo w zadaniu 15 (`HOLE_RADIUS / 5`, `maxBounces: 3`; przy limicie 4 przetrwał
+tor przez ścianę przy wierzchołku paraboli, którego żaden dołek nie usuwał).
+
+**Poza zakresem tego zadania (osobne zadanie na później):** poziomy 18 i 20 (wolny wierzchołek
+przeciągany palcem — mniejszy dołek utrudniłby celowanie) oraz wydane poziomy 1–16.
+
+**Pliki:** `src/levels/stage3.ts`, `tests/levels.test.ts`.
+
+- [ ] **Krok 1:** Dla każdego z poziomów 21, 22, 23 zmierz gęsto (krok ≤ 0.0025, pierścień od
+  SNAP_RADIUS co najmniej do 0.5 — strefy sięgają granicy dotychczasowego skanu) wygrane
+  każdego WOLNEGO ogniska wokół jego celu. Dobierz `holeRadius` (a jeśli trzeba, `maxBounces`,
+  jak na poziomie 24 — rozwiązanie potrzebuje 2 odbić), przy którym żadna wygrana nie leży
+  poza SNAP_RADIUS, z zapasem. Podaj pomiary przed i po.
+- [ ] **Krok 2:** Test szarej strefy z poziomu 24 uogólnij na pomocnika i stosuj do listy
+  `["wspolne-ognisko", "druga-strona", "ktora-galaz", "zwienczenie-3"]`, z komentarzem, dlaczego
+  tylko te (decyzja właściciela; reszta odłożona). Udowodnij, że test pada przy starym dołku
+  każdego z trzech poziomów.
+- [ ] **Krok 3:** Rozwiązania 8/8, start ≤ 1/8, wszystkie testy zielone.
+- [ ] **Krok 4:** Commit.
+
+---
+
 ## Zadanie 16: Weryfikacja końcowa
 
 Nic nowego nie powstaje; zadanie potwierdza, że etap jest skończony, i spisuje decyzje.
