@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, scale, vec } from "../src/core/vec";
+import { add, dist, fromAngle, len, scale, sub, vec } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
   DIAGONAL, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves, perimeter,
@@ -39,7 +39,7 @@ const STAGE_1_IDS = [
 
 describe("poziomy", () => {
   it("liczba poziomów i unikalne identyfikatory", () => {
-    expect(LEVELS).toHaveLength(20);
+    expect(LEVELS).toHaveLength(22);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(LEVELS.length);
   });
 
@@ -68,6 +68,19 @@ describe("poziomy", () => {
   // celowo na osi), więc `launchAngles`/`runProof` nie mają prawa tego zabraniać.
   it("każdy poziom ma PARZYSTĄ liczbę piłek — inaczej kierunek osi przestaje być obojętny", () => {
     for (const l of LEVELS) expect(l.test.balls % 2).toBe(0);
+  });
+
+  it("poziomy hiperboliczne są POZAOSIOWE — inaczej wiązka wraca w lustro", () => {
+    for (const l of LEVELS.filter((x) => x.obstacles.some((o) => o.kind === "hiperbola"))) {
+      const hip = l.obstacles.find((o) => o.kind === "hiperbola")!;
+      if (hip.kind !== "hiperbola") throw new Error("zły rodzaj");
+      // piłka, wspólne ognisko (dalsze od dołka) i dołek nie mogą być współliniowe
+      const M = dist(hip.f1, l.hole) > dist(hip.f2, l.hole) ? hip.f1 : hip.f2;
+      const a = sub(M, l.ball);
+      const b = sub(l.hole, M);
+      const krzyz = Math.abs(a.x * b.y - a.y * b.x) / (len(a) * len(b));
+      expect(krzyz).toBeGreaterThan(0.2);
+    }
   });
 
   it.each(byId)("poziom %s: zapisane rozwiązanie faktycznie rozwiązuje", (_id, level) => {
@@ -278,14 +291,16 @@ describe("poziomy", () => {
   const isCascade = (level: Level) =>
     solutions(level).some((s) => shapeFoci(s).some((f) => !same(f, level.ball) && !same(f, level.hole)));
 
-  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16", () => {
+  // Poziomy 21–22 SĄ kaskadami: ich rozwiązania mają ognisko we wspólnym punkcie M,
+  // poza piłką i dołkiem — stąd rozszerzenie tej sztywnej listy.
+  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16, 21, 22", () => {
     expect(LEVELS.filter(isCascade).map((l) => l.id)).toEqual(
-      ["kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"],
+      ["kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2", "wspolne-ognisko", "druga-strona"],
     );
   });
 
   it.each(LEVELS.filter(isCascade).map((l) => [l.id, l] as const))(
-    "poziom %s: jedna elipsa przez piłkę i dołek, z łukiem elementu, nie wygrywa dla żadnego rozmiaru",
+    "poziom %s: jedna elipsa przez piłkę i dołek, z łukiem elementu, nie wygrywa dla żadnego rozmiaru, JAKI GRACZ MOŻE USTAWIĆ",
     (_id, level) => {
       // start dokładnie na granicy konstruowalności (a = c elipsy przez piłkę i dołek),
       // nie kawałek nad nią — sweep ćwiczy też ten wąski, wcześniej nieobjęty zakres
@@ -296,7 +311,24 @@ describe("poziomy", () => {
         // i dołek, to jego WŁASNA elipsa. Parabola ani hiperbola nie staną się elipsą,
         // więc dla nich tego obejścia nie ma czym wykonać.
         if (sol.kind !== "elipsa") return;
-        for (let a = a0; a <= 3; a += 0.04) {
+        // `start.kind` jest tego samego rodzaju co `sol.kind` (pilnuje test zgodności
+        // uchwytów wyżej) — to zawężenie tylko odzyskuje to dla TypeScriptu.
+        const start = piece.start;
+        if (start.kind !== "elipsa") return;
+        // Rozmiar zablokowany: `dragEllipse` (src/ui/handles.ts) broni `a` od dołu przez
+        // `a = Math.max(lockedA, c + MIN_GAP)`, gdzie `lockedA` to `start.a` poziomu i
+        // `c = |ognisko1 ognisko2| / 2`. Gracz, który postawi swoje ogniska na piłce
+        // i dołku, NIE MOŻE dostać żadnego innego rozmiaru niż ten jeden — dla c poniżej
+        // `lockedA` gra i tak wraca do `lockedA`, a dla c powyżej rośnie wraz z c. Rozmiary
+        // spod tej jedynej dostępnej wartości nie są obejściem, bo gracz nie ma jak ich
+        // ustawić — testowanie ich testowałoby konfiguracje spoza gry, nie lekcję poziomu.
+        // Gdy rozmiar jest WOLNY (jak w poziomie 16 „zwienczenie-2"), gracz ma pełny zakres
+        // i sweep sam wraca do przeglądu 0 → 3 poniżej.
+        const c = dist(level.ball, level.hole) / 2;
+        const locked = piece.locked.includes("rozmiar");
+        const from = locked ? Math.max(start.a, c + 1e-3) : a0;
+        const to = locked ? from : 3;
+        for (let a = from; a <= to; a += 0.04) {
           const one = { ...sol, f1: level.ball, f2: level.hole, a };
           const pieces = level.pieces.map((q, j) => (j === k ? one : q.start));
           expect(solves(level, pieces), `element ${k}, a = ${a.toFixed(2)}`).toBe(false);

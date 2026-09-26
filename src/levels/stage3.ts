@@ -1,6 +1,6 @@
 import { vec } from "../core/vec";
-import { HOLE_RADIUS, Level } from "./types";
-import { parabola } from "./shape";
+import { EllipseShape, HOLE_RADIUS, Level } from "./types";
+import { arcEllipse, ellipse, hyperbola, parabola } from "./shape";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
@@ -30,6 +30,17 @@ const KAWALEK = { mid: 0, span: 1.2 };
 /** Wachlarz poziomu 19: oś obrócona o 45° (piłka i dołek na przekątnej), więc
  *  wachlarz musi celować tam, gdzie teraz jest lustro — wzdłuż tej samej przekątnej. */
 const UKOS = { center: (5 * Math.PI) / 4, width: 2 };
+
+/** Stopnie → radiany, jak w `stage2.ts` — dane poziomów 21–22 opisują łuki w stopniach. */
+const deg = (x: number): number => (x * Math.PI) / 180;
+
+/** Start i rozwiązanie elementu gracza z łukiem: długość łuku liczona na rozwiązaniu,
+ *  start dostaje TEN SAM łuk (ten sam środek i długość) — jak w `stage2.ts`. Bez tego,
+ *  gdy ogniska startu i rozwiązania różnią się (tylko `rozmiar` zablokowany), te same
+ *  kąty parametru dają RÓŻNE {mid, length} na dwóch elipsach o różnym `b` — a zablokowane
+ *  `poczatek`/`koniec` wymagają identycznego `arc` między startem i rozwiązaniem. */
+const withSolutionArc = (start: EllipseShape, solution: EllipseShape) =>
+  ({ start: { ...start, arc: solution.arc }, solution });
 
 export const STAGE_3: Level[] = [
   {
@@ -102,6 +113,52 @@ export const STAGE_3: Level[] = [
     ],
     obstacles: [],
     sector: WACHLARZ_W_LEWO,
+    test: t,
+  },
+  {
+    // Układ pozaosiowy, trzy warunki naraz — i wszystkie trzy są konieczne:
+    //
+    // 1. WACHLARZ + ŁUK. Elipsa NIE może być pełna. Pełna elipsa zbiera piłki do M
+    //    ze WSZYSTKICH stron, a gałąź hiperboli jest wklęsła tylko w jedną — piłki
+    //    nadlatujące z przeciwnej strony trafiłyby ją od wewnątrz i odbiły się w złą
+    //    stronę. Wachlarz w dół-lewo i łuk po tej samej stronie dają stożek nadlatujący
+    //    do M z jednego kierunku.
+    // 2. DOŁEK WEWNĄTRZ ELIPSY. Wiązka odbita od hiperboli leci do dołka; gdyby dołek
+    //    leżał poza elipsą, musiałaby przebić lustro od środka. Dołek (−0.2, 0.3) leży
+    //    wewnątrz elipsy o ogniskach (−0.6, −0.45) i (0.35, 0.55) przy a = 0.78.
+    // 3. POZAOSIOWOŚĆ. piłka→M to (0.95, 1.0), M→dołek to (−0.55, −0.25); sinus kąta
+    //    między nimi ≈ 0.375, czyli dobrze poza zerem (test pilnuje > 0.2).
+    //
+    // c hiperboli = |M dołek| / 2 ≈ 0.302, a = 0.18 → wierzchołek ≈ (0.239, 0.500),
+    // czyli między środkiem a M — na drodze zbiegających piłek.
+    id: "wspolne-ognisko", title: "Wspólne ognisko",
+    hint: "Hiperbola przejmuje zbiegający pęk. Daj jej to ognisko, na które czeka.",
+    ball: vec(-0.6, -0.45), hole: vec(-0.2, 0.3),
+    pieces: [{
+      ...withSolutionArc(
+        ellipse(vec(-0.42, -0.18), vec(0.15, 0.3), 0.78),
+        arcEllipse(vec(-0.6, -0.45), vec(0.35, 0.55), 0.78, deg(150), deg(260)),
+      ),
+      locked: ["rozmiar", "poczatek", "koniec"],
+    }],
+    obstacles: [hyperbola(vec(-0.2, 0.3), vec(0.35, 0.55), 0.18, 1, { mid: 0, span: 1.6 })],
+    sector: { center: deg(215), width: 1.4 },
+    test: t,
+  },
+  {
+    // Ta sama geometria od drugiej strony: elipsa stała, gracz rusza HIPERBOLĄ.
+    // Uczy, że wspólne ognisko jest wspólne — można je dosunąć z każdej strony.
+    // Zablokowane `ognisko1` (dołek) i `rozmiar`: zostaje jeden uchwyt, jedna lekcja.
+    id: "druga-strona", title: "Druga strona",
+    hint: "Tym razem lustro stoi. Przesuń hiperbolę tak, żeby jej dalsze ognisko usiadło w ognisku elipsy.",
+    ball: vec(-0.6, -0.45), hole: vec(-0.2, 0.3),
+    pieces: [{
+      start: hyperbola(vec(-0.2, 0.3), vec(0.19, 0.17), 0.18, 1, { mid: 0, span: 1.6 }),
+      solution: hyperbola(vec(-0.2, 0.3), vec(0.35, 0.55), 0.18, 1, { mid: 0, span: 1.6 }),
+      locked: ["ognisko1", "rozmiar"],
+    }],
+    obstacles: [arcEllipse(vec(-0.6, -0.45), vec(0.35, 0.55), 0.78, deg(150), deg(260))],
+    sector: { center: deg(215), width: 1.4 },
     test: t,
   },
 ];

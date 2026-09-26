@@ -32,9 +32,15 @@ const MAX_TILE_H = 120;
 export const hitRect = (r: Rect, p: Vec2): boolean =>
   p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
-/** Siatka kafelków: w pionie 2 kolumny, w poziomie 4. Wyśrodkowana w pionie. */
+/** Siatka kafelków: w pionie 2 kolumny, w poziomie 4 — ale nie za cenę celu dotykowego.
+ *  Gdy tylu wierszy przy tej bazowej liczbie kolumn zepchnęłoby kafelek pod 44 px
+ *  (poziomy 21+ na małych telefonach), siatka dostaje dodatkową kolumnę — dokładnie tyle,
+ *  by wiersze zmieściły się w `maxRows`. Przy liczbie poziomów z etapów 1–2 (≤ 16) to
+ *  zawsze `base`, więc stare ekrany wyglądają tak jak wcześniej. */
 export function menuLayout(width: number, height: number, count: number): Rect[] {
-  const cols = width >= height ? 4 : 2;
+  const base = width >= height ? 4 : 2;
+  const maxRows = Math.max(1, Math.floor((height - TOP - SIDE + GAP) / (44 + GAP)));
+  const cols = Math.max(base, Math.ceil(count / maxRows));
   const rows = Math.ceil(count / cols);
   const w = (width - 2 * SIDE - (cols - 1) * GAP) / cols;
   const h = Math.min(MAX_TILE_H, (height - TOP - SIDE - (rows - 1) * GAP) / rows);
