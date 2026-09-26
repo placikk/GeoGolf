@@ -475,6 +475,26 @@ describe("poziomy", () => {
     expect(sprawdzone).toBe(ileWolnych * KIERUNKI * PROMIENIE);
   }, 30_000);
 
+  // Zadanie 15c. Zadanie 15b znalazło na poziomie 21 DOKŁADNE rozwiązanie z drugim
+  // ogniskiem elipsy poza planszą: piłka → M → hiperbola-przeszkoda → GÓRNA ŚCIANA →
+  // dołek, gdzie M siedzi w zwierciadlanym odbiciu dołka względem ściany y = 1
+  // (dołek (−0.2, 0.3) → M = (−0.2, 1.7)). Żaden dołek go nie usuwa (raport 15b),
+  // bo trafia idealnie — jedynym lekiem jest uczynić tę pozycję nieosiągalną palcem.
+  // Ten test odtwarza obejście DOKŁADNIE tak, jak zrobiłby to gracz: `ognisko1` do
+  // piłki (przyskok), `ognisko2` do M poza planszą — oba przez `applyDrag`, z tym
+  // samym `lockedA`, co w grze (poziom ma zablokowany rozmiar).
+  it("poziom wspolne-ognisko: obejście z ogniskiem poza planszą (−0.2, 1.7) jest NIEOSIĄGALNE przez applyDrag", () => {
+    const level = LEVELS.find((l) => l.id === "wspolne-ognisko");
+    if (level === undefined) throw new Error("brak poziomu wspolne-ognisko");
+    const piece = level.pieces[0];
+    const start = piece.start;
+    if (start.kind !== "elipsa") throw new Error("poziom wspolne-ognisko ma mieć elipsę");
+    const lockedA = piece.locked.includes("rozmiar") ? start.a : undefined;
+    let bypass: MovableShape = applyDrag(start, "ognisko1", level.ball, lockedA);
+    bypass = applyDrag(bypass, "ognisko2", vec(-0.2, 1.7), lockedA);
+    expect(solves(level, [bypass])).toBe(false);
+  });
+
   it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
     const level = LEVELS.find((l) => l.id === "wspologniskowe")!;
     const base = level.pieces[0].solution;

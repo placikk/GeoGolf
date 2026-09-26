@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { vec, dist } from "../../src/core/vec";
+import { Vec2, vec, dist } from "../../src/core/vec";
 import {
   EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams,
   circle, ellipse, ellipseParam, ellipsePoint, hyperbola, paramAtLength, parabola, perimeter, segment, shapeAxisAngle,
@@ -160,9 +160,18 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
     expect(ends(below).end).toBeCloseTo(5.9, 9);
   });
 
-  it("łuk zachowuje długość, gdy elipsa rośnie, i obejmuje wtedy mniejszy zakres parametru", () => {
-    const bigger = applyDrag(shape, "rozmiar", vec(2, 2));
-    expect(bigger.a).toBeGreaterThan(2 * shape.a);
+  it("łuk zachowuje długość, gdy elipsa rośnie (uchwyt rozmiaru zaciśnięty do planszy), i obejmuje wtedy mniejszy zakres parametru", () => {
+    // Uchwyt rozmiaru nie stoi pod palcem — renderuje się w ustalonym kierunku osi
+    // (środek (0.3, 0.4), oś (1,1)/√2), a palec (nawet w planszy, więc bez udziału
+    // przycięcia PALCA) daje tylko długość. Zadanie 15c ścina `a` do najdalszego t
+    // wzdłuż tej osi, przy którym uchwyt jeszcze mieści się w [-1,1]²: granica y = 1
+    // wypada pierwsza, t = (1 − 0.4)·√2 = 0.6√2 — WYŻSZY sufit niż walidacja elipsy
+    // (a > c), więc to jego test tu sprawdza, nie tamten.
+    const bigger = applyDrag(shape, "rozmiar", vec(1, 1));
+    expect(bigger.a).toBeCloseTo(0.6 * Math.SQRT2, 9);
+    const pos = handlePositions(bigger).find((h) => h.id === "rozmiar")!.pos;
+    expect(pos.x).toBeLessThanOrEqual(1);
+    expect(pos.y).toBeLessThanOrEqual(1);
     expect(bigger.arc).toBe(shape.arc);
     expect(lengthOf(bigger)).toBeCloseTo(shape.arc.length, 9);
     expect(ends(bigger).end - ends(bigger).start).toBeLessThan(ends(shape).end - ends(shape).start);
@@ -172,10 +181,13 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
     expect(applyDrag(state, "koniec", vec(0, 1))).toBe(state);
   });
 
-  it("ognisk nic nie ogranicza: przy dalekim przeciągnięciu rozmiar rośnie, ognisko jest pod palcem", () => {
+  it("ognisko poza planszą zostaje przycięte do brzegu, ale rozmiar i tak rośnie", () => {
+    // Zadanie 15c: ognisko idzie za palcem TYLKO w planszy — dalej niż x = −1 nie sięga,
+    // choć rozmiar wciąż rośnie, żeby elipsa istniała (jak dawniej, tyle że liczona od
+    // przyciętego ogniska, nie od surowego palca).
     const far = vec(-3, 0.2);
     const next = applyDrag(shape, "ognisko1", far);
-    expect(next.f1).toBe(far);
+    expect(next.f1).toEqual(vec(-1, 0.2));
     expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
     expect(next.arc).toBe(shape.arc);
   });
@@ -334,5 +346,60 @@ describe("uchwyty hiperboli", () => {
     const backNoLock = applyDrag(away, "ognisko2", hyp.f2);
     if (backNoLock.kind !== "hiperbola") throw new Error("zły rodzaj");
     expect(backNoLock.a).toBeLessThan(hyp.a);
+  });
+});
+
+// Zadanie 15c: uchwyt idzie za palcem TYLKO w planszy [-1, 1]² — patrz WHY przy
+// `clampToBoard`/`applyDrag`. Bez tego poziom 21 miał dokładne rozwiązanie z ogniskiem
+// w (−0.2, 1.7) (zadanie 15b), którego żaden dołek nie usuwa; regresja na to jest
+// w `tests/levels.test.ts`. Tu sprawdzamy sam mechanizm przycięcia, dla każdego rodzaju
+// krzywej i każdego rodzaju uchwytu.
+describe("uchwyty nie wychodzą poza planszę (zadanie 15c)", () => {
+  const inBoard = (p: Vec2): void => {
+    expect(p.x).toBeGreaterThanOrEqual(-1);
+    expect(p.x).toBeLessThanOrEqual(1);
+    expect(p.y).toBeGreaterThanOrEqual(-1);
+    expect(p.y).toBeLessThanOrEqual(1);
+  };
+
+  it("ognisko elipsy przeciągnięte daleko poza planszę kończy się na jej brzegu", () => {
+    const next = applyDrag(state, "ognisko1", vec(50, -80));
+    expect(next.f1).toEqual(vec(1, -1));
+    inBoard(next.f1);
+  });
+
+  it("uchwyt rozmiaru elipsy przeciągnięty daleko poza planszę kończy się w planszy", () => {
+    // palec daleko w rogu — bez ścięcia `a` (patrz `applyDrag`) uchwyt renderowałby się
+    // wzdłuż osi elipsy dużo dalej niż plansza, mimo że palec sam JEST przycięty
+    const next = applyDrag(state, "rozmiar", vec(50, 50));
+    inBoard(handlePositions(next).find((h) => h.id === "rozmiar")!.pos);
+  });
+
+  it("ognisko i wierzchołek paraboli przeciągnięte daleko poza planszę kończą się na jej brzegu", () => {
+    const withFocus = applyDrag(par, "ognisko", vec(-50, 30));
+    if (withFocus.kind !== "parabola") throw new Error("zły rodzaj");
+    inBoard(withFocus.focus);
+    const withVertex = applyDrag(par, "wierzcholek", vec(30, -50));
+    if (withVertex.kind !== "parabola") throw new Error("zły rodzaj");
+    inBoard(withVertex.vertex);
+  });
+
+  it("ognisko hiperboli przeciągnięte daleko poza planszę kończy się na jej brzegu", () => {
+    const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+    const next = applyDrag(hyp, "ognisko1", vec(-90, 40));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    inBoard(next.f1);
+  });
+
+  it("ognisko wciąż przyskakuje do celu tuż przy brzegu planszy, mimo przycięcia", () => {
+    // Cel LEŻY na brzegu (poziomy mają tam ogniska), palec kawałek ZA planszą, w promieniu
+    // przyskakiwania liczonym od SUROWEJ pozycji palca — przyskok dzieje się PRZED
+    // przycięciem (w `screens.ts`), więc nie jest tym pogorszony.
+    const target = vec(1, 0.3);
+    const near = vec(1 + SNAP_RADIUS * 0.5, 0.3);
+    const snapped = snapTo(near, [target], SNAP_RADIUS);
+    expect(snapped).toEqual(target);
+    const next = applyDrag(state, "ognisko1", snapped);
+    expect(next.f1).toEqual(target);
   });
 });

@@ -87,6 +87,36 @@ export function pickHandle(
 const wrap = (x: number): number => x - TAU * Math.round(x / TAU);
 const clamp = (x: number, lo: number, hi: number): number => Math.min(Math.max(x, lo), hi);
 
+/** Plansza to domknięty kwadrat [-1, 1]². */
+const BOARD_MIN = -1;
+const BOARD_MAX = 1;
+
+/** DLACZEGO tu: `applyDrag` jest jedynym miejscem, przez które przechodzi i gra
+ *  (`screens.ts` woła go po `toWorld`/`snapTo`), i testy, które chcą modelować grę
+ *  (np. szara strefa poziomów 21–24 w `tests/levels.test.ts`) — wołają `applyDrag`
+ *  PROSTO, z pominięciem `screens.ts`. Przycięcie w samym `screens.ts` byłoby
+ *  obejściem: testy sterujące `applyDrag` nadal eksplorowałyby pozycje poza planszą,
+ *  których gra już nie umie wytworzyć (patrz zadanie 15b — dokładne rozwiązanie
+ *  poziomu 21 z ogniskiem w (−0.2, 1.7)). Jeden punkt obsługuje obu wywołujących. */
+const clampToBoard = (p: Vec2): Vec2 => {
+  const x = clamp(p.x, BOARD_MIN, BOARD_MAX);
+  const y = clamp(p.y, BOARD_MIN, BOARD_MAX);
+  // ta sama referencja, gdy już w planszy — nie tworzymy śmieci i nie łamiemy
+  // testów porównujących TOŻSAMOŚĆ obiektu (`toBe`) dla punktów, które i tak są w planszy
+  return x === p.x && y === p.y ? p : { x, y };
+};
+
+/** Największe t ≥ 0, przy którym `from + dir·t` (dir jednostkowy) jeszcze leży w planszy.
+ *  `from` musi już być w planszy — środek elipsy to średnia dwóch przyciętych ognisk,
+ *  a średnia dwóch punktów wypukłego kwadratu zawsze jest w tym kwadracie. */
+const maxReachInBoard = (from: Vec2, dir: Vec2): number => {
+  const limit = (p: number, d: number): number => {
+    if (Math.abs(d) < 1e-12) return Infinity;
+    return ((d > 0 ? BOARD_MAX : BOARD_MIN) - p) / d;
+  };
+  return Math.min(limit(from.x, dir.x), limit(from.y, dir.y));
+};
+
 /** Przesuwa jeden koniec łuku elipsy `s` do parametru `t`; drugi koniec stoi w miejscu.
  *  Nowy koniec wybieramy najbliżej starego (bez skoku o 2π), a długość łuku zaciskamy do
  *  [MIN_ARC_LENGTH, obwód − MIN_ARC_LENGTH], więc końce się nie mijają. Wynik: nowy
@@ -183,16 +213,35 @@ export function applyDrag(state: MovableShape, handle: Handle, to: Vec2, lockedA
 export function applyDrag(
   state: MovableShape, handle: Handle, to: Vec2, lockedA?: number,
 ): MovableShape {
-  if (state.kind === "parabola") return dragParabola(state, handle, to);
-  if (state.kind === "hiperbola") return dragHyperbola(state, handle, to, lockedA);
+  // Przycięcie NAJPIERW, cała reszta funkcji dostaje już punkt z planszy — patrz
+  // komentarz przy `clampToBoard`. Przyskakiwanie (`snapTo`) dzieje się WCZEŚNIEJ,
+  // w `screens.ts`, na surowej pozycji palca — jeśli przycięlibyśmy przed przyskokiem,
+  // ognisko upuszczone tuż za brzegiem obok celu leżącego NA brzegu przestałoby łapać
+  // (odległość do celu liczona od przyciętego punktu, nie od palca, bywałaby większa
+  // niż promień). Cele przyskakiwania (ogniska poziomu) same leżą w planszy, więc
+  // wynik przyskoku i tak przechodzi przez przycięcie bez zmiany.
+  const clamped = clampToBoard(to);
+  if (state.kind === "parabola") return dragParabola(state, handle, clamped);
+  if (state.kind === "hiperbola") return dragHyperbola(state, handle, clamped, lockedA);
   if (handle === "poczatek" || handle === "koniec") {
-    // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej
+    // kąt palca w układzie elipsy → parametr: uchwyt ślizga się po krzywej, nie schodzi z niej.
+    // Przycięcie zmienia coś tylko, gdy palec jest poza planszą — inaczej parametr wychodzi
+    // z tego samego punktu jak dawniej.
     if (state.arc === undefined) return state;
-    return { ...state, arc: moveArcEnd({ ...state, arc: state.arc }, handle, ellipseParam(state, to)) };
+    return { ...state, arc: moveArcEnd({ ...state, arc: state.arc }, handle, ellipseParam(state, clamped)) };
   }
   if (handle === "rozmiar") {
-    const a = (dist(to, state.f1) + dist(to, state.f2)) / 2;
-    return { ...state, a: Math.max(a, dist(state.f1, state.f2) / 2 + MIN_GAP) };
+    const aMin = dist(state.f1, state.f2) / 2 + MIN_GAP;
+    // Uchwyt rozmiaru NIE stoi pod palcem — renderuje się w ustalonym kierunku osi
+    // (`ellipseAxis`), a palec daje tylko DŁUGOŚĆ (suma odległości / 2). Samo przycięcie
+    // palca do planszy nie wystarcza: przy ogniskach blisko środka odległość od palca
+    // w rogu planszy do obu ognisk daje `a` idące daleko poza planszę wzdłuż tej osi.
+    // Więc dodatkowo ścinamy `a` do najdalszego t, przy którym `środek + oś·t` jeszcze
+    // leży w planszy — istnienie elipsy (a > c) ma pierwszeństwo, gdyby te granice się
+    // pogryzły (skrajny przypadek: ogniska tuż przy przeciwległych rogach planszy).
+    const aMax = Math.max(aMin, maxReachInBoard(ellipseCenter(state), ellipseAxis(state)));
+    const a = (dist(clamped, state.f1) + dist(clamped, state.f2)) / 2;
+    return { ...state, a: clamp(a, aMin, aMax) };
   }
   // Ognisk nic nie ogranicza; gdy się rozjadą, rozmiar rośnie, żeby elipsa istniała.
   // Bez `lockedA` rozmiar nigdy sam nie maleje — nawet przy zablokowanym uchwycie
@@ -201,6 +250,6 @@ export function applyDrag(
   // zablokowany) rozmiar WRACA do tej wartości, gdy ogniska znów się zejdą — inaczej
   // gracz, który przeciągnął ognisko za daleko (choćby po drodze do celu), utknąłby
   // z elipsą za dużą, żeby wygrać, a zablokowany uchwyt nie pozwoliłby mu tego cofnąć.
-  const next = handle === "ognisko1" ? { ...state, f1: to } : { ...state, f2: to };
+  const next = handle === "ognisko1" ? { ...state, f1: clamped } : { ...state, f2: clamped };
   return { ...next, a: Math.max(lockedA ?? next.a, dist(next.f1, next.f2) / 2 + MIN_GAP) };
 }
