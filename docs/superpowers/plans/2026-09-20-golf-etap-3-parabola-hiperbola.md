@@ -2225,12 +2225,14 @@ Dopisz na końcu `STAGE_3` w `src/levels/stage3.ts` (nad tablicą dodaj stałą
     ball: vec(-0.55, 0), hole: vec(0.55, 0),
     pieces: [
       {
-        start: parabola(vec(-0.45, 0.35), vec(-0.85, 0.1), KAWALEK),
+        // wierzchołki startowe przechylone OD siebie: przy starych (-0.85,0.1)/(0.88,-0.15)
+        // start dawał 5/8 piłek w dołku jeszcze przed dotknięciem — zmierzone w zadaniu 13
+        start: parabola(vec(-0.45, 0.35), vec(-0.75, -0.2), KAWALEK),
         solution: parabola(vec(-0.55, 0), vec(-0.85, 0), KAWALEK),
         locked: [],
       },
       {
-        start: parabola(vec(0.5, -0.3), vec(0.88, -0.15), KAWALEK),
+        start: parabola(vec(0.5, -0.3), vec(0.75, 0.3), KAWALEK),
         solution: parabola(vec(0.55, 0), vec(0.85, 0), KAWALEK),
         locked: [],
       },
@@ -2292,6 +2294,19 @@ git commit -m "feat(levels): poziomy 19 Obrot osi i 20 Teleskop"
 ---
 
 ## Zadanie 14: Poziomy 21 „Wspólne ognisko" i 22 „Druga strona"
+
+
+**Uwaga dopisana w trakcie realizacji (dotyczy zadań 14 i 15).** Test „kaskady istnieją
+tam, gdzie powinny" w `tests/levels.test.ts` ma sztywną listę `["kaskada",
+"kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"]`. Poziomy 21–24 SĄ kaskadami — mają
+ognisko we wspólnym punkcie M, poza piłką i dołkiem — więc przy ich dodawaniu listę trzeba
+rozszerzyć o ich identyfikatory. To zamierzone, nie obejście testu. Następny test w tym
+bloku („jedna elipsa przez piłkę i dołek nie wygrywa") jest dla poziomu 21 NAJWAŻNIEJSZY:
+wykrywa, czy gracz może ominąć hiperbolę, stawiając ogniska swojej elipsy na piłce i dołku.
+Jeśli ten test padnie na 21, to poziom jest do przebudowy, a nie test.
+
+Sprawdzone w zadaniu 11c: geometria poziomu 22 z tego planu daje `solved === true` bez
+żadnej kalibracji.
 
 Pierwsze poziomy hiperboliczne. Obowiązuje **zasada układu pozaosiowego** z nagłówka planu.
 
@@ -2441,6 +2456,19 @@ git commit -m "feat(levels): poziomy 21 Wspolne ognisko i 22 Druga strona - ukla
 ---
 
 ## Zadanie 15: Poziomy 23 „Która gałąź" i 24 „Zwieńczenie"
+
+
+**Uwaga dopisana w trakcie realizacji (dotyczy zadań 14 i 15).** Test „kaskady istnieją
+tam, gdzie powinny" w `tests/levels.test.ts` ma sztywną listę `["kaskada",
+"kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"]`. Poziomy 21–24 SĄ kaskadami — mają
+ognisko we wspólnym punkcie M, poza piłką i dołkiem — więc przy ich dodawaniu listę trzeba
+rozszerzyć o ich identyfikatory. To zamierzone, nie obejście testu. Następny test w tym
+bloku („jedna elipsa przez piłkę i dołek nie wygrywa") jest dla poziomu 21 NAJWAŻNIEJSZY:
+wykrywa, czy gracz może ominąć hiperbolę, stawiając ogniska swojej elipsy na piłce i dołku.
+Jeśli ten test padnie na 21, to poziom jest do przebudowy, a nie test.
+
+Sprawdzone w zadaniu 11c: geometria poziomu 22 z tego planu daje `solved === true` bez
+żadnej kalibracji.
 
 **Pliki:**
 - Zmiana: `src/levels/stage3.ts`, `tests/levels.test.ts`, `tests/ui/game.test.ts`
