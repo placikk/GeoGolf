@@ -1,6 +1,6 @@
 import { Vec2, add, dist, dot, norm, scale, sub } from "../core/vec";
 import {
-  ArcRange, EllipseShape, Handle, HyperbolaShape, Level, MIN_ARC_LENGTH, MovableShape, ParabolaShape,
+  ArcRange, EllipseShape, Handle, HyperbolaShape, Level, MIN_ARC_LENGTH, MovableShape, ParabolaShape, PlayerPiece,
 } from "../levels/types";
 import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, shapeFoci } from "../levels/shape";
 import { arcFromParams, arcLengthBetween, arcParams, paramAtLength, perimeter } from "../levels/arc";
@@ -223,8 +223,19 @@ function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2, lockedA?: nu
   return fit({ ...s, a: Math.abs(dot(sub(to, center), norm(sub(s.f2, s.f1)))) });
 }
 
+/** Wartość `lockedA` dla `applyDrag`: `a` ze startu poziomu, gdy uchwyt „rozmiar”
+ *  elementu jest zablokowany, inaczej `undefined`. Przy zablokowanym uchwycie rozmiar wraca
+ *  do wartości poziomu, gdy ogniska znów się zejdą — patrz komentarz w `applyDrag` i
+ *  `dragHyperbola`. Dotyczy elipsy i hiperboli (obie mają pole `a`); parabola nie ma uchwytu
+ *  rozmiaru, więc nie ma go czym zablokować. Jedna funkcja dla gry (`screens.ts`) i testu
+ *  szarej strefy, żeby nie mogły się rozjechać. */
+export function lockedSize(def: PlayerPiece): number | undefined {
+  return def.locked.includes("rozmiar") && (def.start.kind === "elipsa" || def.start.kind === "hiperbola")
+    ? def.start.a : undefined;
+}
+
 /** `lockedA`: wartość `a` ze startu poziomu, gdy uchwyt „rozmiar” tego elementu jest
- *  zablokowany (patrz `PlayerPiece.locked`); w przeciwnym razie `undefined`.
+ *  zablokowany (patrz `PlayerPiece.locked` i `lockedSize`); w przeciwnym razie `undefined`.
  *
  *  Przeciążenie na `EllipseShape` istnieje, bo zwykły `MovableShape → MovableShape`
  *  gubi dla wywołującego wiedzę, że wynik przeciągnięcia elipsy jest dalej elipsą —

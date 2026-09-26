@@ -7,7 +7,7 @@ import {
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
 import { piecePolyline } from "../src/render/shapes";
-import { applyDrag } from "../src/ui/handles";
+import { applyDrag, lockedSize } from "../src/ui/handles";
 
 const proofFor = (level: Level, pieces: MovableShape[], obstacles: Shape[] = level.obstacles) =>
   runProof({
@@ -438,8 +438,7 @@ describe("poziomy", () => {
     let sprawdzone = 0;
     level.pieces.forEach((piece, k) => {
       const sol = piece.solution;
-      const lockedA = piece.locked.includes("rozmiar") && (piece.start.kind === "elipsa" || piece.start.kind === "hiperbola")
-        ? piece.start.a : undefined;
+      const lockedA = lockedSize(piece);
       // każde wolne ognisko elementu razem z jego celem
       const wolne: { uchwyt: Handle; cel: Vec2 }[] = sol.kind === "parabola"
         ? [{ uchwyt: "ognisko", cel: sol.focus }]
@@ -489,7 +488,7 @@ describe("poziomy", () => {
     const piece = level.pieces[0];
     const start = piece.start;
     if (start.kind !== "elipsa") throw new Error("poziom wspolne-ognisko ma mieć elipsę");
-    const lockedA = piece.locked.includes("rozmiar") ? start.a : undefined;
+    const lockedA = lockedSize(piece);
     let bypass: MovableShape = applyDrag(start, "ognisko1", level.ball, lockedA);
     bypass = applyDrag(bypass, "ognisko2", vec(-0.2, 1.7), lockedA);
     expect(solves(level, [bypass])).toBe(false);

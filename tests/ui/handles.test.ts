@@ -5,7 +5,7 @@ import {
   circle, ellipse, ellipseParam, ellipsePoint, hyperbola, paramAtLength, parabola, perimeter, segment, shapeAxisAngle,
   shapeConic,
 } from "../../src/levels";
-import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
+import { applyDrag, handlePositions, lockedSize, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
 const state: EllipseShape = ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8);
@@ -414,5 +414,19 @@ describe("uchwyty nie wychodzą poza planszę (zadanie 15c)", () => {
     expect(snapped).toEqual(target);
     const next = applyDrag(state, "ognisko1", snapped);
     expect(next.f1).toEqual(target);
+  });
+});
+
+describe("lockedSize", () => {
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.7, 0), 0.3, 1, { mid: 0, span: 2 });
+  it("zablokowany rozmiar elipsy i hiperboli daje `a` ze startu, inaczej nic", () => {
+    expect(lockedSize({ start: state, solution: state, locked: ["rozmiar"] })).toBe(0.8);
+    expect(lockedSize({ start: hyp, solution: hyp, locked: ["ognisko1", "rozmiar"] })).toBe(0.3);
+    expect(lockedSize({ start: state, solution: state, locked: ["ognisko1"] })).toBeUndefined();
+    expect(lockedSize({ start: hyp, solution: hyp, locked: [] })).toBeUndefined();
+  });
+
+  it("parabola nie ma rozmiaru — nawet blokada `rozmiar` nic nie daje", () => {
+    expect(lockedSize({ start: par, solution: par, locked: ["rozmiar"] })).toBeUndefined();
   });
 });

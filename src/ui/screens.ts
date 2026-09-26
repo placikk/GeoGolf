@@ -6,7 +6,7 @@ import {
 } from "../render/draw";
 import { curveHints } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
-import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
+import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
   MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, settingsButton, settingsLayout,
@@ -167,13 +167,8 @@ export function mount(canvas: HTMLCanvasElement): void {
     const snapped = id === "ognisko1" || id === "ognisko2" || id === "ognisko"
       ? snapTo(w, snapTargets(game.level, game.pieces, piece), SNAP_RADIUS)
       : w;
-    const def = game.level.pieces[piece];
-    // przy zablokowanym uchwycie rozmiaru rozmiar wraca do wartości poziomu, gdy ogniska
-    // znów się zejdą — patrz komentarz w `applyDrag`/`dragHyperbola`. Dotyczy elipsy i
-    // hiperboli (obie mają pole `a`); parabola nie ma uchwytu rozmiaru, więc nie ma go czym
-    // zablokować.
-    const lockedA = def.locked.includes("rozmiar") && (def.start.kind === "elipsa" || def.start.kind === "hiperbola")
-      ? def.start.a : undefined;
+    // przy zablokowanym uchwycie rozmiaru rozmiar wraca do wartości poziomu — patrz `lockedSize`
+    const lockedA = lockedSize(game.level.pieces[piece]);
     const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped, lockedA) : s));
     game = { ...game, pieces };
   });
