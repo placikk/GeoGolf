@@ -2174,6 +2174,19 @@ git commit -m "feat(levels): poziomy 17 Ognisko paraboli i 18 Rozmiar bez znacze
 
 ## Zadanie 13: Poziomy 19 „Obrót osi" i 20 „Teleskop"
 
+**Decyzja właściciela z 2026-09-26 — wielkość dołka na poziomach parabolicznych.**
+Poziom 17 dostał `holeRadius: HOLE_RADIUS / 3`, żeby żadna piłka nie skracała drogi przy osi
+i wszystkie osiem docierało w jednym błysku. To było za darmo, bo na 17 gracz rusza tylko
+ogniskiem, a ono przyskakuje. **Poziomy 18–20 zostają przy standardowym `HOLE_RADIUS`**:
+tam wierzchołek jest przeciągany palcem bez przyskakiwania, a dołek bez skracania zawęża
+tolerancję celowania osią z ok. 11° do ok. 3,6° — kilka pikseli na telefonie. Dwie piłki
+będą tam skracać drogę i to jest świadomie przyjęte.
+
+Konsekwencja dla tego zadania: jeśli kryterium 5% padnie na poziomie 19 albo 20, NIE
+zaczynaj od zmniejszania dołka — to wraca do problemu celowania palcem. Najpierw zwęź kawałek
+lustra odbierającego albo zmień geometrię poziomu; mniejszy dołek tylko w ostateczności,
+z podaniem, o ile zawęża tolerancję celowania.
+
 **Pliki:**
 - Zmiana: `src/levels/stage3.ts`, `tests/levels.test.ts`
 
