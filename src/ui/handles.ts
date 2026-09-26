@@ -106,15 +106,37 @@ const clampToBoard = (p: Vec2): Vec2 => {
   return x === p.x && y === p.y ? p : { x, y };
 };
 
-/** Największe t ≥ 0, przy którym `from + dir·t` (dir jednostkowy) jeszcze leży w planszy.
- *  `from` musi już być w planszy — środek elipsy to średnia dwóch przyciętych ognisk,
- *  a średnia dwóch punktów wypukłego kwadratu zawsze jest w tym kwadracie. */
-const maxReachInBoard = (from: Vec2, dir: Vec2): number => {
-  const limit = (p: number, d: number): number => {
-    if (Math.abs(d) < 1e-12) return Infinity;
-    return ((d > 0 ? BOARD_MAX : BOARD_MIN) - p) / d;
-  };
-  return Math.min(limit(from.x, dir.x), limit(from.y, dir.y));
+const inBoard = (p: Vec2): boolean =>
+  p.x >= BOARD_MIN && p.x <= BOARD_MAX && p.y >= BOARD_MIN && p.y <= BOARD_MAX;
+
+/** Prawdziwa pozycja uchwytu „rozmiar” dla danego `a` — WOŁA `handlePositions`, bo to jej
+ *  formuła (bez łuku: `środek + oś·a`; z łukiem: `ellipsePoint(s, arc.mid)`, zależne od `a`
+ *  przez `b = √(a²−c²)`, więc INNE) rysuje uchwyt na ekranie. Granica planszy i rysowany
+ *  uchwyt liczone z tej samej funkcji nie mogą się rozjechać. */
+const sizeHandlePos = (s: EllipseShape, a: number): Vec2 => {
+  const found = handlePositions({ ...s, a }).find((h) => h.id === "rozmiar");
+  if (found === undefined) throw new Error("elipsa ma zawsze uchwyt rozmiaru");
+  return found.pos;
+};
+
+/** Największe `a` w [lo, hi], dla którego uchwyt rozmiaru (wzięty z `handlePositions`,
+ *  z łukiem albo bez) jeszcze leży w planszy. Z łukiem `sizeHandlePos` nie jest funkcją
+ *  liniową `a` (przez `b = √(a²−c²)`), więc nie ma zamkniętego wzoru jak dla samej osi —
+ *  bisekcja zamiast tego: 40 kroków daje błąd < (hi−lo)/2⁴⁰, więc w praktyce dokładne.
+ *  Zakładamy, że `inBoard(sizeHandlePos(s, lo))` — `lo` to najmniejsze poprawne `a`, blisko
+ *  ognisk, a audyt kontrolera potwierdza, że żaden poziom nie ma ogniska poza planszą.
+ *  Gdyby TO nie trzymało (ogniska tuż przy przeciwległych rogach), istnienie elipsy
+ *  (`a > c`) ma pierwszeństwo — zwracamy `lo`, choć jego uchwyt wystaje o promil. */
+const maxSizeHandleA = (s: EllipseShape, lo: number, hi: number): number => {
+  if (hi <= lo || !inBoard(sizeHandlePos(s, lo))) return lo;
+  if (inBoard(sizeHandlePos(s, hi))) return hi;
+  let l = lo;
+  let h = hi;
+  for (let i = 0; i < 40; i++) {
+    const mid = (l + h) / 2;
+    if (inBoard(sizeHandlePos(s, mid))) l = mid; else h = mid;
+  }
+  return l;
 };
 
 /** Przesuwa jeden koniec łuku elipsy `s` do parametru `t`; drugi koniec stoi w miejscu.
@@ -232,16 +254,18 @@ export function applyDrag(
   }
   if (handle === "rozmiar") {
     const aMin = dist(state.f1, state.f2) / 2 + MIN_GAP;
-    // Uchwyt rozmiaru NIE stoi pod palcem — renderuje się w ustalonym kierunku osi
-    // (`ellipseAxis`), a palec daje tylko DŁUGOŚĆ (suma odległości / 2). Samo przycięcie
-    // palca do planszy nie wystarcza: przy ogniskach blisko środka odległość od palca
-    // w rogu planszy do obu ognisk daje `a` idące daleko poza planszę wzdłuż tej osi.
-    // Więc dodatkowo ścinamy `a` do najdalszego t, przy którym `środek + oś·t` jeszcze
-    // leży w planszy — istnienie elipsy (a > c) ma pierwszeństwo, gdyby te granice się
-    // pogryzły (skrajny przypadek: ogniska tuż przy przeciwległych rogach planszy).
-    const aMax = Math.max(aMin, maxReachInBoard(ellipseCenter(state), ellipseAxis(state)));
-    const a = (dist(clamped, state.f1) + dist(clamped, state.f2)) / 2;
-    return { ...state, a: clamp(a, aMin, aMax) };
+    const aRaw = (dist(clamped, state.f1) + dist(clamped, state.f2)) / 2;
+    // Uchwyt rozmiaru NIE stoi pod palcem — bez łuku renderuje się w ustalonym kierunku
+    // osi (`środek + oś·a`), z łukiem w środku łuku (`ellipsePoint(s, arc.mid)`, zależne
+    // od `a` inaczej, przez półoś małą `b = √(a²−c²)`). Samo przycięcie palca do planszy
+    // nie wystarcza w obu przypadkach: przy ogniskach blisko środka odległość od palca
+    // w rogu planszy do obu ognisk daje `a`, którego uchwyt (w KTÓRYMKOLWIEK z tych dwóch
+    // wzorów) ląduje daleko poza planszą. Więc ścinamy `a` do największej wartości, przy
+    // której PRAWDZIWA pozycja uchwytu (patrz `sizeHandlePos` — ta sama formuła, co
+    // rysowanie) jeszcze leży w planszy; istnienie elipsy (a > c) ma pierwszeństwo,
+    // gdyby te granice się pogryzły (patrz komentarz przy `maxSizeHandleA`).
+    const a = maxSizeHandleA(state, aMin, Math.max(aMin, aRaw));
+    return { ...state, a };
   }
   // Ognisk nic nie ogranicza; gdy się rozjadą, rozmiar rośnie, żeby elipsa istniała.
   // Bez `lockedA` rozmiar nigdy sam nie maleje — nawet przy zablokowanym uchwycie

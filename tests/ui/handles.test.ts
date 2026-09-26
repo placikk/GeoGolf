@@ -161,16 +161,15 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
   });
 
   it("łuk zachowuje długość, gdy elipsa rośnie (uchwyt rozmiaru zaciśnięty do planszy), i obejmuje wtedy mniejszy zakres parametru", () => {
-    // Uchwyt rozmiaru nie stoi pod palcem — renderuje się w ustalonym kierunku osi
-    // (środek (0.3, 0.4), oś (1,1)/√2), a palec (nawet w planszy, więc bez udziału
-    // przycięcia PALCA) daje tylko długość. Zadanie 15c ścina `a` do najdalszego t
-    // wzdłuż tej osi, przy którym uchwyt jeszcze mieści się w [-1,1]²: granica y = 1
-    // wypada pierwsza, t = (1 − 0.4)·√2 = 0.6√2 — WYŻSZY sufit niż walidacja elipsy
-    // (a > c), więc to jego test tu sprawdza, nie tamten.
-    const bigger = applyDrag(shape, "rozmiar", vec(1, 1));
-    expect(bigger.a).toBeCloseTo(0.6 * Math.SQRT2, 9);
+    // Uchwyt rozmiaru NIE stoi pod palcem — z łukiem renderuje się w środku łuku
+    // (`ellipsePoint(s, arc.mid)`, zależnie od `a` przez półoś małą b = √(a²−c²)), nie na
+    // osi wielkiej. Zadanie 15c ścina `a` do największej wartości, przy której TA pozycja
+    // (nie punkt na osi) jeszcze mieści się w [-1,1]² — bisekcja (`maxSizeHandleA`), bo
+    // z łukiem nie ma tu prostego wzoru zamkniętego. Róg (−1,−1) daje `x = −1` dokładnie.
+    const bigger = applyDrag(shape, "rozmiar", vec(-1, -1));
+    expect(bigger.a).toBeCloseTo(1.4243789118635517, 6);
     const pos = handlePositions(bigger).find((h) => h.id === "rozmiar")!.pos;
-    expect(pos.x).toBeLessThanOrEqual(1);
+    expect(pos.x).toBeCloseTo(-1, 6);
     expect(pos.y).toBeLessThanOrEqual(1);
     expect(bigger.arc).toBe(shape.arc);
     expect(lengthOf(bigger)).toBeCloseTo(shape.arc.length, 9);
@@ -372,6 +371,20 @@ describe("uchwyty nie wychodzą poza planszę (zadanie 15c)", () => {
     // palec daleko w rogu — bez ścięcia `a` (patrz `applyDrag`) uchwyt renderowałby się
     // wzdłuż osi elipsy dużo dalej niż plansza, mimo że palec sam JEST przycięty
     const next = applyDrag(state, "rozmiar", vec(50, 50));
+    inBoard(handlePositions(next).find((h) => h.id === "rozmiar")!.pos);
+  });
+
+  // Kontrprzykład z przeglądu kodu: z łukiem uchwyt rozmiaru NIE siedzi na osi wielkiej
+  // (`środek + oś·a`), a w środku łuku (`ellipsePoint(s, arc.mid)`) — inna formuła, zależna
+  // od `a` przez półoś małą `b = √(a²−c²)`. Ognisko blisko brzegu (y = 0.9) i `mid = π/2`
+  // (środek łuku „nad” osią wielką) dawały bez tej poprawki uchwyt w (0, 1.899) — daleko
+  // poza planszą — mimo że sam palec był przycięty do (1, 1).
+  it("uchwyt rozmiaru elipsy Z ŁUKIEM (środek łuku poza osią wielką) też kończy się w planszy", () => {
+    const shape: EllipseShape & { arc: { mid: number; length: number } } = {
+      kind: "elipsa", f1: vec(-0.05, 0.9), f2: vec(0.05, 0.9), a: 0.5,
+      arc: { mid: Math.PI / 2, length: 1 },
+    };
+    const next = applyDrag(shape, "rozmiar", vec(50, 50));
     inBoard(handlePositions(next).find((h) => h.id === "rozmiar")!.pos);
   });
 
