@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { add, dist, fromAngle, len, scale, sub, vec } from "../src/core/vec";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves, perimeter,
-  shapeAxisAngle, shapeConic, shapeFoci,
+  DIAGONAL, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
+  perimeter, shapeAxisAngle, shapeConic, shapeFoci,
 } from "../src/levels";
 import { applyDrag } from "../src/ui/handles";
 
@@ -70,16 +70,26 @@ describe("poziomy", () => {
     for (const l of LEVELS) expect(l.test.balls % 2).toBe(0);
   });
 
+  // Hiperbola poziomu bywa przeszkodą (odbija piłkę, poziom 21) ALBO elementem gracza
+  // (poziom 22: gracz rusza samą hiperbolą) — test musi znaleźć ją w obu miejscach,
+  // inaczej sprawdza tylko połowę poziomów hiperbolicznych i milczy dokładnie tam, gdzie
+  // gracz mógłby zepchnąć układ na osiową współliniowość. Bierzemy `solution`, bo to
+  // intencja poziomu, nie chwilowy (i celowo bezładny) stan startu.
+  const levelHyperbolas = (level: Level): HyperbolaShape[] =>
+    [...level.obstacles, ...solutions(level)].filter(
+      (s): s is HyperbolaShape => s.kind === "hiperbola",
+    );
+
   it("poziomy hiperboliczne są POZAOSIOWE — inaczej wiązka wraca w lustro", () => {
-    for (const l of LEVELS.filter((x) => x.obstacles.some((o) => o.kind === "hiperbola"))) {
-      const hip = l.obstacles.find((o) => o.kind === "hiperbola")!;
-      if (hip.kind !== "hiperbola") throw new Error("zły rodzaj");
-      // piłka, wspólne ognisko (dalsze od dołka) i dołek nie mogą być współliniowe
-      const M = dist(hip.f1, l.hole) > dist(hip.f2, l.hole) ? hip.f1 : hip.f2;
-      const a = sub(M, l.ball);
-      const b = sub(l.hole, M);
-      const krzyz = Math.abs(a.x * b.y - a.y * b.x) / (len(a) * len(b));
-      expect(krzyz).toBeGreaterThan(0.2);
+    for (const l of LEVELS) {
+      for (const hip of levelHyperbolas(l)) {
+        // piłka, wspólne ognisko (dalsze od dołka) i dołek nie mogą być współliniowe
+        const M = dist(hip.f1, l.hole) > dist(hip.f2, l.hole) ? hip.f1 : hip.f2;
+        const a = sub(M, l.ball);
+        const b = sub(l.hole, M);
+        const krzyz = Math.abs(a.x * b.y - a.y * b.x) / (len(a) * len(b));
+        expect(krzyz, `poziom ${l.id}`).toBeGreaterThan(0.2);
+      }
     }
   });
 
