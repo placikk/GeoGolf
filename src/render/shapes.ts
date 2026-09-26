@@ -37,7 +37,7 @@ export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
     // zmienności), dla hiperboli ostro jak cosh. Punkty się zatem gęszczą przy
     // wierzchołku, gdzie krzywizna jest największa — dokładnie gdzie polylinii trzeba
     // największej gęstości. Dla paraboli tylko składowa prostopadła zmienia się równomiernie,
-    // co będzie ważne w zadaniu 18 (szerokość wiązki odbytej = zakres t niezależnie od p).
+    // co jest ważne na poziomie 18 (szerokość wiązki odbitej = zakres t niezależnie od p).
     const n = Math.max(2, steps);
     return Array.from({ length: n + 1 }, (_, i) =>
       framePoint(range.frame, range.from + ((range.to - range.from) * i) / n));

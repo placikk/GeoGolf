@@ -59,7 +59,8 @@ export function shapeFrame(s: ParabolaShape | HyperbolaShape): CurveFrame {
     center: scale(add(s.f1, s.f2), 0.5),
     axis: norm(sub(s.f2, s.f1)),
     a: s.a,
-    // zacisk pod pierwiastkiem jak w `arc.ts`: w trakcie przeciągania bywa a ≥ c
+    // zacisk pod pierwiastkiem czysto obronny: przeciąganie pilnuje a < c (`fit`
+    // w `dragHyperbola`), a w `shapeToPiece` przy a ≥ c wcześniej rzuca `hyperbolaFromFoci`
     b: Math.sqrt(Math.max(0, c * c - s.a * s.a)),
     branch: s.branch,
   };

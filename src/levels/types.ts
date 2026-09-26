@@ -41,8 +41,7 @@ export interface HyperbolaShape {
   kind: "hiperbola"; f1: Vec2; f2: Vec2; a: number; branch: 1 | -1; span: Span;
 }
 
-/** Czym gracz może ruszać. Odcinki są stałe — jak w etapie 2. Rozszerzenie `Shape`
- *  o te kształty należy do zadania 7, kiedy `shapeToPiece` będzie umiało je obsłużyć. */
+/** Czym gracz może ruszać. Odcinki są stałe — jak w etapie 2. */
 export type MovableShape = EllipseShape | ParabolaShape | HyperbolaShape;
 
 export interface SegmentShape { kind: "odcinek"; from: Vec2; to: Vec2 }
