@@ -39,7 +39,7 @@ const STAGE_1_IDS = [
 
 describe("poziomy", () => {
   it("liczba poziomów i unikalne identyfikatory", () => {
-    expect(LEVELS).toHaveLength(18);
+    expect(LEVELS).toHaveLength(20);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(LEVELS.length);
   });
 

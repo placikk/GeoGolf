@@ -27,6 +27,10 @@ const WACHLARZ_W_LEWO = { center: Math.PI, width: 2 };
  *  poziom 18: wiązka zawsze mieści się w luster odbierającym, choćby gracz urósł. */
 const KAWALEK = { mid: 0, span: 1.2 };
 
+/** Wachlarz poziomu 19: oś obrócona o 45° (piłka i dołek na przekątnej), więc
+ *  wachlarz musi celować tam, gdzie teraz jest lustro — wzdłuż tej samej przekątnej. */
+const UKOS = { center: (5 * Math.PI) / 4, width: 2 };
+
 export const STAGE_3: Level[] = [
   {
     // Dwie parabole naprzeciw siebie na osi x. Wierzchołek przybity w (−0.8, 0),
@@ -57,6 +61,46 @@ export const STAGE_3: Level[] = [
       locked: [],
     }],
     obstacles: [parabola(vec(0.5, 0), vec(0.8, 0), KAWALEK)],
+    sector: WACHLARZ_W_LEWO,
+    test: t,
+  },
+  {
+    // Ta sama konstrukcja obrócona o 45°. Ognisko PRZYBITE w piłce, wolny wierzchołek:
+    // gracz nie może rozwiązać tego przesuwaniem ogniska, tylko celowaniem osi.
+    // Oś u = (1,1)/√2, ogniskowa 0.3, więc wierzchołek leży 0.3·u za piłką. Piłka i dołek
+    // muszą leżeć DOKŁADNIE w ogniskach — zaokrąglenie do trzech miejsc (±0.538) chybia
+    // o rząd 0.002, więc tu ±0.53787 (= 0.75 − 0.3/√2, dokładniej 0.75 − 0.3·√2/2).
+    id: "obrot-osi", title: "Obrót osi",
+    hint: "Ognisko już siedzi na piłce. Zostaje wycelować oś.",
+    ball: vec(-0.53787, -0.53787), hole: vec(0.53787, 0.53787),
+    pieces: [{
+      start: parabola(vec(-0.53787, -0.53787), vec(-0.55, -0.85), KAWALEK),
+      solution: parabola(vec(-0.53787, -0.53787), vec(-0.75, -0.75), KAWALEK),
+      locked: ["ognisko"],
+    }],
+    obstacles: [parabola(vec(0.53787, 0.53787), vec(0.75, 0.75), KAWALEK)],
+    sector: UKOS,
+    test: t,
+  },
+  {
+    // Oba lustra należą do gracza. Cztery uchwyty, trzy warunki: ognisko na piłce,
+    // ognisko na dołku, osie równoległe. To jest zwieńczenie części parabolicznej.
+    id: "teleskop", title: "Teleskop",
+    hint: "Dwa lustra, dwa ogniska. Osie muszą patrzeć na siebie.",
+    ball: vec(-0.55, 0), hole: vec(0.55, 0),
+    pieces: [
+      {
+        start: parabola(vec(-0.45, 0.35), vec(-0.85, 0.1), KAWALEK),
+        solution: parabola(vec(-0.55, 0), vec(-0.85, 0), KAWALEK),
+        locked: [],
+      },
+      {
+        start: parabola(vec(0.5, -0.3), vec(0.88, -0.15), KAWALEK),
+        solution: parabola(vec(0.55, 0), vec(0.85, 0), KAWALEK),
+        locked: [],
+      },
+    ],
+    obstacles: [],
     sector: WACHLARZ_W_LEWO,
     test: t,
   },
