@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, len, scale, sub, vec } from "../src/core/vec";
-import { onPiece } from "../src/core/piece";
+import { add, dist, fromAngle, len, norm, scale, sub, vec } from "../src/core/vec";
+import { onPiece, rayPiece } from "../src/core/piece";
 import { runProof } from "../src/core/verify";
 import {
   DIAGONAL, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
@@ -370,15 +370,40 @@ describe("poziomy", () => {
     }
   });
 
-  it("poziom 24 składa wszystkie trzy stożkowe", () => {
-    const l = LEVELS.find((x) => x.id === "zwienczenie-3")!;
-    const rodzaje = new Set([
-      ...l.pieces.map((p) => p.solution.kind),
-      ...l.obstacles.map((o) => o.kind),
-    ]);
+  // Poziom 24 to dwie drogi do jednego dołka (para parabol oraz elipsa z hiperbolą).
+  // Sama obecność trzech rodzajów krzywych nic nie znaczy — poprzednia wersja poziomu
+  // miała parabolę-dekorację, której usunięcie niczego nie zmieniało. Dlatego test
+  // odtwarza tor KAŻDEJ piłki rozwiązania i dla każdego odbicia ustala, od której
+  // krzywej ono było (ta sama reguła co w `trace`: najbliższe trafienie wzdłuż odcinka).
+  // Każdy element gracza i każda przeszkoda musi odbić co najmniej jedną piłkę, a ściany
+  // żadnej — obie drogi mają działać na lustrach, nie na bandach.
+  it("poziom 24: każda krzywa (elementy gracza i przeszkody) odbija co najmniej jedną piłkę rozwiązania", () => {
+    const l = LEVELS.find((x) => x.id === "zwienczenie-3");
+    if (l === undefined) throw new Error("brak poziomu zwienczenie-3");
+    const rodzaje = new Set([...solutions(l).map((s) => s.kind), ...l.obstacles.map((o) => o.kind)]);
     expect(rodzaje).toContain("elipsa");
     expect(rodzaje).toContain("parabola");
     expect(rodzaje).toContain("hiperbola");
+
+    // kolejność jak w `levelCurves`: elementy gracza, przeszkody, na końcu ściany
+    const krzywe = levelCurves(l, solutions(l));
+    const ileLuster = l.pieces.length + l.obstacles.length;
+    const odbite = new Set<number>();
+    for (const b of proofFor(l, solutions(l)).balls) {
+      for (let i = 1; i < b.path.length - 1; i++) {
+        const skad = b.path[i - 1];
+        const kierunek = norm(sub(b.path[i], skad));
+        let najblizej = Infinity;
+        let ktora = -1;
+        krzywe.forEach((c, j) => {
+          const t = rayPiece(skad, kierunek, c);
+          if (t !== null && t < najblizej) { najblizej = t; ktora = j; }
+        });
+        odbite.add(ktora);
+      }
+    }
+    for (let j = 0; j < ileLuster; j++) expect(odbite.has(j), `krzywa ${j} nie odbija żadnej piłki`).toBe(true);
+    expect([...odbite].filter((j) => j < 0 || j >= ileLuster), "odbicia od ścian").toEqual([]);
   });
 
   it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {

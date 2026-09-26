@@ -181,37 +181,65 @@ export const STAGE_3: Level[] = [
     test: t,
   },
   {
-    // Kaskada z trzech stożkowych — ale NIE w łańcuchu, bo optycznie nie da się go
-    // zbudować: paraboliczne odbicie z ogniska daje wiązkę ŚCIŚLE równoległą, a taka
-    // wiązka trafiająca w elipsę (albo hiperbolę) NIE zbiega się z powrotem w jeden
-    // punkt — to nie przybliżenie, to twierdzenie (dokładna zbieżność elipsy/hiperboli
-    // działa tylko dla promieni PRZEZ ognisko, nigdy dla wiązki równoległej; odwrotna
-    // sztuczka paraboli, „równoległa → ognisko”, wymaga DRUGIEJ paraboli po tej samej
-    // osi, jak w „Teleskopie” — tu jej nie ma). Sprawdzone empirycznie: wymuszenie
-    // zderzenia z parabolą przed elipsą (mały parametr p) daje chybienia rzędu 0.5–1.3,
-    // więc to nie jest kwestia kalibracji. Dlatego poziom łączy naraz DWA wcześniejsze
-    // zadania (21 i 22): gracz rusza i elipsą (piłka→M), i hiperbolą (M→dołek) w jednym
-    // poziomie — a parabola stoi w tle jako nieruchoma przeszkoda (ognisko wciąż na
-    // piłce, z ciekawości), nie mając własnego uchwytu do testowania kryterium 5%.
+    // DWIE DROGI DO JEDNEGO DOŁKA. Łańcuch parabola → elipsa → hiperbola jest niewykonalny:
+    // parabola wysyła z ogniska wiązkę ŚCIŚLE równoległą, a wiązkę równoległą skupia w punkt
+    // tylko druga parabola na tej samej osi — elipsa ani hiperbola tego nie umieją (to
+    // twierdzenie, nie kwestia kalibracji). Dlatego zwieńczenie składa OBIE konstrukcje
+    // etapu równolegle, z jednej piłki do jednego dołka:
+    //
+    // • piłki 0–3 (kąty 195°–240°): parabola A (ognisko = piłka, wierzchołek (−0.8, −0.2))
+    //   → wiązka wzdłuż osi y = −0.2 w prawo → parabola B (ognisko = dołek, oś odwrotna)
+    //   → dołek. Osie współliniowe, bo piłka, dołek i oba wierzchołki leżą na y = −0.2;
+    // • piłki 4–7 (kąty 255°–300°): łuk elipsy (ogniska: piłka i M = (−0.05, 0.3))
+    //   → ku M → hiperbola (ogniska: dołek i M, gałąź przy M) → dołek.
+    //
+    // Rozdział wachlarza robi SAM kawałek paraboli A: promień z ogniska pod kątem δ od osi
+    // trafia na odsunięciu t = 2p·tan(δ/2), przy p = 0.3 piłki 0–3 mają t ≈ 0.08–0.35,
+    // a piłka 4 ma 0.46 — kawałek |t| ∈ [0.04, 0.38] łapie pierwsze cztery i przepuszcza
+    // resztę do elipsy, która zaczyna się tuż za jego końcem. Wiązka biegnie PO DRUGIEJ
+    // stronie osi niż M, więc hiperbola (wysoko, przy M) jej nie przecina, a zbiegające
+    // do M promienie elipsy mijają oba kawałki parabol (A stoi za piłką, B za dołkiem).
+    // Dołek leży wewnątrz elipsy (|dołek piłka| + |dołek M| ≈ 1.49 < 2a = 1.6), więc
+    // stożek odbity od hiperboli nie wraca w łuk; układ pozaosiowy (sinus ≈ 0.99).
+    //
+    // Gracz rusza DWOMA elementami, po jednym z każdej lekcji etapu:
+    // • parabolą A — tylko ogniskiem (wierzchołek przybity). Wolny wierzchołek dawałby
+    //   wolne p, a od p zależy, gdzie wachlarz się dzieli: przy innym rozmiarze kawałek A
+    //   gubi skrajne piłki albo zabiera piłki elipsie. Po poziomie 18 („rozmiar bez
+    //   znaczenia") byłby to ukryty, nieuczciwy warunek. Przybity wierzchołek na osi
+    //   piłka–dołek sprawia, że ognisko przyskakujące do piłki SAMO celuje osią w B;
+    // • hiperbolą — tylko dalszym ogniskiem, jak w poziomie 22 (bliższe przybite w dołku,
+    //   rozmiar zablokowany): ma usiąść w drugim ognisku elipsy.
+    // Elipsa i parabola B są przeszkodami. Elipsa NIE jest elementem gracza celowo: gdyby
+    // była, gracz mógłby postawić jej ogniska na piłce i dołku i posłać połowę wachlarza
+    // prosto do dołka, z pominięciem hiperboli.
+    //
+    // Dołek standardowy: oba wolne uchwyty to ogniska przyskakujące dokładnie (do piłki
+    // i do M), a kryterium 5% przechodzi bez zmniejszania — najbliższa osi piłka mija
+    // środek dołka o 0.079 > HOLE_RADIUS, więc i tak odbija się od B.
     id: "zwienczenie-3", title: "Zwieńczenie",
-    hint: "Dwa wspólne ogniska naraz: jedno elipsy na piłce i M, drugie hiperboli na M i dołku.",
-    ball: vec(-0.6, -0.5), hole: vec(-0.15, 0.2),
+    hint: "Wachlarz dzieli się na dwie drogi do jednego dołka: część piłek leci przez dwie parabole, reszta przez elipsę i hiperbolę. Ognisko paraboli posadź na piłce, a dalsze ognisko hiperboli w drugim ognisku elipsy.",
+    ball: vec(-0.5, -0.2), hole: vec(0.35, -0.2),
     pieces: [
       {
-        ...withSolutionArc(
-          ellipse(vec(-0.3, -0.1), vec(0.2, 0.4), 0.8),
-          arcEllipse(vec(-0.6, -0.5), vec(0.4, 0.55), 0.8, deg(150), deg(260)),
-        ),
-        locked: ["rozmiar", "poczatek", "koniec"],
+        start: parabola(vec(-0.55, 0.2), vec(-0.8, -0.2), { mid: -0.21, span: 0.34 }),
+        solution: parabola(vec(-0.5, -0.2), vec(-0.8, -0.2), { mid: -0.21, span: 0.34 }),
+        locked: ["wierzcholek"],
       },
       {
-        start: hyperbola(vec(-0.15, 0.2), vec(0.35, -0.15), 0.2, 1, { mid: 0, span: 1.6 }),
-        solution: hyperbola(vec(-0.15, 0.2), vec(0.4, 0.55), 0.2, 1, { mid: 0, span: 1.6 }),
+        start: hyperbola(vec(0.35, -0.2), vec(0.2, 0.45), 0.18, 1, { mid: 0.6, span: 0.8 }),
+        solution: hyperbola(vec(0.35, -0.2), vec(-0.05, 0.3), 0.18, 1, { mid: 0.6, span: 0.8 }),
         locked: ["ognisko1", "rozmiar"],
       },
     ],
-    obstacles: [parabola(vec(-0.6, -0.5), vec(-0.85, -0.5), { mid: 0, span: 1.0 })],
-    sector: { center: deg(215), width: 1.4 },
+    obstacles: [
+      // B: wierzchołek za dołkiem, oś w lewo — jej parametr t ma przeciwny znak niż A,
+      // więc ten sam pas wiązki to tu mid = +0.21
+      parabola(vec(0.35, -0.2), vec(0.65, -0.2), { mid: 0.21, span: 0.34 }),
+      arcEllipse(vec(-0.5, -0.2), vec(-0.05, 0.3), 0.8, deg(193.5), deg(242)),
+    ],
+    // osiem piłek co 15°, od 195° do 300°
+    sector: { center: deg(247.5), width: deg(120) },
     test: t,
   },
 ];
