@@ -1,5 +1,5 @@
 import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, shapeFoci, shapeToPiece } from "../levels";
+import { LEVELS, SNAP_RADIUS, Shape, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
@@ -150,10 +150,9 @@ export function mount(canvas: HTMLCanvasElement): void {
       return;
     }
     const w = toWorld(e);
-    const picked = pickHandle(
+    dragging = pickHandle(
       w, game.pieces, game.level.pieces.map((p) => p.locked), (HANDLE_PX * 1.5) / cam().scale,
     );
-    dragging = picked;
     pointer = w;
     canvas.setPointerCapture(e.pointerId);
   });
@@ -230,12 +229,18 @@ export function mount(canvas: HTMLCanvasElement): void {
       sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
     }
 
-    for (const o of level.obstacles) {
-      if (settings.hints && (o.kind === "parabola" || o.kind === "hiperbola")) {
-        for (const linia of curveHints(o)) {
+    /** Linie pomocnicze krzywej (kierownica, asymptoty) — tylko przy włączonych
+     *  podpowiedziach; tak samo dla przeszkód i elementów gracza. */
+    const drawHints = (s: Shape): void => {
+      if (settings.hints && (s.kind === "parabola" || s.kind === "hiperbola")) {
+        for (const linia of curveHints(s)) {
           glowPolyline(ctx, c, linia, PALETTE.hint, "rgba(0,0,0,0)", 1);
         }
       }
+    };
+
+    for (const o of level.obstacles) {
+      drawHints(o);
       drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
       // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
       // ogniskiem w to ognisko"; okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
@@ -245,11 +250,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     }
 
     for (const s of game.pieces) {
-      if (settings.hints && (s.kind === "parabola" || s.kind === "hiperbola")) {
-        for (const linia of curveHints(s)) {
-          glowPolyline(ctx, c, linia, PALETTE.hint, "rgba(0,0,0,0)", 1);
-        }
-      }
+      drawHints(s);
       drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
     }
 
