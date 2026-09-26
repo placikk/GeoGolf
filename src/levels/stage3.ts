@@ -90,12 +90,12 @@ export const STAGE_3: Level[] = [
     ball: vec(-0.55, 0), hole: vec(0.55, 0),
     pieces: [
       {
-        start: parabola(vec(-0.45, 0.35), vec(-0.85, 0.1), KAWALEK),
+        start: parabola(vec(-0.45, 0.35), vec(-0.75, -0.2), KAWALEK),
         solution: parabola(vec(-0.55, 0), vec(-0.85, 0), KAWALEK),
         locked: [],
       },
       {
-        start: parabola(vec(0.5, -0.3), vec(0.88, -0.15), KAWALEK),
+        start: parabola(vec(0.5, -0.3), vec(0.75, 0.3), KAWALEK),
         solution: parabola(vec(0.55, 0), vec(0.85, 0), KAWALEK),
         locked: [],
       },
