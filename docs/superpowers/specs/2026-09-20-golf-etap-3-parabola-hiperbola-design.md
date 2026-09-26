@@ -289,9 +289,13 @@ Zwieńczenie łączy więc obie konstrukcje etapu równolegle: wachlarz dzieli s
 jedna idzie przez parę parabol, druga przez elipsę i hiperbolę, a obie kończą w tym samym dołku.
 Każda krzywa na planszy musi odbić co najmniej jedną piłkę rozwiązania — żadnej dekoracji.
 
-Poziom 23 jest jedynym, na którym obie gałęzie hiperboli są widoczne na planszy. Czynna
-jest ta wskazana przez `branch`; druga jest narysowana i **nie odbija**. To jest
-zamierzone i ma być wyjaśnione podpowiedzią poziomu, bo inaczej wygląda jak usterka.
+Poziom 23 jest jedynym, na którym obie gałęzie hiperboli są widoczne na planszy — **z wyboru,
+nie z geometrii** (decyzja właściciela z 2026-09-26): druga gałąź zmieściłaby się na planszy
+także na poziomach 21, 22 i 24, ale rysuje się tylko tam, gdzie jest lekcją, pod flagą `twin`
+w danych poziomu. Czynna jest ta wskazana przez `branch`; druga jest tylko rysunkiem — blado,
+kolorem i grubością linii podpowiedzi, ale niezależnie od przełącznika podpowiedzi — i **nie
+odbija** (nie trafia do `shapeToPiece` ani do dowodu). To jest zamierzone i ma być wyjaśnione
+podpowiedzią poziomu, bo inaczej wygląda jak usterka.
 
 Parametry poziomów kalibruje się w trakcie implementacji; liczba i tematyka są ustalone.
 

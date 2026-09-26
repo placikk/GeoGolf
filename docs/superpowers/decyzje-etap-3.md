@@ -247,6 +247,16 @@ jest w `progress.md`.
    gęsty test szarej strefy nie kosztuje gracza nic. Poziomy 18 i 20 (wolny wierzchołek,
    pojedyncze wyspy wygranych) oraz wydane poziomy 1–16 (ognisko2 etapów 1–2, znany
    wyjątek „6 z 8") zostają osobnym zadaniem na później, z własną specyfikacją.
+5. **Druga gałąź hiperboli rysowana tylko na poziomie 23 (2026-09-26, przegląd końcowy).**
+   Specyfikacja, komentarz poziomu, podpowiedź i checklista obiecywały widoczną drugą
+   gałąź, a gra rysowała tylko czynną. Rozstrzygnięcie: druga gałąź rysuje się blado
+   (kolor i grubość linii podpowiedzi, ale niezależnie od przełącznika podpowiedzi), tylko
+   na poziomie 23, pod flagą `twin` w danych poziomu. Jest wyłącznie rysunkiem — do
+   `shapeToPiece` i dowodu nie trafia, więc nie odbija. Na 21, 22 i 24 zmieściłaby się na
+   planszy tak samo, ale tam jej nie ma — z wyboru, nie z geometrii.
+6. **Uchwyt rozmiaru elipsy poza planszą po przeciągnięciu ogniska — odłożony
+   (2026-09-26).** Patrz sekcja 7, „Uchwyt rozmiaru elipsy poza planszą". Kod przeciągania
+   się nie zmienia; sprawa idzie do osobnego zadania o szarych strefach i uchwytach.
 
 ---
 
@@ -367,15 +377,29 @@ nie defekt etapu 3. Naprawiona konsekwencja tego zjawiska (dokładne rozwiązani
 + ściana" z ogniskiem poza planszą) — zamknięta zadaniem 15c (przycięcie do planszy); sama
 mechanika „igły" jako taka — odłożona do tego samego przyszłego zadania o szarych strefach.
 
-### Rezydualny przypadek w zacisku uchwytów (zadanie 15c)
+### Uchwyt rozmiaru elipsy poza planszą po przeciągnięciu ogniska (zadanie 15c)
 
-Ognisko dociągnięte do DRUGIEGO ogniska tego samego elementu, w skrajnym przypadku gdy oba
-ogniska już leżą blisko przeciwległych rogów planszy, może dać `a` (przez zwykłą ścieżkę
-ogniska, nie rozmiaru) odsunięte o `MIN_GAP` (1e-3) za przycięte ognisko — teoretycznie
-uchwyt rozmiaru mógłby wtedy wystawać poza planszę o ułamek promila. Nie dotyczy żadnego
-z 24 poziomów (audyt kontrolera); o trzy rzędy wielkości mniejsze niż `HOLE_RADIUS` lub
-`SNAP_RADIUS`. Nienaprawiane w zadaniu 15c, nieodłożone do żadnego konkretnego zadania —
-tylko zanotowane w jego raporcie.
+Zadanie 15c przycina do planszy punkt, do którego gracz ciągnie uchwyt, a przy ciągnięciu
+SAMEGO uchwytu rozmiaru ścina `a` tak, żeby ten uchwyt został w planszy (o ile istnienie
+elipsy, `a > c`, na to pozwala). Nie pilnuje za to
+uchwytu rozmiaru, gdy gracz ciągnie OGNISKO elipsy: `a` wtedy nie maleje
+(`a = max(lockedA ?? a, c + MIN_GAP)`, koniec `applyDrag` w `src/ui/handles.ts`), a uchwyt
+rozmiaru jedzie razem ze środkiem i osią — bez łuku stoi w `środek + oś·a`, z łukiem
+w środku łuku. Wcześniejszy zapis tej sekcji („ułamek promila", „nie dotyczy żadnego
+z 24 poziomów") był nieprawdziwy.
+
+Pomiar z przeglądu końcowego (jedno przeciągnięcie każdego odblokowanego ogniska ze stanu
+startowego, cele na brzegu i na siatce planszy, przez `applyDrag` z `lockedSize`, liczone
+tylko odblokowane — czyli rysowane — uchwyty): uchwyt rozmiaru wychodzi poza planszę na
+**9 poziomach etapów 1–2**: `rozmiar`, `skos`, `blisko`, `ciasna`, `przeszkoda`,
+`dwie-przeszkody`, `bandy`, `zwienczenie`, `zwienczenie-2`. Najdalej do (−1,600; 0) na
+`przeszkoda`, gdy `ognisko2` stanie na brzegu w (−1; 0) — 0,6 za brzegiem (tyle samo na
+`skos` i `blisko`). Na `zwienczenie-2` (elipsa z łukiem) wystaje uchwyt w środku łuku,
+o ok. 0,1. Poziomy 17–24 nie są dotknięte.
+
+**Decyzja właściciela z 2026-09-26: odłożone** do osobnego zadania o szarych strefach
+i uchwytach (to samo co „igła" wyżej). Kod przeciągania nie jest w etapie 3 zmieniany —
+zachowanie elipsy na wydanych poziomach 1–16 zostaje takie jak dotąd.
 
 ### Drobne odłożone (minor, deferred) — zebrane z ledgera
 
@@ -387,13 +411,16 @@ tylko zanotowane w jego raporcie.
 - Zadanie 3: `ARC_EPS` ma niespójne jednostki między parabolą (`t` = długość świata) i
   hiperbolą (`t` bezwymiarowe, tolerancja rośnie wykładniczo) — zmierzony zapas ~6 rzędów
   przy rozpiętościach poziomów, nieblokujące.
-- Zadanie 5: brak przypadku negatywnego `@ts-expect-error` dla unii `Span`.
+- Zadanie 5: brak przypadku negatywnego `@ts-expect-error` dla unii `Span` — zamknięte
+  w fali poprawek po przeglądzie końcowym: `Span` jest teraz unią wyłączną (`?: never`),
+  a test typów ma przypadki „oba pola" i „żadne".
 - Zadanie 8: commit `a708f29` ma wiadomość po angielsku wbrew konwencji repozytorium
   (odłożone celowo, patrz sekcja 3).
 - Zadanie 9: dwie bramki `kind === "elipsa"` w `screens.ts` bez lokalnego komentarza —
   zamknięte samo w zadaniu 10, które usunęło całe rusztowanie `ellipsePieces()`.
 - Zadanie 11: kierownica testowana tylko dla osi poziomej; drobna duplikacja bloku
-  podpowiedzi w dwóch pętlach `screens.ts` (wymuszone treścią briefu).
+  podpowiedzi w dwóch pętlach `screens.ts` (wymuszone treścią briefu) — duplikacja
+  zamknięta w fali poprawek po przeglądzie końcowym (lokalne `drawHints`).
 - Zadanie 11b: słabsze skracanie `span` dla hiperboli (parametr bezwymiarowy) było
   niezweryfikowane, bo żaden poziom hiperboliczny jeszcze nie istniał — sprawdziło się samo
   przy zadaniach 14–15 (bez problemów).
@@ -405,6 +432,10 @@ tylko zanotowane w jego raporcie.
   stan uchwytu wierzchołka (nieaktywny na 17, aktywny na 18) niepokryty żadnym testem
   automatycznym.
 - Zadanie 14: `!` w nowych testach — istniejący precedens w całej suicie, nieruszone.
+- Przegląd końcowy: uchwyt rozmiaru elipsy wychodzi poza planszę po przeciągnięciu ogniska
+  na 9 poziomach etapów 1–2 (do 0,6 za brzegiem) — odłożone decyzją właściciela
+  z 2026-09-26 do zadania o szarych strefach i uchwytach; szczegóły w sekcji „Uchwyt
+  rozmiaru elipsy poza planszą" wyżej.
 
 ---
 
@@ -483,7 +514,9 @@ Konkretnie do sprawdzenia na każdym poziomie:
   (dwa `ognisko`, dwa `wierzcholek`).
 - **21–23** — sprawdzić, że **obie gałęzie hiperboli są rysowane** na poziomie 23
   („Która gałąź"), a odbija tylko jedna (ta obejmująca swoje ognisko) — druga jest tylko
-  rysunkiem, dokładnie jak mówi podpowiedź poziomu.
+  rysunkiem, dokładnie jak mówi podpowiedź poziomu. Druga gałąź jest blada (jak linie
+  podpowiedzi) i widać ją także przy wyłączonych podpowiedziach; na 21 i 22 (oraz 24)
+  rysuje się tylko czynna gałąź.
 - **Wszystkie poziomy 17–24** — podpowiedzi z krzywymi (kierownica paraboli, asymptoty
   hiperboli) są **za przełącznikiem w ustawieniach**, nie widoczne domyślnie — sprawdzić,
   że przełącznik faktycznie je pokazuje/chowa.
