@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { add, dist, fromAngle, len, scale, sub, vec } from "../src/core/vec";
+import { onPiece } from "../src/core/piece";
 import { runProof } from "../src/core/verify";
 import {
   DIAGONAL, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
-  perimeter, shapeAxisAngle, shapeConic, shapeFoci,
+  perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
+import { piecePolyline } from "../src/render/shapes";
 import { applyDrag } from "../src/ui/handles";
 
 const proofFor = (level: Level, pieces: MovableShape[], obstacles: Shape[] = level.obstacles) =>
@@ -39,7 +41,7 @@ const STAGE_1_IDS = [
 
 describe("poziomy", () => {
   it("liczba poziomów i unikalne identyfikatory", () => {
-    expect(LEVELS).toHaveLength(22);
+    expect(LEVELS).toHaveLength(24);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(LEVELS.length);
   });
 
@@ -303,9 +305,12 @@ describe("poziomy", () => {
 
   // Poziomy 21–22 SĄ kaskadami: ich rozwiązania mają ognisko we wspólnym punkcie M,
   // poza piłką i dołkiem — stąd rozszerzenie tej sztywnej listy.
-  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16, 21, 22", () => {
+  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16, 21, 22, 23, 24", () => {
     expect(LEVELS.filter(isCascade).map((l) => l.id)).toEqual(
-      ["kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2", "wspolne-ognisko", "druga-strona"],
+      [
+        "kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2",
+        "wspolne-ognisko", "druga-strona", "ktora-galaz", "zwienczenie-3",
+      ],
     );
   });
 
@@ -346,6 +351,35 @@ describe("poziomy", () => {
       });
     },
   );
+
+  it("poziom 23 ma na planszy obie gałęzie, ale odbija tylko jedna", () => {
+    const l = LEVELS.find((x) => x.id === "ktora-galaz")!;
+    const gracz = l.pieces[0].solution;
+    if (gracz.kind !== "hiperbola") throw new Error("zły rodzaj");
+    const bliznjak = { ...gracz, branch: (gracz.branch === 1 ? -1 : 1) as 1 | -1 };
+    // nieczynna gałąź leży na planszy...
+    const p = shapeToPiece(bliznjak);
+    const pts = piecePolyline(p, 32);
+    expect(pts.some((q) => Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1)).toBe(true);
+    // ...ale żadne odbicie rozwiązania nie wypada na niej
+    const czynna = shapeToPiece(gracz);
+    for (const b of proofFor(l, [gracz]).balls) {
+      for (const odbicie of b.path.slice(1, -1)) {
+        if (onPiece(p, odbicie)) expect(onPiece(czynna, odbicie)).toBe(true);
+      }
+    }
+  });
+
+  it("poziom 24 składa wszystkie trzy stożkowe", () => {
+    const l = LEVELS.find((x) => x.id === "zwienczenie-3")!;
+    const rodzaje = new Set([
+      ...l.pieces.map((p) => p.solution.kind),
+      ...l.obstacles.map((o) => o.kind),
+    ]);
+    expect(rodzaje).toContain("elipsa");
+    expect(rodzaje).toContain("parabola");
+    expect(rodzaje).toContain("hiperbola");
+  });
 
   it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
     const level = LEVELS.find((l) => l.id === "wspologniskowe")!;

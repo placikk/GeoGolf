@@ -161,4 +161,57 @@ export const STAGE_3: Level[] = [
     sector: { center: deg(215), width: 1.4 },
     test: t,
   },
+  {
+    // Jedyny poziom, na którym OBIE gałęzie są widoczne. Czynna jest ta wskazana przez
+    // `branch`; druga jest narysowana i NIE odbija. Wygląda to jak usterka, więc mówi
+    // o tym podpowiedź — a gracz uczy się, że gałąź należy do swojego ogniska.
+    // `c` jest tu duże (ogniska daleko), więc obie gałęzie mieszczą się na planszy.
+    // Start f2=(0.2, 0.35) z planu wygrywał 3/8 (za blisko rozwiązania) — przesunięty
+    // na (0.3, 0.2), dalej od M=(0.4, 0.6), wygrywa 0/8 (sprawdzone `sprawdz-poziom.ts`).
+    id: "ktora-galaz", title: "Która gałąź",
+    hint: "Odbija tylko ta gałąź, która obejmuje swoje ognisko. Druga jest tylko rysunkiem.",
+    ball: vec(-0.55, -0.55), hole: vec(-0.25, 0.25),
+    pieces: [{
+      start: hyperbola(vec(-0.25, 0.25), vec(0.3, 0.2), 0.2, 1, { mid: 0, span: 1.8 }),
+      solution: hyperbola(vec(-0.25, 0.25), vec(0.4, 0.6), 0.2, 1, { mid: 0, span: 1.8 }),
+      locked: ["ognisko1", "rozmiar"],
+    }],
+    obstacles: [arcEllipse(vec(-0.55, -0.55), vec(0.4, 0.6), 0.8, deg(150), deg(260))],
+    sector: { center: deg(215), width: 1.4 },
+    test: t,
+  },
+  {
+    // Kaskada z trzech stożkowych — ale NIE w łańcuchu, bo optycznie nie da się go
+    // zbudować: paraboliczne odbicie z ogniska daje wiązkę ŚCIŚLE równoległą, a taka
+    // wiązka trafiająca w elipsę (albo hiperbolę) NIE zbiega się z powrotem w jeden
+    // punkt — to nie przybliżenie, to twierdzenie (dokładna zbieżność elipsy/hiperboli
+    // działa tylko dla promieni PRZEZ ognisko, nigdy dla wiązki równoległej; odwrotna
+    // sztuczka paraboli, „równoległa → ognisko”, wymaga DRUGIEJ paraboli po tej samej
+    // osi, jak w „Teleskopie” — tu jej nie ma). Sprawdzone empirycznie: wymuszenie
+    // zderzenia z parabolą przed elipsą (mały parametr p) daje chybienia rzędu 0.5–1.3,
+    // więc to nie jest kwestia kalibracji. Dlatego poziom łączy naraz DWA wcześniejsze
+    // zadania (21 i 22): gracz rusza i elipsą (piłka→M), i hiperbolą (M→dołek) w jednym
+    // poziomie — a parabola stoi w tle jako nieruchoma przeszkoda (ognisko wciąż na
+    // piłce, z ciekawości), nie mając własnego uchwytu do testowania kryterium 5%.
+    id: "zwienczenie-3", title: "Zwieńczenie",
+    hint: "Dwa wspólne ogniska naraz: jedno elipsy na piłce i M, drugie hiperboli na M i dołku.",
+    ball: vec(-0.6, -0.5), hole: vec(-0.15, 0.2),
+    pieces: [
+      {
+        ...withSolutionArc(
+          ellipse(vec(-0.3, -0.1), vec(0.2, 0.4), 0.8),
+          arcEllipse(vec(-0.6, -0.5), vec(0.4, 0.55), 0.8, deg(150), deg(260)),
+        ),
+        locked: ["rozmiar", "poczatek", "koniec"],
+      },
+      {
+        start: hyperbola(vec(-0.15, 0.2), vec(0.35, -0.15), 0.2, 1, { mid: 0, span: 1.6 }),
+        solution: hyperbola(vec(-0.15, 0.2), vec(0.4, 0.55), 0.2, 1, { mid: 0, span: 1.6 }),
+        locked: ["ognisko1", "rozmiar"],
+      },
+    ],
+    obstacles: [parabola(vec(-0.6, -0.5), vec(-0.85, -0.5), { mid: 0, span: 1.0 })],
+    sector: { center: deg(215), width: 1.4 },
+    test: t,
+  },
 ];
