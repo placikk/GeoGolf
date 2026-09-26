@@ -4,14 +4,16 @@ import { parabola } from "./shape";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
-/** Poziom 17 ma mniejszy dołek, żeby piłki lecące blisko osi nie skróciły się do jednego
- *  odbicia. Promień wiązki około 0.2 rad daje y ≈ 0.0375 (przy p=0.3, wzór 2p·tan(δ/2)),
- *  co mieści się w standardowym HOLE_RADIUS ≈ 0.0566. Dołek zmniejszony do HOLE_RADIUS / 3
- *  ≈ 0.0189 zapewnia, że wszystkie osiem pilek odbija się dwa razy i ląduje jednocześnie.
- *  To jest bezpieczne tutaj, bo jedynym wolnym uchwytem jest ognisko, które przylegnie
- *  dokładnie do piłki. Poziomy 18–20 mają dołek standardowy, bo tam wierzchołek jest
- *  uruchamiany ręcznie. Dołek jest rysowany zawsze 9 px, więc gracz widzi różnicę
- *  (ani jedną stronę). */
+/** Poziom 17 ma mniejszy dołek, żeby żadna piłka nie skracała drogi przy osi. Promień
+ *  wystrzelony pod kątem δ od osi odbija się na wysokość y = 2p·tan(δ/2); przy p = 0.3,
+ *  wachlarzu szerokości 2 i ośmiu piłkach dwie środkowe mają δ = 0.125, czyli y ≈ 0.0375 —
+ *  mniej niż standardowy HOLE_RADIUS ≈ 0.0566, więc wpadałyby po jednym odbiciu i docierały
+ *  wcześniej niż reszta. Przy HOLE_RADIUS / 3 ≈ 0.0189 wszystkie osiem odbija się dwa razy
+ *  i dociera w jednym błysku. Tutaj to nic nie kosztuje: jedynym wolnym uchwytem jest
+ *  ognisko, a ono przyskakuje dokładnie do piłki. Poziomy 18–20 zostają przy standardowym
+ *  dołku, bo tam wierzchołek przeciąga się palcem bez przyskakiwania, a dołek bez skracania
+ *  zawęziłby tolerancję celowania osią z ok. 11° do ok. 3,6°. Dołek rysuje się zawsze
+ *  jako 9 px, więc gracz nie widzi żadnej różnicy. */
 const t17 = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 };
 
 /** Wachlarz poziomów parabolicznych. Piłka stoi w ognisku i strzela w lustro; kierunki
