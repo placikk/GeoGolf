@@ -77,8 +77,11 @@ Plan zakładał 16 zadań; wykonanie dodało cztery, wszystkie udokumentowane w 
 
 ## 3. Rozstrzygnięcia kontrolera podjęte w trakcie realizacji (ledger)
 
-35 wpisów `Ruling:` w ledgerze. Poniżej — po temacie, z uzasadnieniem i kosztem, jeśli źle;
-pełny tekst każdego jest w `progress.md`.
+37 rulingów w ledgerze (35 zapisanych dosłownie jako `Ruling:`, plus dwa zapisane jako
+`Ruling (2026-09-24): NOWE ZADANIE 11b`/`11c`, które nie łapią się na wyszukiwanie po samym
+`Ruling:` — te dwa są opisane w sekcji 2, „Zadania dodane w trakcie realizacji", nie
+powtarzam ich tutaj). Poniżej — po temacie, z uzasadnieniem i kosztem, jeśli źle; pełny
+tekst każdego jest w `progress.md`.
 
 **Zadanie 1 — kod z przerwanej sesji.** Subagent padł na limicie sesji po napisaniu kodu
 i testów `conic.ts`, przed commitem. Ruling: nie resetuję drzewa — kod jest transkrypcją
@@ -492,8 +495,13 @@ Konkretnie do sprawdzenia na każdym poziomie:
   spróbować przeciągnąć każdy wolny uchwyt daleko poza widoczną planszę i sprawdzić, że
   zatrzymuje się na krawędzi, nie ucieka pod pasek napisów/przycisków.
 - **Stan startowy** każdego poziomu — potwierdzić, że „Sprawdź" na starcie (bez żadnego
-  przeciągnięcia) **nie** daje wygranej (poziomy 17, 18: 1/8; 19: 0/8; 21: 2/8; 22: 0/8;
-  wartości z ledgera zadań 12–14 — jeśli faktyczny wynik różni się, to regresja).
+  przeciągnięcia) **nie** daje wygranej. Zmierzone na kodzie finalnym (`npx vite-node
+  scripts/sprawdz-poziom.ts <id>`, commit `cca7d2d`, ten sam, na którym zamknięto zadanie
+  16 — nie skopiowane z ledgera, bo część liczb w ledgerze jest z etapów PRZED późniejszą
+  kalibracją dołka i już nieaktualna, patrz niżej): 17 „ognisko-paraboli" → 1/8; 18
+  „parabola-rozmiar" → 1/8; 19 „obrot-osi" → 1/8; 20 „teleskop" → 0/8; 21 „wspolne-ognisko"
+  → 0/8; 22 „druga-strona" → 0/8; 23 „ktora-galaz" → 0/8; 24 „zwienczenie-3" → 0/8. Jeśli
+  faktyczny wynik na urządzeniu właściciela różni się od tych ośmiu liczb, to regresja.
 
 ---
 
