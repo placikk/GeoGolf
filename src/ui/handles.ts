@@ -186,12 +186,13 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
  *  siebie niż promień łapania palcem, więc gracz nie umie złapać końca osobno od środka. */
 export const MIN_SEGMENT_LENGTH = 0.2;
 
-/** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH. Najpierw
- *  próbujemy dalej wzdłuż kierunku palca, potem w przeciwną stronę — odcinek zostaje na
- *  swojej prostej. W rogu planszy po skosie obie strony mogą wypaść (np. drugi koniec w
- *  (0.95, -0.95)), więc ostatnia próba idzie od drugiego końca ku środkowi planszy: każda
- *  współrzędna maleje wtedy co do modułu (albo, gdy drugi koniec leży bliżej środka niż
- *  MIN_SEGMENT_LENGTH, wynik ląduje w tej odległości od środka), więc zawsze się mieści. */
+/** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH (L). Dwie
+ *  pierwsze próby zostawiają odcinek na jego prostej: dalej wzdłuż kierunku palca, potem
+ *  w przeciwną stronę. W rogu planszy po skosie obie mogą wypaść (np. drugi koniec w
+ *  (0.95, −0.95)), więc ostatnia próba schodzi z prostej: punkt w odległości L od drugiego
+ *  końca, w stronę środka planszy. Ten zawsze się mieści — gdy drugi koniec leży co
+ *  najmniej L od środka, każda współrzędna maleje co do modułu; gdy bliżej (r < L), wynik
+ *  leży w odległości L − r < L od środka. */
 const keepLength = (moved: Vec2, other: Vec2, fallback: Vec2): Vec2 => {
   const d = dist(moved, other);
   if (d >= MIN_SEGMENT_LENGTH) return moved;
