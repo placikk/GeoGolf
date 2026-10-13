@@ -28,6 +28,8 @@ export const PALETTE = {
   tileEdge: "rgba(203, 213, 225, 0.22)",
   hint: "rgba(203, 213, 225, 0.30)",
   sector: "rgba(248, 250, 252, 0.05)",
+  // strzałka strzału jednopiłkowego — wyraźniejsza niż klin, bo to jeden kierunek, nie pole
+  shot: "rgba(248, 250, 252, 0.45)",
   board: "#10161e",
   frame: MUTED,
   // ta sama barwa co `frame`/`muted`, tylko przy niskiej krycia — poświata ramki
@@ -76,6 +78,24 @@ export function glowPolyline(
   ctx.lineWidth = width;
   trace();
   ctx.stroke();
+}
+
+/** Cienka przerywana łamana bez poświaty — oś paraboli. Kreskowanie wyłączane na końcu,
+ *  żeby nie przeciekło do następnych rysunków na tym samym kontekście. */
+export function dashedPolyline(ctx: Ctx, cam: Camera, pts: Vec2[], color: string, width: number): void {
+  if (pts.length < 2) return;
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  const s0 = cam.toScreen(pts[0]);
+  ctx.moveTo(s0.x, s0.y);
+  for (let i = 1; i < pts.length; i++) {
+    const s = cam.toScreen(pts[i]);
+    ctx.lineTo(s.x, s.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 export function glowDot(

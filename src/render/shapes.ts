@@ -1,4 +1,4 @@
-import { Vec2, add, dist, dot, norm, perp, scale, sub, vec } from "../core/vec";
+import { Vec2, add, dist, dot, fromAngle, norm, perp, scale, sub, vec } from "../core/vec";
 import { Conic, classify, ellipseGeometry } from "../core/conic";
 import { Piece } from "../core/piece";
 import { CurveFrame, framePoint } from "../core/frame";
@@ -105,4 +105,26 @@ export function twinPolyline(s: Shape, steps = 128): Vec2[] | undefined {
   const { from, to } = spanRange(shapeFrame(s), s.span);
   const druga = shapeFrame({ ...s, branch: s.branch === 1 ? -1 : 1 });
   return rangePolyline(druga, from, to, steps);
+}
+
+/** Oś paraboli od wierzchołka przez ognisko do brzegu planszy [-1, 1]² — tam, dokąd poleci
+ *  wiązka odbita z ogniska (uwaga 4 właściciela: oś nie jest oczywista). Wierzchołek leży
+ *  w planszy (uchwyty są przycinane, dane poziomów pilnuje test), więc wyjście istnieje;
+ *  `Math.max(0, …)` tylko na wypadek wierzchołka na samym brzegu, skierowanego na zewnątrz. */
+export function parabolaAxis(s: ParabolaShape): [Vec2, Vec2] {
+  const u = norm(sub(s.focus, s.vertex));
+  let t = Infinity;
+  if (u.x > 0) t = Math.min(t, (1 - s.vertex.x) / u.x);
+  if (u.x < 0) t = Math.min(t, (-1 - s.vertex.x) / u.x);
+  if (u.y > 0) t = Math.min(t, (1 - s.vertex.y) / u.y);
+  if (u.y < 0) t = Math.min(t, (-1 - s.vertex.y) / u.y);
+  return [s.vertex, add(s.vertex, scale(u, Math.max(0, t)))];
+}
+
+/** Strzałka strzału jednopiłkowego: trzon od piłki długości `reach` w kierunku `angle`
+ *  i grot z dwóch ramion po 0.25·reach, rozchylonych o ±0.5 rad od trzonu. */
+export function shotArrow(apex: Vec2, angle: number, reach: number): Vec2[][] {
+  const tip = add(apex, scale(fromAngle(angle), reach));
+  const wing = (side: number): Vec2 => add(tip, scale(fromAngle(angle + Math.PI + side * 0.5), 0.25 * reach));
+  return [[apex, tip], [wing(1), tip, wing(-1)]];
 }

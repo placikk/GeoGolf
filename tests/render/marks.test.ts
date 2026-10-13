@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { handleShape, holeMark, ringHandle } from "../../src/render/draw";
+import { dashedPolyline, handleShape, holeMark, ringHandle } from "../../src/render/draw";
 import { makeCamera } from "../../src/render/camera";
 
 function recordingCtx() {
@@ -58,5 +58,22 @@ describe("znaczniki: ruchome kontra stałe", () => {
     handleShape(ctx, cam, vec(0, 0), "pierscien", "glowny", "poswiata", 10);
     expect(calls.filter((c) => c.op === "arc")).toHaveLength(2);
     expect(calls.filter((c) => c.op === "lineTo")).toHaveLength(0);
+  });
+});
+
+describe("oś paraboli: linia przerywana", () => {
+  it("kreskuje tylko swój obrys — po rysunku kreskowanie jest wyłączone", () => {
+    const dashes: number[][] = [];
+    // w obiekcie, nie w `let` — TypeScript nie widzi przypisań z wnętrza metod fałszywego ctx
+    const seen: { current: number[]; atStroke: number[] | null } = { current: [], atStroke: null };
+    const ctx = {
+      lineWidth: 0, strokeStyle: "",
+      beginPath() {}, moveTo() {}, lineTo() {},
+      setLineDash(d: number[]) { seen.current = d; dashes.push(d); },
+      stroke() { seen.atStroke = seen.current; },
+    };
+    dashedPolyline(ctx as unknown as CanvasRenderingContext2D, cam, [vec(0, 0), vec(1, 0)], "kolor", 1);
+    expect(seen.atStroke?.length ?? 0).toBeGreaterThan(0);
+    expect(dashes[dashes.length - 1]).toEqual([]);
   });
 });

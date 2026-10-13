@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { vec } from "../../src/core/vec";
+import { Vec2, dist, fromAngle, vec } from "../../src/core/vec";
 import { ellipseFromFoci, evalConic, hyperbolaFromFoci, lineThrough, parabolaFromFocusVertex } from "../../src/core/conic";
 import { makeCamera } from "../../src/render/camera";
-import { conicPolyline, piecePolyline, twinPolyline } from "../../src/render/shapes";
+import { conicPolyline, parabolaAxis, piecePolyline, shotArrow, twinPolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
-import { arcEllipse, ellipse, ellipsePoint, hyperbola, parabola, segment, shapeFrame, shapeToPiece } from "../../src/levels";
+import {
+  LEVELS, ParabolaShape, arcEllipse, ellipse, ellipsePoint, hyperbola, parabola, segment, shapeFrame, shapeToPiece,
+} from "../../src/levels";
 import { CurveFrame, frameParam, framePoint } from "../../src/core/frame";
 
 describe("kamera", () => {
@@ -193,5 +195,63 @@ describe("druga gałąź hiperboli (tylko rysunek)", () => {
       expect(evalConic(shapeToPiece(s).conic, p)).toBeCloseTo(0, 9);
       expect(frameParam(shapeFrame(s), p).branch).toBe(-1);
     }
+  });
+});
+
+describe("oś paraboli", () => {
+  const naBrzegu = (p: Vec2) => Math.max(Math.abs(p.x), Math.abs(p.y));
+  /** Ognisko leży na odcinku osi, między wierzchołkiem a końcem: suma odległości = długość. */
+  const przezOgnisko = (s: ParabolaShape, [a, b]: [Vec2, Vec2]) =>
+    dist(a, s.focus) + dist(s.focus, b) - dist(a, b);
+
+  it("od wierzchołka przez ognisko do brzegu planszy — oś pozioma", () => {
+    const s = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
+    const os = parabolaAxis(s);
+    expect(os[0]).toEqual(s.vertex);
+    expect(os[1].x).toBeCloseTo(1, 12);
+    expect(os[1].y).toBeCloseTo(0, 12);
+  });
+
+  it("oś ukośna kończy się na brzegu, nie za nim i nie przed nim", () => {
+    const s = parabola(vec(-0.53787, -0.53787), vec(-0.75, -0.75), { mid: 0, span: 1.2 });
+    const os = parabolaAxis(s);
+    expect(naBrzegu(os[1])).toBeCloseTo(1, 12);
+    expect(przezOgnisko(s, os)).toBeCloseTo(0, 12);
+  });
+
+  it("każda parabola każdego poziomu: wierzchołek w planszy, oś przez ognisko do brzegu", () => {
+    for (const l of LEVELS) {
+      const parabole = [...l.pieces.flatMap((p) => [p.start, p.solution]), ...l.obstacles]
+        .filter((x): x is ParabolaShape => x.kind === "parabola");
+      for (const s of parabole) {
+        expect(naBrzegu(s.vertex), l.id).toBeLessThanOrEqual(1);
+        const os = parabolaAxis(s);
+        expect(naBrzegu(os[1]), l.id).toBeCloseTo(1, 12);
+        expect(przezOgnisko(s, os), l.id).toBeCloseTo(0, 12);
+      }
+    }
+  });
+});
+
+describe("strzałka strzału", () => {
+  it("trzon od piłki w kierunku strzału, grot symetryczny w czubku", () => {
+    const apex = vec(-0.5, -0.5);
+    const [trzon, grot] = shotArrow(apex, Math.PI / 2, 0.4);
+    expect(trzon[0]).toEqual(apex);
+    expect(trzon[1].x).toBeCloseTo(-0.5, 12);
+    expect(trzon[1].y).toBeCloseTo(-0.1, 12);
+    expect(grot[1]).toEqual(trzon[1]);
+    // ramiona po obu stronach trzonu, w tej samej odległości od czubka i cofnięte w dół
+    expect(dist(grot[0], grot[1])).toBeCloseTo(0.1, 12);
+    expect(dist(grot[2], grot[1])).toBeCloseTo(0.1, 12);
+    expect(grot[0].x + grot[2].x).toBeCloseTo(2 * -0.5, 12);
+    expect(grot[0].y).toBeLessThan(trzon[1].y);
+  });
+
+  it("kierunek idzie za kątem", () => {
+    const [trzon] = shotArrow(vec(0, 0), 0.3, 1);
+    const d = fromAngle(0.3);
+    expect(trzon[1].x).toBeCloseTo(d.x, 12);
+    expect(trzon[1].y).toBeCloseTo(d.y, 12);
   });
 });

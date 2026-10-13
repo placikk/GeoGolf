@@ -2,9 +2,10 @@ import { Vec2, vec } from "../core/vec";
 import { LEVELS, SNAP_RADIUS, Shape, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import {
-  PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, handleShape, holeMark, sectorWedge,
+  PALETTE, SECTOR_REACH, boardFrame, dashedPolyline, drawPiece, glowDot, glowPolyline, handleShape, holeMark,
+  sectorWedge,
 } from "../render/draw";
-import { curveHints, twinPolyline } from "../render/shapes";
+import { curveHints, parabolaAxis, shotArrow, twinPolyline } from "../render/shapes";
 import { handleMark, shapeStyle } from "../render/style";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
@@ -223,7 +224,14 @@ export function mount(canvas: HTMLCanvasElement): void {
     // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
     // gdzie lecą piłki" wyglądałby na błąd gry; mały i przycięty do planszy
     if (game.phase === "edycja" && level.sector !== undefined) {
-      sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
+      // jedna piłka (wachlarz zerowej szerokości) — klin byłby pusty, więc strzałka kierunku
+      if (level.sector.width === 0) {
+        for (const linia of shotArrow(level.ball, level.sector.center, SECTOR_REACH)) {
+          glowPolyline(ctx, c, linia, PALETTE.shot, "rgba(0,0,0,0)", 1.5);
+        }
+      } else {
+        sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
+      }
     }
 
     /** Linie pomocnicze krzywej (kierownica, asymptoty) — tylko przy włączonych
@@ -248,6 +256,8 @@ export function mount(canvas: HTMLCanvasElement): void {
       drawHints(o);
       drawTwin(o);
       const st = shapeStyle(o, "staly");
+      // oś paraboli zawsze (nie tylko przy podpowiedziach) — pod krzywą, żeby jej nie przecinać
+      if (o.kind === "parabola") dashedPolyline(ctx, c, parabolaAxis(o), st.line, 1);
       drawPiece(ctx, c, shapeToPiece(o), st.line, st.glow, 2);
       // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
       // ogniskiem w to ognisko"; przeszkody (okręgi, odcinki) ich nie mają (`focus: null`)
@@ -260,6 +270,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       drawHints(s);
       drawTwin(s);
       const st = shapeStyle(s, "gracz");
+      if (s.kind === "parabola") dashedPolyline(ctx, c, parabolaAxis(s), st.line, 1);
       drawPiece(ctx, c, shapeToPiece(s), st.line, st.glow, 2);
     }
 
