@@ -235,7 +235,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       }
     };
 
-    /** Druga gałąź hiperboli z flagą `twin` (dziś tylko poziom 23): blado, tak jak linie
+    /** Druga gałąź hiperboli z flagą `twin` (dziś tylko „ktora-galaz"): blado, tak jak linie
      *  pomocnicze, ale NIEZALEŻNIE od podpowiedzi — tam jest częścią poziomu, nie pomocą.
      *  Rysowana przed samą krzywą, żeby krzywa leżała na wierzchu. */
     const drawTwin = (s: Shape): void => {

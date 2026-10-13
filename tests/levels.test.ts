@@ -36,6 +36,10 @@ const solves = (level: Level, pieces: MovableShape[]): boolean => {
 const solutions = (level: Level) => level.pieces.map((p) => p.solution);
 const byId = LEVELS.map((l) => [l.id, l] as const);
 
+// Numery poziomów w komentarzach tego pliku to numeracja z czasów, gdy powstawał dany test
+// (etapy 1–3: 1–24). W grze są o 3 większe — etap 0 dodał trzy poziomy na początku — a
+// „druga-strona" (stary 22) stoi teraz przed „wspolne-ognisko" (stary 21). Nazwy testów
+// podają identyfikatory.
 const STAGE_1_IDS = [
   "ogniska", "rozmiar", "skos", "blisko", "ciasna", "przeszkoda", "dwie-przeszkody", "zwienczenie",
 ];
@@ -54,6 +58,15 @@ describe("poziomy", () => {
   // zapis postępu trzyma identyfikatory (`progress.ts`, `LEGACY_ORDER`)
   it("identyfikatory etapu 1 zostały, w tej samej kolejności — zapisany postęp przetrwa", () => {
     expect(LEVELS.slice(3, 11).map((l) => l.id)).toEqual(STAGE_1_IDS);
+  });
+
+  // Jedyna zmiana kolejności od wydania: „druga-strona" (jeden uchwyt) wprowadza hiperbolę,
+  // więc stoi przed „wspolne-ognisko". Zapis postępu przelicza stare indeksy (`LEGACY_ORDER`).
+  it("etap 3: parabole, potem hiperbole od najprostszej", () => {
+    expect(LEVELS.slice(19, 27).map((l) => l.id)).toEqual([
+      "ognisko-paraboli", "parabola-rozmiar", "obrot-osi", "teleskop",
+      "druga-strona", "wspolne-ognisko", "ktora-galaz", "zwienczenie-3",
+    ]);
   });
 
   it("identyfikatory etapu 2 zostały, w tej samej kolejności", () => {
@@ -367,11 +380,11 @@ describe("poziomy", () => {
 
   // Poziomy 21–22 SĄ kaskadami: ich rozwiązania mają ognisko we wspólnym punkcie M,
   // poza piłką i dołkiem — stąd rozszerzenie tej sztywnej listy.
-  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16, 21, 22, 23, 24", () => {
+  it("kaskady istnieją tam, gdzie powinny: cztery z etapu 2 i cztery hiperboliczne z etapu 3", () => {
     expect(LEVELS.filter(isCascade).map((l) => l.id)).toEqual(
       [
         "kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2",
-        "wspolne-ognisko", "druga-strona", "ktora-galaz", "zwienczenie-3",
+        "druga-strona", "wspolne-ognisko", "ktora-galaz", "zwienczenie-3",
       ],
     );
   });
@@ -425,7 +438,7 @@ describe("poziomy", () => {
   };
 
   it.each(["start", "solution"] as const)(
-    "poziom 23 (%s): druga gałąź jest rysowana — cała na planszy, po drugiej stronie niż czynna",
+    "poziom ktora-galaz (%s): druga gałąź jest rysowana — cała na planszy, po drugiej stronie niż czynna",
     (ktory) => {
       const s = ktoraGalaz().pieces[0][ktory];
       if (s.kind !== "hiperbola") throw new Error("zły rodzaj");
@@ -443,14 +456,14 @@ describe("poziomy", () => {
     },
   );
 
-  it("druga gałąź jest rysowana tylko na poziomie 23 — na 21, 22 i 24 (i wszystkich innych) nie", () => {
+  it("druga gałąź jest rysowana tylko na poziomie ktora-galaz — na pozostałych hiperbolicznych (i wszystkich innych) nie", () => {
     const zDrugaGalezia = LEVELS.filter((l) =>
       [...l.pieces.flatMap((p) => [p.start, p.solution]), ...l.obstacles].some((s) => twinPolyline(s) !== undefined),
     ).map((l) => l.id);
     expect(zDrugaGalezia).toEqual(["ktora-galaz"]);
   });
 
-  it("poziom 23: flaga drugiej gałęzi przeżywa przeciąganie (applyDrag, każdy uchwyt)", () => {
+  it("poziom ktora-galaz: flaga drugiej gałęzi przeżywa przeciąganie (applyDrag, każdy uchwyt)", () => {
     const piece = ktoraGalaz().pieces[0];
     const cel = piece.solution.kind === "hiperbola" ? piece.solution.f2 : vec(0.4, 0.6);
     for (const h of handlePositions(piece.start)) {
@@ -460,7 +473,7 @@ describe("poziomy", () => {
     }
   });
 
-  it("poziom 23: odbija tylko czynna gałąź — żadne odbicie rozwiązania nie leży na drugiej", () => {
+  it("poziom ktora-galaz: odbija tylko czynna gałąź — żadne odbicie rozwiązania nie leży na drugiej", () => {
     const l = ktoraGalaz();
     const s = l.pieces[0].solution;
     if (s.kind !== "hiperbola") throw new Error("zły rodzaj");
@@ -484,7 +497,7 @@ describe("poziomy", () => {
   // krzywej ono było (ta sama reguła co w `trace`: najbliższe trafienie wzdłuż odcinka).
   // Każdy element gracza i każda przeszkoda musi odbić co najmniej jedną piłkę, a ściany
   // żadnej — obie drogi mają działać na lustrach, nie na bandach.
-  it("poziom 24: każda krzywa (elementy gracza i przeszkody) odbija co najmniej jedną piłkę rozwiązania", () => {
+  it("poziom zwienczenie-3: każda krzywa (elementy gracza i przeszkody) odbija co najmniej jedną piłkę rozwiązania", () => {
     const l = LEVELS.find((x) => x.id === "zwienczenie-3");
     if (l === undefined) throw new Error("brak poziomu zwienczenie-3");
     const rodzaje = new Set([...solutions(l).map((s) => s.kind), ...l.obstacles.map((o) => o.kind)]);
@@ -536,7 +549,7 @@ describe("poziomy", () => {
   // Druga liczba to liczba wolnych ognisk poziomu — test sprawdza, że przejrzał je wszystkie
   // (21: oba ogniska elipsy, 22–23: M, 24: ognisko paraboli A i dalsze ognisko hiperboli).
   const BEZ_SZAREJ_STREFY: [string, number][] = [
-    ["wspolne-ognisko", 2], ["druga-strona", 1], ["ktora-galaz", 1], ["zwienczenie-3", 2],
+    ["druga-strona", 1], ["wspolne-ognisko", 2], ["ktora-galaz", 1], ["zwienczenie-3", 2],
   ];
 
   /** Położenia wolnych ognisk poziomu w pierścieniu SNAP_RADIUS … rMax, które wygrywają. */
@@ -601,7 +614,7 @@ describe("poziomy", () => {
     expect(solves(level, [bypass])).toBe(false);
   });
 
-  it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
+  it("poziom wspologniskowe: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
     const level = LEVELS.find((l) => l.id === "wspologniskowe")!;
     const base = level.pieces[0].solution;
     for (let i = 0; i <= 119; i++) {

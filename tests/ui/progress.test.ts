@@ -58,6 +58,8 @@ describe("postęp", () => {
   it("stary zapis z indeksem przelicza się na ten sam poziom, nie na ten sam numer", () => {
     const p = loadProgress(memory({ [KEY]: '{"solved":["ogniska"],"last":20}' }), IDS);
     expect(p).toEqual({ solved: ["ogniska"], lastId: "wspolne-ognisko" });
+    // i to naprawdę jest inny numer niż dawniej — inaczej test nie dowodziłby przeliczenia
+    expect(LEVELS[20].id).not.toBe("wspolne-ognisko");
   });
 
   it("stary indeks spoza starej listy daje brak zapisu ostatniego poziomu", () => {

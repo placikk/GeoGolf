@@ -4,6 +4,11 @@ import { arcEllipse, ellipse, hyperbola, parabola } from "./shape";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
+// Numery poziomów w komentarzach tego pliku to numeracja z czasów etapu 3 (17–24).
+// W grze są o 3 większe (etap 0 dodał trzy poziomy na początku), a „druga-strona" stoi
+// teraz PRZED „wspolne-ognisko" — stary 21 to „wspolne-ognisko", stary 22 to „druga-strona".
+// Szukaj po identyfikatorze, nie po numerze.
+
 /** Poziom 17 ma mniejszy dołek, żeby żadna piłka nie skracała drogi przy osi. Promień
  *  wystrzelony pod kątem δ od osi odbija się na wysokość y = 2p·tan(δ/2); przy p = 0.3,
  *  wachlarzu szerokości 2 i ośmiu piłkach dwie środkowe mają δ = 0.125, czyli y ≈ 0.0375 —
@@ -161,6 +166,27 @@ export const STAGE_3: Level[] = [
     test: t,
   },
   {
+    // Wstęp do hiperboli: elipsa stała (ogniska: piłka i M), gracz rusza HIPERBOLĄ.
+    // Zablokowane `ognisko1` (dołek) i `rozmiar`: zostaje jeden uchwyt — drugie ognisko
+    // hiperboli na M — więc to najprostszy poziom z hiperbolą i dlatego stoi przed
+    // „wspolne-ognisko", które tę samą geometrię odwraca. Dlaczego geometria wygląda
+    // właśnie tak — patrz komentarz przy „wspolne-ognisko" niżej.
+    id: "druga-strona", title: "Druga strona",
+    hint: "Elipsa zbiera piłki w swoim drugim ognisku. Postaw tam dalsze ognisko hiperboli.",
+    ball: vec(-0.6, -0.45), hole: vec(-0.2, 0.3),
+    pieces: [{
+      start: hyperbola(vec(-0.2, 0.3), vec(0.19, 0.17), 0.18, 1, { mid: 0, span: 1.6 }),
+      solution: hyperbola(vec(-0.2, 0.3), vec(0.35, 0.55), 0.18, 1, { mid: 0, span: 1.6 }),
+      locked: ["ognisko1", "rozmiar"],
+    }],
+    obstacles: [arcEllipse(vec(-0.6, -0.45), vec(0.35, 0.55), 0.78, deg(150), deg(260))],
+    sector: { center: deg(215), width: 1.4 },
+    // mniejszy dołek i krótszy limit odbić — patrz `t21_23` na górze pliku
+    test: t21_23,
+  },
+  {
+    // Ta sama geometria co „druga-strona", od drugiej strony: hiperbola stała, gracz rusza
+    // ELIPSĄ. Uczy, że wspólne ognisko jest wspólne — można je dosunąć z każdej strony.
     // Układ pozaosiowy, trzy warunki naraz — i wszystkie trzy są konieczne:
     //
     // 1. WACHLARZ + ŁUK. Elipsa NIE może być pełna. Pełna elipsa zbiera piłki do M
@@ -177,7 +203,7 @@ export const STAGE_3: Level[] = [
     // c hiperboli = |M dołek| / 2 ≈ 0.302, a = 0.18 → wierzchołek ≈ (0.239, 0.500),
     // czyli między środkiem a M — na drodze zbiegających piłek.
     id: "wspolne-ognisko", title: "Wspólne ognisko",
-    hint: "Hiperbola przejmuje zbiegający pęk. Daj jej to ognisko, na które czeka.",
+    hint: "Teraz stoi hiperbola. Drugie ognisko elipsy postaw w dalszym ognisku hiperboli.",
     ball: vec(-0.6, -0.45), hole: vec(-0.2, 0.3),
     pieces: [{
       ...withSolutionArc(
@@ -187,23 +213,6 @@ export const STAGE_3: Level[] = [
       locked: ["rozmiar", "poczatek", "koniec"],
     }],
     obstacles: [hyperbola(vec(-0.2, 0.3), vec(0.35, 0.55), 0.18, 1, { mid: 0, span: 1.6 })],
-    sector: { center: deg(215), width: 1.4 },
-    // mniejszy dołek i krótszy limit odbić — patrz `t21_23` na górze pliku
-    test: t21_23,
-  },
-  {
-    // Ta sama geometria od drugiej strony: elipsa stała, gracz rusza HIPERBOLĄ.
-    // Uczy, że wspólne ognisko jest wspólne — można je dosunąć z każdej strony.
-    // Zablokowane `ognisko1` (dołek) i `rozmiar`: zostaje jeden uchwyt, jedna lekcja.
-    id: "druga-strona", title: "Druga strona",
-    hint: "Tym razem lustro stoi. Przesuń hiperbolę tak, żeby jej dalsze ognisko usiadło w ognisku elipsy.",
-    ball: vec(-0.6, -0.45), hole: vec(-0.2, 0.3),
-    pieces: [{
-      start: hyperbola(vec(-0.2, 0.3), vec(0.19, 0.17), 0.18, 1, { mid: 0, span: 1.6 }),
-      solution: hyperbola(vec(-0.2, 0.3), vec(0.35, 0.55), 0.18, 1, { mid: 0, span: 1.6 }),
-      locked: ["ognisko1", "rozmiar"],
-    }],
-    obstacles: [arcEllipse(vec(-0.6, -0.45), vec(0.35, 0.55), 0.78, deg(150), deg(260))],
     sector: { center: deg(215), width: 1.4 },
     // mniejszy dołek i krótszy limit odbić — patrz `t21_23` na górze pliku
     test: t21_23,

@@ -101,11 +101,11 @@ const BOARD_MAX = 1;
 
 /** DLACZEGO tu: `applyDrag` jest jedynym miejscem, przez które przechodzi i gra
  *  (`screens.ts` woła go po `toWorld`/`snapTo`), i testy, które chcą modelować grę
- *  (np. szara strefa poziomów 21–24 w `tests/levels.test.ts`) — wołają `applyDrag`
+ *  (np. szara strefa poziomów z hiperbolą w `tests/levels.test.ts`) — wołają `applyDrag`
  *  PROSTO, z pominięciem `screens.ts`. Przycięcie w samym `screens.ts` byłoby
  *  obejściem: testy sterujące `applyDrag` nadal eksplorowałyby pozycje poza planszą,
  *  których gra już nie umie wytworzyć (patrz zadanie 15b — dokładne rozwiązanie
- *  poziomu 21 z ogniskiem w (−0.2, 1.7)). Jeden punkt obsługuje obu wywołujących. */
+ *  poziomu „wspolne-ognisko" z ogniskiem w (−0.2, 1.7)). Jeden punkt obsługuje obu wywołujących. */
 const clampToBoard = (p: Vec2): Vec2 => {
   const x = clamp(p.x, BOARD_MIN, BOARD_MAX);
   const y = clamp(p.y, BOARD_MIN, BOARD_MAX);

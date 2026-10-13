@@ -34,7 +34,7 @@ export const hitRect = (r: Rect, p: Vec2): boolean =>
 
 /** Siatka kafelków: w pionie 2 kolumny, w poziomie 4 — ale nie za cenę celu dotykowego.
  *  Gdy tylu wierszy przy tej bazowej liczbie kolumn zepchnęłoby kafelek pod 44 px
- *  (poziomy 21+ na małych telefonach), siatka dostaje dodatkową kolumnę — dokładnie tyle,
+ *  (od ok. 21 poziomów na małych telefonach), siatka dostaje dodatkową kolumnę — dokładnie tyle,
  *  by wiersze zmieściły się w `maxRows`. Przy liczbie poziomów z etapów 1–2 (≤ 16) to
  *  zawsze `base`, więc stare ekrany wyglądają tak jak wcześniej. */
 export function menuLayout(width: number, height: number, count: number): Rect[] {
