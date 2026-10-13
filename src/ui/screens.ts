@@ -9,8 +9,8 @@ import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, settingsButton, settingsLayout,
-  winAction, winLabels,
+  MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner, settingsButton,
+  settingsLayout, winAction, winLabels,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -303,10 +303,11 @@ export function mount(canvas: HTMLCanvasElement): void {
         // pod tytułem tylko dopisek ostatniego poziomu; na pozostałych — nic
         const allSolved = LEVELS.every((l) => progress.solved.includes(l.id));
         const { right, note } = winLabels(isLast(), allSolved);
-        banner("Wpadły wszystkie", note ?? "", ["Jeszcze raz", right]);
+        banner(resultBanner(game.proof.balls.length, 0).title, note ?? "", ["Jeszcze raz", right]);
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
-        banner("Nie wszystkie", `Chybiło ${missed} z ${game.proof.balls.length}. Zobacz, którędy.`, "Jeszcze raz");
+        const { title, note } = resultBanner(game.proof.balls.length, missed);
+        banner(title, note, "Jeszcze raz");
       }
     }
 

@@ -33,7 +33,8 @@ const proofFor = (state: GameState, count: number): Proof =>
     count,
   });
 
-export const preview = (state: GameState): Proof => proofFor(state, 2);
+/** Podgląd: dwie piłki — chyba że poziom ma jedną (bilard), wtedy dwie byłyby tym samym torem. */
+export const preview = (state: GameState): Proof => proofFor(state, Math.min(2, state.level.test.balls));
 
 export const startProof = (state: GameState): GameState => ({
   ...state, phase: "dowod", proof: proofFor(state, state.level.test.balls), elapsed: 0,

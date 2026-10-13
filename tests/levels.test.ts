@@ -3,7 +3,8 @@ import { Vec2, add, dist, fromAngle, len, norm, scale, sub, vec } from "../src/c
 import { rayPiece } from "../src/core/piece";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, Handle, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
+  DIAGONAL, Handle, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, SegmentShape, Shape, Span,
+  levelCurves,
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
 import { piecePolyline, twinPolyline } from "../src/render/shapes";
@@ -41,16 +42,22 @@ const STAGE_1_IDS = [
 
 describe("poziomy", () => {
   it("liczba poziomów i unikalne identyfikatory", () => {
-    expect(LEVELS).toHaveLength(24);
+    expect(LEVELS).toHaveLength(27);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(LEVELS.length);
   });
 
+  it("etap 0 otwiera grę: trzy poziomy bilardowe", () => {
+    expect(LEVELS.slice(0, 3).map((l) => l.id)).toEqual(["odbicie", "dwa-odbicia", "za-rogiem"]);
+  });
+
+  // numery się przesunęły o etap 0, ale identyfikatory i ich wzajemna kolejność zostały —
+  // zapis postępu trzyma identyfikatory (`progress.ts`, `LEGACY_ORDER`)
   it("identyfikatory etapu 1 zostały, w tej samej kolejności — zapisany postęp przetrwa", () => {
-    expect(LEVELS.slice(0, 8).map((l) => l.id)).toEqual(STAGE_1_IDS);
+    expect(LEVELS.slice(3, 11).map((l) => l.id)).toEqual(STAGE_1_IDS);
   });
 
   it("identyfikatory etapu 2 zostały, w tej samej kolejności", () => {
-    expect(LEVELS.slice(8, 16).map((l) => l.id)).toEqual([
+    expect(LEVELS.slice(11, 19).map((l) => l.id)).toEqual([
       "polelipsa", "bandy", "przycinanie", "wspologniskowe",
       "kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2",
     ]);
@@ -68,8 +75,18 @@ describe("poziomy", () => {
   // byłby to naprawdę inny zestaw kierunków. Niezmiennik pilnowany tu, nie w rdzeniu:
   // nieparzyste count jest świadomie dopuszczone przez specyfikację etapu 1 (jedna piłka
   // celowo na osi), więc `launchAngles`/`runProof` nie mają prawa tego zabraniać.
-  it("każdy poziom ma PARZYSTĄ liczbę piłek — inaczej kierunek osi przestaje być obojętny", () => {
-    for (const l of LEVELS) expect(l.test.balls % 2).toBe(0);
+  // Dotyczy tylko dowodu na 360° — z wachlarzem kierunki liczy `sector`, nie oś, więc
+  // obrót bazy o π niczego nie zmienia (i poziomy jednopiłkowe mogą istnieć).
+  it("każdy poziom bez wachlarza ma PARZYSTĄ liczbę piłek — inaczej kierunek osi przestaje być obojętny", () => {
+    for (const l of LEVELS.filter((x) => x.sector === undefined)) expect(l.test.balls % 2, l.id).toBe(0);
+  });
+
+  // Jedna piłka ma sens tylko z wachlarzem zerowej szerokości (jeden znany kierunek strzału);
+  // i odwrotnie — wachlarz zerowej szerokości przy wielu piłkach puściłby je wszystkie jednym torem.
+  it("poziom jednopiłkowy ma wachlarz zerowej szerokości — i tylko on", () => {
+    for (const l of LEVELS) {
+      expect(l.test.balls === 1, l.id).toBe(l.sector !== undefined && l.sector.width === 0);
+    }
   });
 
   // Hiperbola poziomu bywa przeszkodą (odbija piłkę, poziom 21) ALBO elementem gracza
@@ -123,7 +140,8 @@ describe("poziomy", () => {
       }
     }
     if (level.sector !== undefined) {
-      expect(level.sector.width).toBeGreaterThan(0);
+      // zero tylko przy jednej piłce — pilnuje osobny test wyżej
+      expect(level.sector.width).toBeGreaterThanOrEqual(0);
       expect(level.sector.width).toBeLessThanOrEqual(2 * Math.PI);
     }
   });
@@ -154,6 +172,12 @@ describe("poziomy", () => {
         expect(sol.span).toEqual(start.span);
         // rysowanie drugiej gałęzi to też dana poziomu, nie stan gracza
         expect(sol.twin).toBe(start.twin);
+        continue;
+      }
+      if (start.kind === "odcinek" && sol.kind === "odcinek") {
+        if (locked.includes("koniec1")) expect(sol.from).toEqual(start.from);
+        if (locked.includes("koniec2")) expect(sol.to).toEqual(start.to);
+        if (locked.includes("srodek")) expect(scale(add(sol.from, sol.to), 0.5)).toEqual(scale(add(start.from, start.to), 0.5));
         continue;
       }
       // tu zostaje elipsa: rodzaje startu i rozwiązania są równe, sprawdzone wyżej
@@ -278,6 +302,30 @@ describe("poziomy", () => {
         const shifted: MovableShape = { ...sol, focus: add(sol.focus, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
         const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
         expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
+      }
+    });
+  });
+
+  // Kryterium 5% nie pasuje do odcinka: przesunięcie środka wzdłuż własnej prostej lustra
+  // niczego nie zmienia, dopóki piłka w lustro trafia. Odpowiednik dla lustra płaskiego to
+  // obrót — o ±3° wokół środka musi dać pudło (spec wprowadzeń §1.4).
+  const rotate = (s: SegmentShape, deg: number): SegmentShape => {
+    const c = scale(add(s.from, s.to), 0.5);
+    const t = (deg * Math.PI) / 180;
+    const turn = (p: Vec2) => {
+      const d = sub(p, c);
+      return add(c, vec(d.x * Math.cos(t) - d.y * Math.sin(t), d.x * Math.sin(t) + d.y * Math.cos(t)));
+    };
+    return { ...s, from: turn(s.from), to: turn(s.to) };
+  };
+
+  it.each(byId)("poziom %s: każde lustro-odcinek obrócone o ±3° odpada", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      if (sol.kind !== "odcinek") return;
+      for (const deg of [-3, 3]) {
+        const moved = solutions(level).map((s, j) => (j === k ? rotate(sol, deg) : s));
+        expect(solves(level, moved), `element ${k}, ${deg}°`).toBe(false);
       }
     });
   });

@@ -70,6 +70,13 @@ export function winLabels(isLast: boolean, allSolved: boolean): { right: string;
   return { right: "Menu", note: allSolved ? "Wszystkie poziomy ukończone." : "To był ostatni poziom." };
 }
 
+/** Napisy banera po dowodzie. Jedna piłka (bilard etapu 0) mówi w liczbie pojedynczej —
+ *  „Wpadły wszystkie" i „Chybiło 1 z 1" brzmiałyby jak błąd gry. */
+export function resultBanner(total: number, missed: number): { title: string; note: string } {
+  if (missed === 0) return { title: total === 1 ? "Wpadła" : "Wpadły wszystkie", note: "" };
+  if (total === 1) return { title: "Chybiła", note: "Zobacz, którędy poleciała." };
+  return { title: "Nie wszystkie", note: `Chybiło ${missed} z ${total}. Zobacz, którędy.` };
+}
 
 export function hitTile(tiles: Rect[], p: Vec2): number | null {
   const i = tiles.findIndex((t) => hitRect(t, p));

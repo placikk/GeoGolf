@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
   ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea,
-  settingsButton, settingsLayout, winAction, winLabels,
+  resultBanner, settingsButton, settingsLayout, winAction, winLabels,
 } from "../../src/ui/menu";
 import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
@@ -197,5 +197,17 @@ describe("tekst ekranu wygranej", () => {
   it("nie ma już zdania o ośmiu torach (decyzja właściciela)", () => {
     const src = readFileSync("src/ui/screens.ts", "utf8");
     expect(src.includes("Osiem torów")).toBe(false);
+  });
+});
+
+describe("napisy po dowodzie", () => {
+  it("wiele piłek: liczba mnoga i licznik chybionych", () => {
+    expect(resultBanner(8, 0).title).toBe("Wpadły wszystkie");
+    expect(resultBanner(8, 3)).toEqual({ title: "Nie wszystkie", note: "Chybiło 3 z 8. Zobacz, którędy." });
+  });
+
+  it("jedna piłka: liczba pojedyncza, bez „1 z 1\"", () => {
+    expect(resultBanner(1, 0).title).toBe("Wpadła");
+    expect(resultBanner(1, 1)).toEqual({ title: "Chybiła", note: "Zobacz, którędy poleciała." });
   });
 });
