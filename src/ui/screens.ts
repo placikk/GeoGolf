@@ -2,9 +2,10 @@ import { Vec2, vec } from "../core/vec";
 import { LEVELS, SNAP_RADIUS, Shape, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import {
-  PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
+  PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, handleShape, holeMark, sectorWedge,
 } from "../render/draw";
 import { curveHints, twinPolyline } from "../render/shapes";
+import { handleMark, shapeStyle } from "../render/style";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
@@ -246,22 +247,25 @@ export function mount(canvas: HTMLCanvasElement): void {
     for (const o of level.obstacles) {
       drawHints(o);
       drawTwin(o);
-      drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
+      const st = shapeStyle(o, "staly");
+      drawPiece(ctx, c, shapeToPiece(o), st.line, st.glow, 2);
       // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
-      // ogniskiem w to ognisko"; okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
-      if (o.kind !== "odcinek") {
-        for (const f of shapeFoci(o)) glowDot(ctx, c, f, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+      // ogniskiem w to ognisko"; przeszkody (okręgi, odcinki) ich nie mają (`focus: null`)
+      if (st.focus !== null) {
+        for (const f of shapeFoci(o)) glowDot(ctx, c, f, st.focus, "rgba(0,0,0,0)", 2.5);
       }
     }
 
     for (const s of game.pieces) {
       drawHints(s);
       drawTwin(s);
-      drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
+      const st = shapeStyle(s, "gracz");
+      drawPiece(ctx, c, shapeToPiece(s), st.line, st.glow, 2);
     }
 
     // Stałe punkty są pełne (piłka) albo wyglądają jak otwór (dołek); wszystko, co da się
-    // przeciągnąć, to pulsujący pusty pierścień w kolorze elipsy. Pierścienie rysujemy
+    // przeciągnąć, to pulsujący pusty znak w kolorze swojej krzywej — pierścień (ognisko),
+    // romb (wierzchołek) albo kwadrat (reszta), patrz `handleMark`. Uchwyty rysujemy
     // na końcu, żeby ognisko postawione na piłce otaczało ją, a nie znikało pod nią.
     holeMark(ctx, c, level.hole, PALETTE.hole, PALETTE.holeGlow, PALETTE.holeInside, 9);
     glowDot(ctx, c, level.ball, PALETTE.ball, PALETTE.ballGlow, 6);
@@ -272,7 +276,8 @@ export function mount(canvas: HTMLCanvasElement): void {
           if (level.pieces[piece].locked.includes(h.id)) continue;
           const active = dragging !== null && dragging.piece === piece && dragging.id === h.id;
           const r = active ? 15 : 12 + 1.5 * Math.sin(time * 3.2);
-          ringHandle(ctx, c, h.pos, PALETTE.handle, PALETTE.handleGlow, r);
+          const st = shapeStyle(s, "gracz");
+          handleShape(ctx, c, h.pos, handleMark(h.id), st.line, st.glow, r);
         }
       });
       // podgląd na żywo: dwie piłki, blade tory — tylko gdy gracz włączył to w ustawieniach
