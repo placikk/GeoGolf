@@ -9,6 +9,7 @@ export * from "./types";
 export * from "./shape";
 export * from "./arc";
 export * from "./span";
+export * from "./cards";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
