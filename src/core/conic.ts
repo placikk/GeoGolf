@@ -1,4 +1,4 @@
-import { Vec2, dist, vec } from "./vec";
+import { Vec2, dist, dot, perp, scale, sub, vec } from "./vec";
 
 export interface Conic { A: number; B: number; C: number; D: number; E: number; F: number }
 
@@ -22,6 +22,49 @@ export function ellipseFromFoci(f1: Vec2, f2: Vec2, a: number): Conic {
   const angle = Math.atan2(f2.y - f1.y, f2.x - f1.x);
   const u = Math.cos(angle), v = Math.sin(angle);
   const ia = 1 / (a * a), ib = 1 / (b * b);
+  const cx = (f1.x + f2.x) / 2, cy = (f1.y + f2.y) / 2;
+
+  const A = u * u * ia + v * v * ib;
+  const B = 2 * u * v * (ia - ib);
+  const C = v * v * ia + u * u * ib;
+  return {
+    A, B, C,
+    D: -2 * A * cx - B * cy,
+    E: -2 * C * cy - B * cx,
+    F: A * cx * cx + B * cx * cy + C * cy * cy - 1,
+  };
+}
+
+/** Parabola z ogniska i wierzchołka. `p = |F − V|` to odległość ogniskowa, oś biegnie
+ *  od wierzchołka do ogniska. Równanie: (n·q)² − 4p(u·q) = 0 przy q = P − V, więc
+ *  wyróżnik wychodzi zerowy z konstrukcji i `classify` nie potrzebuje wyjątku. */
+export function parabolaFromFocusVertex(focus: Vec2, vertex: Vec2): Conic {
+  const p = dist(focus, vertex);
+  if (p < EPS) throw new Error("ognisko paraboli nie może leżeć w jej wierzchołku");
+  const u = scale(sub(focus, vertex), 1 / p);
+  const n = perp(u);
+  const s = dot(n, vertex);
+  const w = dot(u, vertex);
+  return {
+    A: n.x * n.x,
+    B: 2 * n.x * n.y,
+    C: n.y * n.y,
+    D: -2 * s * n.x - 4 * p * u.x,
+    E: -2 * s * n.y - 4 * p * u.y,
+    F: s * s + 4 * p * w,
+  };
+}
+
+/** Hiperbola z dwóch ognisk i połowy osi rzeczywistej. To DOSŁOWNIE `ellipseFromFoci`
+ *  ze znakiem przy drugiej półosi: `ib = −1/b²` zamiast `+1/b²`, i warunek odwrócony
+ *  na `a < c`. Stąd wyróżnik dodatni, a reszta rdzenia niczego nie zauważa. */
+export function hyperbolaFromFoci(f1: Vec2, f2: Vec2, a: number): Conic {
+  const c = dist(f1, f2) / 2;
+  if (!(a > 0 && a < c)) throw new Error("połowa osi rzeczywistej musi leżeć w (0, połowa odległości ognisk)");
+  const b = Math.sqrt(c * c - a * a);
+  const angle = Math.atan2(f2.y - f1.y, f2.x - f1.x);
+  const u = Math.cos(angle), v = Math.sin(angle);
+  const ia = 1 / (a * a), ib = -1 / (b * b);
   const cx = (f1.x + f2.x) / 2, cy = (f1.y + f2.y) / 2;
 
   const A = u * u * ia + v * v * ib;

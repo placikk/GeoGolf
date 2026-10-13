@@ -1,13 +1,22 @@
 import { Vec2, add, dot, len, scale, sub } from "./vec";
 import { Conic, classify } from "./conic";
 import { rayConicAll } from "./intersect";
+import { CurveFrame, frameParam } from "./frame";
 
 /** `via` to dowolny punkt na ZACHOWANEJ części krzywej — wskazuje stronę cięciwy
  *  zamiast flagi, której znak łatwo pomylić. Dla prostej `via` nie jest używany. */
 export interface Arc { from: Vec2; via: Vec2; to: Vec2 }
 
-/** Kawałek krzywej: brak `arc` oznacza całą krzywą. */
-export interface Piece { conic: Conic; arc?: Arc }
+/** Zakres parametru we własnym układzie krzywej — dla krzywych NIEOGRANICZONYCH.
+ *  Rozwiązuje naraz trzy rzeczy, których cięciwa nie umie: skończoność ramion, wybór
+ *  gałęzi hiperboli i odporność na gracza (gdziekolwiek przeciągnie uchwyt, kawałek
+ *  zostaje tym samym kawałkiem tej samej gałęzi). */
+export interface ParamRange { from: number; to: number; frame: CurveFrame }
+
+/** Kawałek krzywej. Brak `arc` i `range` oznacza całą krzywą. Kawałek ma CO NAJWYŻEJ
+ *  JEDEN tryb ograniczenia — `range` wygrywa, gdy ktoś poda oba (patrz test
+ *  "range wygrywa nad arc" w `tests/core/piece.test.ts`). */
+export interface Piece { conic: Conic; arc?: Arc; range?: ParamRange }
 
 /** Tolerancja przynależności do łuku, w jednostkach świata. Końce liczą się włącznie. */
 export const ARC_EPS = 1e-9;
@@ -16,10 +25,21 @@ export const whole = (conic: Conic): Piece => ({ conic });
 
 const cross = (a: Vec2, b: Vec2): number => a.x * b.y - a.y * b.x;
 
-/** Czy punkt P LEŻĄCY NA krzywej należy do zachowanej części. Prosta przecina stożkową
- *  w co najwyżej dwóch punktach, więc cięciwa from→to dzieli KAŻDĄ stożkową na dwie
- *  części po przeciwnych stronach — wystarczy porównać stronę P ze stroną `via`. */
+/** Czy punkt P LEŻĄCY NA krzywej należy do zachowanej części.
+ *
+ *  Tryb `range` (krzywe nieograniczone) sprawdza parametr i gałąź — patrz `ParamRange`.
+ *
+ *  Tryb `arc` porównuje stronę P ze stroną `via` względem cięciwy from→to. Działa dla
+ *  elipsy i odcinka, bo prosta przecina je w co najwyżej dwóch punktach i cięciwa dzieli
+ *  je na dwie części po przeciwnych stronach. Dla HIPERBOLI to zawodzi — druga gałąź
+ *  wypada po tej samej stronie co wierzchołek pierwszej — i dlatego istnieje `range`. */
 export function onPiece(piece: Piece, p: Vec2): boolean {
+  const range = piece.range;
+  if (range !== undefined) {
+    const { t, branch } = frameParam(range.frame, p);
+    if (range.frame.kind === "hiperbola" && branch !== range.frame.branch) return false;
+    return t >= range.from - ARC_EPS && t <= range.to + ARC_EPS;
+  }
   const arc = piece.arc;
   if (arc === undefined) return true;
   const chord = sub(arc.to, arc.from);

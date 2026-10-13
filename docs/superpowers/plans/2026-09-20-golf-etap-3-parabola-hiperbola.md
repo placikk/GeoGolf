@@ -140,7 +140,7 @@ Expected: FAIL — `parabolaFromFocusVertex is not defined`.
 - [ ] **Krok 3: Implementacja**
 
 W `src/core/conic.ts` rozszerz import wektorów na
-`import { Vec2, dist, dot, norm, perp, scale, sub, vec } from "./vec";`
+`import { Vec2, dist, dot, perp, scale, sub, vec } from "./vec";`
 i dopisz pod `ellipseFromFoci`:
 
 ```ts
@@ -524,8 +524,15 @@ na `baseAngle: shapeAxisAngle(pieces[0]),` i popraw listę importów.
 - [ ] **Krok 4: Uruchom wszystko**
 
 Run: `npx tsc --noEmit && npm test`
-Expected: PASS — wszystkie 331 testów. Żaden wynik gry się nie zmienia, bo dla elipsy
-`shapeAxisAngle` zwraca dokładnie to, co zwracało `ellipseGeometry(...).angle`.
+Expected: PASS — cała suita (liczba testów rośnie z każdym zadaniem; zmierz ją przed
+zmianą i porównaj po). Żaden wynik gry się nie zmienia, ale NIE dlatego, że kąt jest ten
+sam: `ellipseGeometry` odzyskuje oś z wektora własnego, którego znak zależy od danych,
+więc dla części elips nowy kąt różni się od starego o **dokładnie π** (zmierzone: 8 z 34
+kształtów w poziomach 1–16). To nie zmienia wyniku, bo `launchAngles` rozkłada `count`
+kierunków równo po pełnym okręgu, a π to dokładnie `count/2` kroków, gdy `count` jest
+parzyste — czyli ten sam ZBIÓR kierunków, tylko inaczej ponumerowany. Wszystkie poziomy
+mają `balls: 8`, podgląd ma 2. **Niezmiennik do utrzymania: liczba piłek musi być
+parzysta.** Przy nieparzystej ten refaktor zmieniłby zbiór kierunków.
 
 - [ ] **Krok 5: Commit**
 
@@ -702,7 +709,11 @@ describe("długość wzdłuż krzywej nieograniczonej", () => {
   });
 
   it("spanRange po parametrze przepisuje zakres wprost", () => {
-    expect(spanRange(PAR, { mid: 0.2, span: 1.4 })).toEqual({ from: -0.5, to: 0.9 });
+    // toBeCloseTo, nie toEqual: 0.2 − 1.4/2 daje −0.49999999999999994, a 0.2 + 1.4/2
+    // daje 0.8999999999999999. Równość bitowa jest tu nieosiągalna i nie o nią chodzi.
+    const r = spanRange(PAR, { mid: 0.2, span: 1.4 });
+    expect(r.from).toBeCloseTo(-0.5, 9);
+    expect(r.to).toBeCloseTo(0.9, 9);
   });
 
   it("spanRange po długości daje kawałek o zadanej długości", () => {
@@ -750,9 +761,13 @@ import { Span } from "./types";
  *  tą samą funkcją; wtedy długość i jej odwrotność są swoimi dokładnymi odwrotnościami. */
 const SAMPLES = 512;
 
-/** Zasięg planszy w `trace` to [-2, 2]²; 4 jednostki od wierzchołka wyprowadzają
- *  krzywą poza ten kwadrat z każdego punktu startowego wewnątrz [-1, 1]². */
-const REACH = 4;
+/** Zasięg planszy w `trace` to [-2, 2]². Ile trzeba odjechać od wierzchołka, żeby
+ *  NA PEWNO z niego wyjść? Wierzchołek leży w [-1, 1]², więc wystarczy, by przesunięcie
+ *  `d` dało `max(|dx|, |dy|) > 3`. Najgorszy przypadek to oś po skosie, gdzie
+ *  `max(|dx|, |dy|) = |d|/√2`, czyli potrzeba `|d| > 3√2 ≈ 4.243`.
+ *  Wartość 4 NIE wystarcza — zmierzone: parabola o p = 1000 i wierzchołku w (−1, −1)
+ *  z osią po skosie ma w t = 4 punkt (1.83, 1.83), wciąż wewnątrz planszy. */
+const REACH = 5;
 
 /** Parametr, poza którym krzywa na pewno jest poza planszą — granica tablicy długości.
  *  Dla paraboli odsunięcie prostopadłe to wprost `t`. Dla hiperboli to `b·sinh t`. */
@@ -835,7 +850,13 @@ git commit -m "feat(levels): dlugosc wzdluz paraboli i hiperboli, kawalek opisan
 
 **Pliki:**
 - Zmiana: `src/levels/shape.ts`, `src/levels/types.ts` (rozszerzenie `Shape`), `src/levels/index.ts`
-- Test: `tests/levels/shape.test.ts`
+- Test: `tests/levels/shape.test.ts`, `tests/levels.test.ts`
+
+**Uwaga o `tests/levels.test.ts`:** rozszerzenie `Shape` ZEPSUJE kompilację tego pliku.
+Jego blok „każdy kształt daje się skonstruować" odsiewa `"odcinek"` i czyta `.a`/`.f1`/
+`.arc`, co było poprawne, dopóki po odsianiu zostawała sama elipsa. Obramuj te asercje
+warunkiem `s.kind === "elipsa"`, zostawiając sprawdzenie `shapeConic(s)` poza bramką —
+ma nadal obejmować wszystkie krzywe.
 
 **Interfejsy:**
 - Konsumuje: `parabolaFromFocusVertex`, `hyperbolaFromFoci` (zadanie 1); `CurveFrame` (zadanie 2); `ParamRange` (zadanie 3); `Span`, `ParabolaShape`, `HyperbolaShape`, `MovableShape` (zadanie 5); `spanRange` (zadanie 6).
@@ -855,7 +876,9 @@ Dopisz na końcu `tests/levels/shape.test.ts`:
 ```ts
 describe("parabola i hiperbola jako kształty poziomu", () => {
   const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
-  const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+  // ogniska ODLEGŁE O 1.2, nie o 1: przy odległości 1 wektor f2−f1 jest już jednostkowy,
+  // więc `norm()` byłby identycznością i test nie wykryłby jego usunięcia.
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.7, 0), 0.3, 1, { mid: 0, span: 2 });
 
   it("shapeFrame paraboli ma oś jednostkową od wierzchołka do ogniska", () => {
     const f = shapeFrame(par);
@@ -869,7 +892,8 @@ describe("parabola i hiperbola jako kształty poziomu", () => {
     const f = shapeFrame(hyp);
     if (f.kind !== "hiperbola") throw new Error("zły rodzaj");
     expect(f.a).toBeCloseTo(0.3, 12);
-    expect(f.b).toBeCloseTo(Math.sqrt(0.25 - 0.09), 12);
+    expect(len(f.axis)).toBeCloseTo(1, 12);
+    expect(f.b).toBeCloseTo(Math.sqrt(0.36 - 0.09), 12);
     expect(f.branch).toBe(1);
   });
 
@@ -906,7 +930,7 @@ describe("parabola i hiperbola jako kształty poziomu", () => {
 
   it("shapeFoci zwraca ogniska każdej krzywej", () => {
     expect(shapeFoci(par)).toEqual([vec(-0.5, 0)]);
-    expect(shapeFoci(hyp)).toEqual([vec(-0.5, 0), vec(0.5, 0)]);
+    expect(shapeFoci(hyp)).toEqual([vec(-0.5, 0), vec(0.7, 0)]);
   });
 });
 ```
@@ -1053,7 +1077,7 @@ Nowy plik `tests/core/dwustopniowe.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, scale, sub, vec } from "../../src/core/vec";
+import { add, dist, fromAngle, sub, vec } from "../../src/core/vec";
 import { trace } from "../../src/core/trace";
 import { ellipse, hyperbola, parabola, shapeToPiece } from "../../src/levels/shape";
 
@@ -1128,6 +1152,17 @@ describe("konstrukcja dwustopniowa ma STAŁĄ długość drogi", () => {
 
       expect(drogi.length).toBeGreaterThan(8);
       expect(Math.max(...drogi) - Math.min(...drogi)).toBeLessThan(1e-6);
+
+      // Rozrzut sam w sobie nie wystarcza: łapie tylko niezgodność między kierunkami,
+      // nie złapałby błędu JEDNAKOWEGO w obu parabolach (np. źle policzone `p`), bo
+      // wtedy wszystkie dwanaście dróg nadal byłyby sobie równe, tylko równe źle. Wartość
+      // niezależna od śledzenia: z definicji ognisko-kierownica droga to odległość między
+      // kierownicami, bo składowe x punktów przecięcia się znoszą — nie zależy od kierunku
+      // strzału. Kierownica A leży w VA.x − pa, kierownica B w VB.x + pb.
+      const oczekiwanaDroga = (VB.x + pb) - (VA.x - pa);
+      for (const droga of drogi) {
+        expect(droga).toBeCloseTo(oczekiwanaDroga, 9);
+      }
     }
   });
 });
@@ -1221,9 +1256,14 @@ i na POCZĄTKU `piecePolyline`, przed obsługą `arc`:
 export function piecePolyline(piece: Piece, steps = 128): Vec2[] {
   const range = piece.range;
   if (range !== undefined) {
-    // krzywa nieograniczona: równe kroki parametru. Dla paraboli parametr to odsunięcie
-    // prostopadłe, więc punkty wychodzą równomiernie; dla hiperboli gęstnieją przy
-    // wierzchołku, czyli tam, gdzie krzywizna jest największa — dokładnie gdzie trzeba.
+    // krzywa nieograniczona: równe kroki parametru. NIE dają punktów równo rozłożonych
+    // wzdłuż krzywej — na obu krzywych gęstnieją przy wierzchołku, bo tam prędkość
+    // parametryzacji jest najmniejsza. I bardzo dobrze: wierzchołek to miejsce
+    // największej krzywizny, czyli dokładnie tam, gdzie łamana potrzebuje punktów.
+    // Parabola zagęszcza łagodnie (|dP/dt| = √(1 + t²/4p²), ~41% różnicy na zakresie
+    // ±0.6 przy p = 0.3), hiperbola ostro (cosh/sinh). Równy jest tylko składnik
+    // PROSTOPADŁY, bo dla paraboli parametr JEST tym odsunięciem — i na tym stoi
+    // poziom 18, bo szerokość wiązki odbitej równa się zakresowi t niezależnie od p.
     const n = Math.max(2, steps);
     return Array.from({ length: n + 1 }, (_, i) =>
       framePoint(range.frame, range.from + ((range.to - range.from) * i) / n));
@@ -1256,7 +1296,11 @@ brakuje tylko możliwości chwycenia jej palcem.
 
 **Pliki:**
 - Zmiana: `src/levels/types.ts`, `src/ui/game.ts`, `src/ui/screens.ts`
-- Test: `tests/ui/game.test.ts`
+- Test: `tests/ui/game.test.ts`, `tests/levels.test.ts`, `tests/ui/handles.test.ts`
+
+**Uwaga:** poszerzenie `PlayerPiece` zepsuje zawężanie typu także w `tests/levels.test.ts`
+i `tests/ui/handles.test.ts`. Napraw bramką `kind === "elipsa"` albo pomocnikiem
+`shapeFoci`, bez rzutowań.
 
 **Interfejsy:**
 - Produkuje: `PlayerPiece.start` i `.solution` typu `MovableShape`; `GameState.pieces: MovableShape[]`.
@@ -1278,7 +1322,15 @@ describe("gra z krzywą nieograniczoną", () => {
     }],
     obstacles: [parabola(vec(0.5, 0), vec(0.8, 0), { mid: 0, span: 1.2 })],
     sector: { center: Math.PI, width: 2 },
-    test: { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS },
+    // DOŁEK TRZY RAZY MNIEJSZY niż w prawdziwych poziomach, i to jest istotne.
+    // Piłka wystrzelona pod kątem δ od osi trafia parabolę w punkcie o parametrze
+    // t = 2p·tan(δ/2), a odbita biegnie równolegle na wysokości y = t. Przy wachlarzu
+    // szerokości 2 i ośmiu piłkach dwie środkowe mają δ = 0.125, czyli y = 0.0375 —
+    // MNIEJ niż HOLE_RADIUS = 0.0566. `trace` sprawdza dołek przed każdym odbiciem,
+    // więc te dwie wpadłyby po JEDNYM odbiciu, nie dotykając drugiej paraboli, i test
+    // dwóch odbić by nie przeszedł. Mniejszy dołek wymusza prawdziwą drogę dwustopniową,
+    // czyli dokładnie to, co ten test ma udowodnić. Zapas: 0.0375 / 0.0189 ≈ 2×.
+    test: { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS / 3 },
   };
 
   it("rozwiązanie wygrywa, stan startowy nie", () => {
@@ -1504,13 +1556,35 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
 /** Hiperbola istnieje tylko przy 0 < a < c, więc KAŻDE przeciągnięcie kończy się
  *  zaciśnięciem `a` do tego przedziału. Gałąź jest daną poziomu — uchwyt rozmiaru
  *  bierze z palca tylko ODLEGŁOŚĆ od środka wzdłuż osi, nigdy stronę. */
+/** Ogniska nie mogą się zejść w jeden punkt: wtedy `c = 0`, a `fit` niżej ma PODŁOGĘ
+ *  `MIN_GAP * 2`, więc wypchnęłoby `a` powyżej `c` i `hyperbolaFromFoci` by rzuciło
+ *  w środku gestu. Odsuwamy przeciągane ognisko, tak jak `dragParabola` odsuwa ognisko
+ *  od wierzchołka. */
+const MIN_FOCUS_GAP = 10 * MIN_GAP;
+const keepApart = (moved: Vec2, other: Vec2, fallbackAxis: Vec2): Vec2 => {
+  const d = dist(moved, other);
+  if (d >= MIN_FOCUS_GAP) return moved;
+  const dir = d > 0 ? scale(sub(moved, other), 1 / d) : fallbackAxis;
+  return add(other, scale(dir, MIN_FOCUS_GAP));
+};
+
 function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaShape {
+  // OBA brzegi zjeżdżają razem z `c`. Stała podłoga na którymkolwiek z nich staje się
+  // większa od `c`, gdy ogniska się zbliżą, i wypycha `a` poza dozwolony przedział —
+  // dokładnie tak powstał pierwotny błąd tego zacisku. Dla każdego c > 0 zachodzi
+  // 0 < lo ≤ hi < c.
   const fit = (x: HyperbolaShape): HyperbolaShape => {
     const c = dist(x.f1, x.f2) / 2;
-    return { ...x, a: clamp(x.a, MIN_GAP, Math.max(MIN_GAP * 2, c - MIN_GAP)) };
+    const hi = c - Math.min(MIN_GAP, c / 2);
+    const lo = Math.min(MIN_GAP, hi);
+    return { ...x, a: clamp(x.a, lo, hi) };
   };
-  if (handle === "ognisko1") return fit({ ...s, f1: to });
-  if (handle === "ognisko2") return fit({ ...s, f2: to });
+  if (handle === "ognisko1") {
+    return fit({ ...s, f1: keepApart(to, s.f2, norm(sub(s.f1, s.f2))) });
+  }
+  if (handle === "ognisko2") {
+    return fit({ ...s, f2: keepApart(to, s.f1, norm(sub(s.f2, s.f1))) });
+  }
   if (handle !== "rozmiar") return s;
   const center = scale(add(s.f1, s.f2), 0.5);
   return fit({ ...s, a: Math.abs(dot(sub(to, center), norm(sub(s.f2, s.f1)))) });
@@ -1518,6 +1592,19 @@ function dragHyperbola(s: HyperbolaShape, handle: Handle, to: Vec2): HyperbolaSh
 ```
 
 Dopisz do importu z `../core/vec` brakujące `dot`, `norm`, `sub`.
+
+**`applyDrag` potrzebuje przeciążenia**, którego ten plan wcześniej nie przewidział:
+`(s: EllipseShape, …) => EllipseShape` obok `(s: MovableShape, …) => MovableShape`.
+Bez niego `tsc` wywala kilkadziesiąt istniejących linii w `tests/ui/handles.test.ts`
+i `tests/levels.test.ts`, które czytają `.f1`/`.a`/`.arc` wprost z wyniku — TypeScript
+nie zawęzi zwracanej unii sam.
+
+**Usuń rusztowanie `ellipsePieces()`** z `src/ui/screens.ts` (zostawione przez zadanie 9)
+i przepnij wszystkie jego wywołania na `game.pieces` wprost. Przejrzyj przy okazji
+WSZYSTKIE bramki `kind === "elipsa"` w tym pliku: ta w pętli rysującej uchwyty jest już
+błędna (parabole i hiperbole też mają uchwyty), ta przy `lockedA` zostaje (tylko gałąź
+elipsy go używa), a w bloku `.map` stosującym przeciągnięcie jest trzecia, która po cichu
+unieważniałaby przeciąganie nowych krzywych.
 
 - [ ] **Krok 4: Uruchom testy**
 
@@ -1686,6 +1773,226 @@ Expected: PASS, w tym `tests/render/no-shadow-blur.test.ts`.
 git add src/render src/ui/screens.ts tests/render
 git commit -m "feat(render): otwarty obrys krzywej nieograniczonej, kierownica i asymptoty jako podpowiedzi"
 ```
+
+---
+
+## Zadanie 11b: Testy poziomów znają wszystkie krzywe
+
+**Zadanie dopisane w trakcie realizacji** (rozstrzygnięcie kontrolera z 2026-09-24). Plan
+w pierwotnej postaci zakładał, że testy w `tests/levels.test.ts` same obejmą nowe poziomy.
+Nie obejmą: pięć z nich zakłada elipsę. Specyfikacja §8 wymaga kryterium 5% dla KAŻDEGO
+elementu ruchomego, więc bez tego zadania poziomy 17–24 albo wywalają suitę, albo — co gorsze
+— przechodzą testy, które ich w ogóle nie sprawdzają.
+
+Co dziś nie działa dla paraboli i hiperboli:
+
+| Test | Co się dzieje |
+|---|---|
+| zablokowane uchwyty zgadzają się | dla nowych krzywych `continue` — po cichu nic nie sprawdza |
+| ognisko1 odpada (5%) | przesuwa tylko `f1` elipsy; parabolę zostawia bez zmian, więc rozwiązanie nadal wygrywa i test **pada** |
+| ognisko2 odpada (5%) | jak wyżej |
+| brak ognisko paraboli (5%) | **nie istnieje** — ognisko paraboli nie jest w ogóle sprawdzane |
+| rozwiązanie nie opiera się na krawędzi łuku | skraca tylko łuki elips; kawałki `span` zostają nietknięte |
+| jedna elipsa przez piłkę i dołek nie wygrywa | rozsmarowuje kształt gracza; dla hiperboli buduje hiperbolę, nie elipsę |
+
+Ostatni wiersz jest ważniejszy, niż wygląda. Ten test chroni przed obejściem, które na
+poziomie 21 byłoby katastrofalne: gracz ustawia ogniska swojej elipsy na piłce i dołku,
+elipsa sama zbiera wszystko w dołku, a hiperbola — cały temat poziomu — nie jest potrzebna.
+
+**Pliki:**
+- Zmiana: `tests/levels.test.ts`
+
+**Zasada:** żadnego cichego pominięcia. Każde `return`/`continue` dla danego rodzaju krzywej
+musi mieć komentarz mówiący, DLACZEGO ten rodzaj nie podlega sprawdzeniu (bo nie ma takiego
+uchwytu, bo gracz nie może zmienić rodzaju krzywej) — a nie „bo TypeScript nie zawęża".
+
+- [ ] **Krok 1: Zgodność zablokowanych uchwytów dla wszystkich krzywych**
+
+Zastąp ciało testu „zablokowane uchwyty zgadzają się między startem a rozwiązaniem":
+
+```ts
+    for (const piece of level.pieces) {
+      const { start, solution: sol, locked } = piece;
+      // rodzaj krzywej należy do poziomu, nie do gracza — nie ma uchwytu, który by go zmienił
+      expect(sol.kind).toBe(start.kind);
+      if (start.kind === "parabola" && sol.kind === "parabola") {
+        if (locked.includes("ognisko")) expect(sol.focus).toEqual(start.focus);
+        if (locked.includes("wierzcholek")) expect(sol.vertex).toEqual(start.vertex);
+        // kawałek opisuje poziom, nie palec — gracz nie ma jak go zmienić
+        expect(sol.span).toEqual(start.span);
+        continue;
+      }
+      if (start.kind === "hiperbola" && sol.kind === "hiperbola") {
+        if (locked.includes("rozmiar")) expect(sol.a).toBe(start.a);
+        if (locked.includes("ognisko1")) expect(sol.f1).toEqual(start.f1);
+        if (locked.includes("ognisko2")) expect(sol.f2).toEqual(start.f2);
+        // gałąź i kawałek należą do poziomu — uchwyt rozmiaru bierze z palca tylko odległość
+        expect(sol.branch).toBe(start.branch);
+        expect(sol.span).toEqual(start.span);
+        continue;
+      }
+      // tu zostaje elipsa: rodzaje startu i rozwiązania są równe, sprawdzone wyżej
+      if (start.kind !== "elipsa" || sol.kind !== "elipsa") continue;
+      // …dotychczasowe asercje dla elipsy, bez zmian
+    }
+```
+
+- [ ] **Krok 2: Kryterium 5% dla ognisk elipsy i hiperboli**
+
+W testach „każde odblokowane ognisko1…" i „…ognisko2…" zamień przesuwanie tak, żeby
+obejmowało hiperbolę (ma te same pola `f1`/`f2`), a parabolę pomijało JAWNIE:
+
+```ts
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      // parabola nie ma uchwytu `ognisko1` — jej jedyne ognisko sprawdza osobny test niżej
+      if (piece.locked.includes("ognisko1") || sol.kind === "parabola") return;
+      for (let i = 0; i < 8; i++) {
+        const shifted: MovableShape = { ...sol, f1: add(sol.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
+        expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
+      }
+    });
+```
+
+Analogicznie dla `ognisko2` z `f2` i warunkiem `missed >= 6`.
+
+- [ ] **Krok 3: Kryterium 5% dla ogniska paraboli — nowy test**
+
+```ts
+  // Parabola ma jedno ognisko i obowiązuje dla niego surowa postać kryterium — pudło
+  // w każdym z ośmiu kierunków, jak `ognisko1`. Wierzchołka nie przesuwamy: spec §8 wiąże
+  // promień przyskakiwania z tolerancją dla ognisk, a wierzchołek nie przyskakuje.
+  // Uwaga na ryzyko z zadania 9: przy współliniowej geometrii piłki blisko osi mogą
+  // wpadać po jednym odbiciu także przy przesuniętym ognisku. Jeśli ten test padnie na
+  // poziomie parabolicznym, to jest pierwszy podejrzany.
+  it.each(byId)("poziom %s: każde odblokowane ognisko paraboli przesunięte o promień przyskakiwania odpada", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      if (piece.locked.includes("ognisko") || sol.kind !== "parabola") return;
+      for (let i = 0; i < 8; i++) {
+        const shifted: MovableShape = { ...sol, focus: add(sol.focus, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
+        const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
+        expect(solves(level, moved), `element ${k}, kierunek ${i}`).toBe(false);
+      }
+    });
+  });
+```
+
+- [ ] **Krok 4: Krawędź kawałka także dla paraboli i hiperboli**
+
+Rozszerz `shrink` w teście „rozwiązanie nie opiera się na krawędzi łuku" o kawałki `span`:
+wariant długościowy skraca `length` o `2d`, wariant parametryczny skraca `span` o `2d`.
+Dla paraboli parametr to odsunięcie prostopadłe, więc `2d` jest tam wprost długością;
+dla hiperboli to parametr bezwymiarowy i skrócenie jest słabsze — zapisz to w komentarzu.
+Jeśli generyczna sygnatura `<S extends Shape>` nie przejdzie `tsc` bez rzutowania, rozbij
+na dwie funkcje (dla `MovableShape` i dla `Shape`). **Bez rzutowań.**
+
+- [ ] **Krok 5: Obejście „jedna elipsa przez piłkę i dołek" — tylko tam, gdzie ma sens**
+
+W teście sweepu dla kaskad dopisz na początku pętli po elementach:
+
+```ts
+        // Gracz nie zmienia rodzaju krzywej: jedyna elipsa, jaką może postawić przez piłkę
+        // i dołek, to jego WŁASNA elipsa. Parabola ani hiperbola nie staną się elipsą,
+        // więc dla nich tego obejścia nie ma czym wykonać.
+        if (piece.solution.kind !== "elipsa") return;
+```
+
+i zbuduj `one` z zawężonego `piece.solution` (spread elipsy zachowuje jej łuk).
+
+- [ ] **Krok 6: Dowód, że zmienione testy naprawdę obejmują nowe krzywe**
+
+Żaden z 16 wydanych poziomów nie ma paraboli ani hiperboli, więc sama suita nie pokaże,
+czy nowe gałęzie działają. Udowodnij to TYMCZASOWO: dopisz na końcu listy `byId` (tylko
+lokalnie, nie commituj) syntetyczny poziom z dwiema parabolami z `tests/ui/game.test.ts`
+(zadanie 9) — wraz z jego `holeRadius: HOLE_RADIUS / 3` — i uruchom `tests/levels.test.ts`.
+
+Pokaż w raporcie: (a) że PRZED zmianami testy `ognisko1`/`ognisko2` padają na tym poziomie,
+bo przesunięcie paraboli było bez skutku; (b) że PO zmianach test ogniska paraboli
+faktycznie wykonuje się na tym poziomie i przechodzi; (c) że test zgodności uchwytów
+wykrywa rozjechanie — zmień tymczasowo `vertex` w starcie przy zablokowanym `wierzcholek`
+i pokaż, że pada. Potem usuń syntetyczny poziom i zmiany tymczasowe.
+
+- [ ] **Krok 7: Uruchom wszystko**
+
+Run: `npx tsc --noEmit && npm test`
+Expected: PASS, liczba testów NIE maleje (nowy test paraboli dodaje 16 przypadków
+`it.each`, po jednym na poziom).
+
+- [ ] **Krok 8: Commit**
+
+```bash
+git add tests/levels.test.ts
+git commit -m "test(levels): testy poziomow znaja parabole i hiperbole" -m "…treść…" -m "Co-Authored-By: …"
+```
+
+**Uwaga dla zadań 14 i 15:** test „kaskady istnieją tam, gdzie powinny" ma sztywną listę
+`["kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"]`. Poziomy 21–24 też są
+kaskadami (mają ognisko we wspólnym punkcie M, poza piłką i dołkiem), więc przy ich
+dodawaniu trzeba tę listę rozszerzyć o ich identyfikatory — i to jest zamierzone, nie
+obejście testu.
+
+---
+
+## Zadanie 11c: Zablokowany rozmiar hiperboli wraca do wartości poziomu
+
+**Zadanie dopisane w trakcie realizacji** (rozstrzygnięcie kontrolera z 2026-09-24), po
+znalezisku wykonawcy zadania 11b.
+
+**Błąd:** `applyDrag` przyjmuje `lockedA`, ale gałąź hiperboli woła
+`dragHyperbola(state, handle, to)` BEZ niego, a `screens.ts` i tak liczy `lockedA` tylko dla
+elipsy. Skutek, zmierzony na geometrii zaplanowanego poziomu 22 (zablokowane `ognisko1`
+i `rozmiar`, `a = 0.18`, wolne ognisko M):
+
+```
+start:                          a = 0.1800
+M przeciągnięte blisko dołka:   a = 0.0240
+M z powrotem na rozwiązaniu:    a = 0.0240   (rozwiązanie wymaga 0.18)
+```
+
+Zacisk `0 < a < c` słusznie obniża `a`, gdy ogniska się zbliżają — ale potem nic go nie
+podnosi, a uchwyt rozmiaru jest zablokowany. **Gracz utyka na poziomie, którego nie da się
+już wygrać, bez żadnego sygnału dlaczego.** To dokładnie ta sama pułapka, którą poprawki
+etapu 2 usunęły dla elipsy („zablokowany rozmiar wraca do wartości poziomu"), i dotyczy
+obu zaplanowanych poziomów 22 i 23.
+
+**Pliki:**
+- Zmiana: `src/ui/handles.ts`, `src/ui/screens.ts`
+- Test: `tests/ui/handles.test.ts`, `tests/levels.test.ts`
+
+- [ ] **Krok 1: Testy**
+
+W `tests/ui/handles.test.ts`, w bloku „uchwyty hiperboli", dopisz test odtwarzający objazd
+z tabeli wyżej: hiperbola z `a = 0.18`, przeciągnięcie `ognisko2` blisko `ognisko1` z
+`lockedA = 0.18`, potem z powrotem na miejsce z tym samym `lockedA` — `a` ma wrócić do
+`0.18`. Dopisz też przypadek BEZ `lockedA`: wtedy `a` zostaje przycięte i nie wraca samo
+(gracz ma wolny uchwyt rozmiaru i sam je poprawi) — tak jak dla elipsy.
+
+W `tests/levels.test.ts` uogólnij test „zablokowany rozmiar wraca do wartości poziomu po
+objeździe ogniskiem" na hiperbolę (ma te same uchwyty `ognisko1`/`ognisko2`/`rozmiar`) i usuń
+z niego komentarz „dziś zawsze prawda". Parabola ma być wyłączona JAWNIE, z powodem: nie
+ma uchwytu rozmiaru. Objazd dla elementu z zablokowanym `ognisko1` ciągnie tylko `ognisko2`
+— obecny test w ogóle pomija takie elementy (`return` przy zablokowanym dowolnym ognisku),
+co na poziomach 22–23 wyłączyłoby go dokładnie tam, gdzie jest potrzebny. Popraw to tak, żeby
+objazd ciągnął te ogniska, które są WOLNE.
+
+Uruchom — testy mają paść na obecnym kodzie.
+
+- [ ] **Krok 2: Implementacja**
+
+`dragHyperbola` przyjmuje `lockedA?: number` i przy przeciąganiu ogniska stosuje
+`a: lockedA ?? s.a` przed zaciskiem `fit`. Zacisk nadal pilnuje `0 < a < c`, więc gdy ogniska
+są blisko, `a` jest przycięte; gdy się rozejdą, wraca do `lockedA`. `applyDrag` przekazuje
+`lockedA` do `dragHyperbola`.
+
+W `src/ui/screens.ts` warunek liczący `lockedA` ma obejmować także hiperbolę (ma pole `a`),
+nie tylko elipsę. Zaktualizuj komentarz nad nim — obecny mówi, że hiperbola ignoruje
+`lockedA`, co po tej zmianie będzie nieprawdą.
+
+- [ ] **Krok 3: Uruchom wszystko** — `npx tsc --noEmit && npm test`, oczekiwane PASS.
+
+- [ ] **Krok 4: Commit** — polski temat, pusta linia, treść, trailer.
 
 ---
 
@@ -1867,6 +2174,19 @@ git commit -m "feat(levels): poziomy 17 Ognisko paraboli i 18 Rozmiar bez znacze
 
 ## Zadanie 13: Poziomy 19 „Obrót osi" i 20 „Teleskop"
 
+**Decyzja właściciela z 2026-09-26 — wielkość dołka na poziomach parabolicznych.**
+Poziom 17 dostał `holeRadius: HOLE_RADIUS / 3`, żeby żadna piłka nie skracała drogi przy osi
+i wszystkie osiem docierało w jednym błysku. To było za darmo, bo na 17 gracz rusza tylko
+ogniskiem, a ono przyskakuje. **Poziomy 18–20 zostają przy standardowym `HOLE_RADIUS`**:
+tam wierzchołek jest przeciągany palcem bez przyskakiwania, a dołek bez skracania zawęża
+tolerancję celowania osią z ok. 11° do ok. 3,6° — kilka pikseli na telefonie. Dwie piłki
+będą tam skracać drogę i to jest świadomie przyjęte.
+
+Konsekwencja dla tego zadania: jeśli kryterium 5% padnie na poziomie 19 albo 20, NIE
+zaczynaj od zmniejszania dołka — to wraca do problemu celowania palcem. Najpierw zwęź kawałek
+lustra odbierającego albo zmień geometrię poziomu; mniejszy dołek tylko w ostateczności,
+z podaniem, o ile zawęża tolerancję celowania.
+
 **Pliki:**
 - Zmiana: `src/levels/stage3.ts`, `tests/levels.test.ts`
 
@@ -1905,12 +2225,14 @@ Dopisz na końcu `STAGE_3` w `src/levels/stage3.ts` (nad tablicą dodaj stałą
     ball: vec(-0.55, 0), hole: vec(0.55, 0),
     pieces: [
       {
-        start: parabola(vec(-0.45, 0.35), vec(-0.85, 0.1), KAWALEK),
+        // wierzchołki startowe przechylone OD siebie: przy starych (-0.85,0.1)/(0.88,-0.15)
+        // start dawał 5/8 piłek w dołku jeszcze przed dotknięciem — zmierzone w zadaniu 13
+        start: parabola(vec(-0.45, 0.35), vec(-0.75, -0.2), KAWALEK),
         solution: parabola(vec(-0.55, 0), vec(-0.85, 0), KAWALEK),
         locked: [],
       },
       {
-        start: parabola(vec(0.5, -0.3), vec(0.88, -0.15), KAWALEK),
+        start: parabola(vec(0.5, -0.3), vec(0.75, 0.3), KAWALEK),
         solution: parabola(vec(0.55, 0), vec(0.85, 0), KAWALEK),
         locked: [],
       },
@@ -1940,6 +2262,17 @@ startowe muszą być dalej niż 0.1414 od swoich celów.
 Run: `npx tsc --noEmit && npm test`
 Expected: PASS.
 
+**Ryzyko odkryte w zadaniu 9 — dotyczy WSZYSTKICH poziomów parabolicznych 17–20.**
+Gdy piłka, dołek i oś paraboli są współliniowe, piłki lecące blisko osi wpadają do dołka
+po JEDNYM odbiciu, nie dotykając drugiego lustra: promień pod kątem δ od osi odbija się
+na wysokość `y = 2p·tan(δ/2)`, a przy małym δ to mniej niż promień dołka. Zmierzone dla
+`p = 0.3`, wachlarza 2 i ośmiu piłek: dwie środkowe lecą na `y = 0.0375` wobec promienia
+`0.0566`. Poziom nadal WYGRYWA — ale te dwie piłki niczego nie dowodzą, a co gorsza mogą
+wpadać także przy źle ustawionej paraboli, **osłabiając kryterium 5%**. Jeśli kryterium
+odpadnie na poziomach 17–20, to jest pierwszy podejrzany; lekarstwem jest obniżenie
+`holeRadius` tego poziomu (spec §9 i tak każe schodzić z promieniem, nie z kryterium).
+Żeby żadna piłka nie skracała, najbliższy promień musi mieć `δ > 2·arctan(r/2p)`.
+
 Znany punkt ryzyka: na `teleskop` kryterium 5% liczy się **per element**, a dwa elementy
 mogą się nawzajem ratować (przesunięcie ogniska A o 5% psuje wiązkę, ale lustro B jest
 szerokie i część piłek i tak wpada). Jeśli tak wyjdzie, **zwęź** `span` obu KAWALKÓW
@@ -1961,6 +2294,19 @@ git commit -m "feat(levels): poziomy 19 Obrot osi i 20 Teleskop"
 ---
 
 ## Zadanie 14: Poziomy 21 „Wspólne ognisko" i 22 „Druga strona"
+
+
+**Uwaga dopisana w trakcie realizacji (dotyczy zadań 14 i 15).** Test „kaskady istnieją
+tam, gdzie powinny" w `tests/levels.test.ts` ma sztywną listę `["kaskada",
+"kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"]`. Poziomy 21–24 SĄ kaskadami — mają
+ognisko we wspólnym punkcie M, poza piłką i dołkiem — więc przy ich dodawaniu listę trzeba
+rozszerzyć o ich identyfikatory. To zamierzone, nie obejście testu. Następny test w tym
+bloku („jedna elipsa przez piłkę i dołek nie wygrywa") jest dla poziomu 21 NAJWAŻNIEJSZY:
+wykrywa, czy gracz może ominąć hiperbolę, stawiając ogniska swojej elipsy na piłce i dołku.
+Jeśli ten test padnie na 21, to poziom jest do przebudowy, a nie test.
+
+Sprawdzone w zadaniu 11c: geometria poziomu 22 z tego planu daje `solved === true` bez
+żadnej kalibracji.
 
 Pierwsze poziomy hiperboliczne. Obowiązuje **zasada układu pozaosiowego** z nagłówka planu.
 
@@ -2111,6 +2457,35 @@ git commit -m "feat(levels): poziomy 21 Wspolne ognisko i 22 Druga strona - ukla
 
 ## Zadanie 15: Poziomy 23 „Która gałąź" i 24 „Zwieńczenie"
 
+**Wnioski z zadania 14 (dopisane w trakcie realizacji) — przeczytaj przed danymi niżej.**
+
+1. **Łuk elipsy o różnych ogniskach w starcie i rozwiązaniu.** `arcEllipse(f1, f2, a, od, do)`
+   liczy `{mid, length}` z tych samych kątów INACZEJ dla różnych ognisk (inna mimośrodowość).
+   Przy zablokowanych końcach łuku test zgodności uchwytów żąda równości, więc start
+   i rozwiązanie muszą dzielić JEDEN łuk. W `src/levels/stage3.ts` jest już pomocnik
+   `withSolutionArc` (ten sam wzorzec co w `stage2.ts`) — użyj go dla elipsy poziomu 24.
+2. **Dane hiperboli muszą dać się skonstruować** (`0 < a < c`) — także w stanie startowym.
+   W zadaniu 14 start poziomu 22 miał `a > c` i rzucał wyjątkiem. Sprawdź start i rozwiązanie.
+3. **Test „jedna elipsa przez piłkę i dołek nie wygrywa"** sprawdza przy zablokowanym rozmiarze
+   tylko rozmiar osiągalny w grze (`max(start.a, c + 1e-3)`), przy wolnym — pełny przegląd.
+   Jeśli padnie, to poziom jest do przebudowy, nie test.
+4. **Start nie może być prawie-rozwiązaniem**: celuj w 0–1 z 8 piłek w stanie startowym.
+5. **Menu** układa kafelki dynamicznie od zadania 14 — 24 poziomy powinny się zmieścić, ale
+   sprawdź `tests/ui/menu.test.ts`.
+
+
+**Uwaga dopisana w trakcie realizacji (dotyczy zadań 14 i 15).** Test „kaskady istnieją
+tam, gdzie powinny" w `tests/levels.test.ts` ma sztywną listę `["kaskada",
+"kaskada-od-konca", "dwie-elipsy", "zwienczenie-2"]`. Poziomy 21–24 SĄ kaskadami — mają
+ognisko we wspólnym punkcie M, poza piłką i dołkiem — więc przy ich dodawaniu listę trzeba
+rozszerzyć o ich identyfikatory. To zamierzone, nie obejście testu. Następny test w tym
+bloku („jedna elipsa przez piłkę i dołek nie wygrywa") jest dla poziomu 21 NAJWAŻNIEJSZY:
+wykrywa, czy gracz może ominąć hiperbolę, stawiając ogniska swojej elipsy na piłce i dołku.
+Jeśli ten test padnie na 21, to poziom jest do przebudowy, a nie test.
+
+Sprawdzone w zadaniu 11c: geometria poziomu 22 z tego planu daje `solved === true` bez
+żadnej kalibracji.
+
 **Pliki:**
 - Zmiana: `src/levels/stage3.ts`, `tests/levels.test.ts`, `tests/ui/game.test.ts`
 
@@ -2244,6 +2619,72 @@ działa w prawdziwej grze.
 git add src/levels/stage3.ts tests/levels.test.ts tests/ui/game.test.ts
 git commit -m "feat(levels): poziomy 23 Ktora galaz i 24 Zwienczenie"
 ```
+
+---
+
+## Zadanie 15b: Szare strefy na poziomach 21–23
+
+**Zadanie dopisane w trakcie realizacji — decyzja właściciela z 2026-09-26.**
+
+Niezmiennik §8 etapu 1: promień przyskakiwania ma być nie mniejszy niż pas, w którym
+niedokładne ustawienie jeszcze wygrywa — inaczej powstaje „szara strefa": ognisko za daleko,
+żeby przyskoczyć, a gracz i tak wygrywa niedokładnym rozwiązaniem. Kryterium 5% z etapu 1
+sprawdza tylko 8 kierunków w jednej odległości i tego NIE egzekwuje. Gęsty skan kontrolera
+(krok 0.005, pierścień SNAP_RADIUS..0.35) pokazał szare strefy prawie wszędzie:
+
+| Poziom | Wolne ognisko | Punkty wygranej poza SNAP | Najdalej |
+|---|---|---|---|
+| 21 `wspolne-ognisko` | ognisko2 (M) | 696 | 0.350 (granica skanu) |
+| 22 `druga-strona` | ognisko2 (M) | 267 | 0.347 |
+| 23 `ktora-galaz` | ognisko2 (M) | 706 | 0.350 (granica skanu) |
+
+Na tych trzech poziomach wszystkie wolne uchwyty to ogniska, które przyskakują dokładnie,
+więc mniejszy dołek nic gracza nie kosztuje — zgodnie z polityką właściciela. Poziom 24
+naprawiono tak samo w zadaniu 15 (`HOLE_RADIUS / 5`, `maxBounces: 3`; przy limicie 4 przetrwał
+tor przez ścianę przy wierzchołku paraboli, którego żaden dołek nie usuwał).
+
+**Poza zakresem tego zadania (osobne zadanie na później):** poziomy 18 i 20 (wolny wierzchołek
+przeciągany palcem — mniejszy dołek utrudniłby celowanie) oraz wydane poziomy 1–16.
+
+**Pliki:** `src/levels/stage3.ts`, `tests/levels.test.ts`.
+
+- [ ] **Krok 1:** Dla każdego z poziomów 21, 22, 23 zmierz gęsto (krok ≤ 0.0025, pierścień od
+  SNAP_RADIUS co najmniej do 0.5 — strefy sięgają granicy dotychczasowego skanu) wygrane
+  każdego WOLNEGO ogniska wokół jego celu. Dobierz `holeRadius` (a jeśli trzeba, `maxBounces`,
+  jak na poziomie 24 — rozwiązanie potrzebuje 2 odbić), przy którym żadna wygrana nie leży
+  poza SNAP_RADIUS, z zapasem. Podaj pomiary przed i po.
+- [ ] **Krok 2:** Test szarej strefy z poziomu 24 uogólnij na pomocnika i stosuj do listy
+  `["wspolne-ognisko", "druga-strona", "ktora-galaz", "zwienczenie-3"]`, z komentarzem, dlaczego
+  tylko te (decyzja właściciela; reszta odłożona). Udowodnij, że test pada przy starym dołku
+  każdego z trzech poziomów.
+- [ ] **Krok 3:** Rozwiązania 8/8, start ≤ 1/8, wszystkie testy zielone.
+- [ ] **Krok 4:** Commit.
+
+---
+
+## Zadanie 15c: Uchwyty nie wychodzą poza planszę
+
+**Zadanie dopisane w trakcie realizacji** (rozstrzygnięcie kontrolera z 2026-09-26, po
+znalezisku w zadaniu 15b).
+
+Nic dziś nie przycina przeciąganego uchwytu do planszy: uchwyt idzie za palcem, także poza
+kwadrat `[-1, 1]²`, gdy ekran jest wyższy niż plansza. Na poziomie 21 istnieją DOKŁADNE
+rozwiązania z ogniskiem poza planszą (np. `(-0.2, 1.7)`, „igła + ściana"), których żaden
+dołek nie usunie — to obejście lekcji. Sprawdzone: żaden z poziomów 1–24 nie ma ogniska ani
+wierzchołka poza planszą w starcie, rozwiązaniu ani przeszkodach, więc przycięcie niczego
+nie psuje.
+
+**Pliki:** `src/ui/handles.ts` (i ewentualnie `src/ui/screens.ts`), `tests/ui/handles.test.ts`,
+`tests/levels.test.ts`.
+
+- [ ] **Krok 1:** Każda pozycja uchwytu, jaką może wytworzyć przeciąganie, leży w `[-1, 1]²`.
+  Przycięcie umieść tak, żeby obejmowało wszystkich wywołujących i żeby testy przez
+  `applyDrag` modelowały je tak jak gra.
+- [ ] **Krok 2:** Test jednostkowy: przeciągnięcie ogniska, wierzchołka i uchwytu rozmiaru
+  daleko poza planszę kończy się w planszy; ogniska nadal przyskakują do celów przy brzegu.
+- [ ] **Krok 3:** Test regresyjny: dokładne rozwiązanie poziomu 21 z ogniskiem poza planszą
+  NIE jest osiągalne przez `applyDrag`. Udowodnij, że test pada bez przycięcia.
+- [ ] **Krok 4:** Wszystkie testy zielone, w tym test szarej strefy poziomów 21–24.
 
 ---
 

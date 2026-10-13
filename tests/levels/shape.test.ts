@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { add, dist, fromAngle, scale, vec } from "../../src/core/vec";
+import { add, dist, fromAngle, len, scale, vec } from "../../src/core/vec";
 import { circleConic, classify, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { onPiece, rayPiece } from "../../src/core/piece";
+import { framePoint } from "../../src/core/frame";
 import {
-  BOARD_WALLS, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, isCircle, levelCurves, segment, shapeConic,
-  shapeToPiece, LEVELS,
+  BOARD_WALLS, ArcRange, arcEllipse, circle, ellipse, ellipseParam, ellipsePoint, hyperbola, isCircle, levelCurves, parabola,
+  segment, shapeAxisAngle, shapeConic, shapeFoci, shapeFrame, shapeToPiece, Span, LEVELS,
 } from "../../src/levels";
 import { trace } from "../../src/core/trace";
 import { runProof } from "../../src/core/verify";
@@ -26,6 +27,20 @@ describe("kształty poziomu", () => {
     const axis = { x: e.f2.x - e.f1.x, y: e.f2.y - e.f1.y };
     const q = { x: ellipsePoint(e, Math.PI / 2).x - c.x, y: ellipsePoint(e, Math.PI / 2).y - c.y };
     expect(axis.x * q.y - axis.y * q.x).toBeGreaterThan(0);   // przeciwnie do wskazówek zegara
+  });
+
+  it("shapeAxisAngle to kierunek f1→f2, a nie f2→f1", () => {
+    // oś `e` (atan2(-0.4, 0.7) ≈ -29.7°) nie jest wielokrotnością π/2, więc zwroty
+    // f1→f2 i f2→f1 (różne o π) dają się tu jednoznacznie odróżnić — na osi 0°/90°
+    // ten test przeszedłby nawet po odwróceniu zwrotu.
+    const toF2 = Math.atan2(e.f2.y - e.f1.y, e.f2.x - e.f1.x);
+    const toF1 = Math.atan2(e.f1.y - e.f2.y, e.f1.x - e.f2.x);
+    expect(shapeAxisAngle(e)).toBeCloseTo(toF2, 12);
+    expect(shapeAxisAngle(e)).not.toBeCloseTo(toF1, 5);
+  });
+
+  it("shapeAxisAngle dla okręgu (f1 = f2): umowna oś x, jak ellipseAxis", () => {
+    expect(shapeAxisAngle(circle(vec(0.1, -0.2), 0.3))).toBe(0);
   });
 
   it("ellipseParam odwraca ellipsePoint", () => {
@@ -105,10 +120,93 @@ describe("kształty poziomu", () => {
     const pieces = level.pieces.map((p) => p.start);
     const proof = runProof({
       ball: level.ball, hole: level.hole, holeRadius: level.test.holeRadius,
-      maxBounces: level.test.maxBounces, curves: levelCurves(level, pieces), aimCurve: shapeConic(pieces[0]),
+      maxBounces: level.test.maxBounces, curves: levelCurves(level, pieces), baseAngle: shapeAxisAngle(pieces[0]),
     });
     const onFrame = (q: { x: number; y: number }) =>
       Math.abs(Math.abs(q.x) - 1) < 1e-9 || Math.abs(Math.abs(q.y) - 1) < 1e-9;
     expect(proof.balls.some((b) => b.path.slice(1, -1).some(onFrame))).toBe(true);
+  });
+});
+
+describe("typy nowych kształtów", () => {
+  it("Span rozróżnia się obecnością pola, więc dane etapu 2 nie wymagają zmiany", () => {
+    const dlugosc: Span = { mid: 0.2, length: 0.9 };
+    const parametr: Span = { mid: 0.2, span: 1.4 };
+    expect("length" in dlugosc).toBe(true);
+    expect("length" in parametr).toBe(false);
+  });
+
+  it("Span jest wyłączny: ani oba pola naraz, ani żadne", () => {
+    // @ts-expect-error — `length` i `span` naraz: nie wiadomo, który opis obowiązuje
+    const oba: Span = { mid: 0.2, length: 0.9, span: 1.4 };
+    // @ts-expect-error — sam środek bez zakresu nie opisuje kawałka
+    const zaden: Span = { mid: 0.2 };
+    expect([oba, zaden]).toHaveLength(2);
+  });
+
+  it("ArcRange etapu 2 jest wariantem długościowym Span", () => {
+    const arc: ArcRange = { mid: 0, length: 1 };
+    const span: Span = arc;
+    expect(span).toBe(arc);
+  });
+});
+
+describe("parabola i hiperbola jako kształty poziomu", () => {
+  const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
+  // odległość ognisk 1.2, NIE 1 — inaczej `norm(...)` w gałęzi hiperboli byłby
+  // identycznością i test nie odróżniłby normalizacji od jej braku.
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.7, 0), 0.3, 1, { mid: 0, span: 2 });
+
+  it("shapeFrame paraboli ma oś jednostkową od wierzchołka do ogniska", () => {
+    const f = shapeFrame(par);
+    expect(f.kind).toBe("parabola");
+    expect(len(f.axis)).toBeCloseTo(1, 12);
+    expect(f.axis.x).toBeCloseTo(1, 12);
+    if (f.kind === "parabola") expect(f.p).toBeCloseTo(0.3, 12);
+  });
+
+  it("shapeFrame hiperboli liczy b z ognisk i a", () => {
+    const f = shapeFrame(hyp);
+    if (f.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(len(f.axis)).toBeCloseTo(1, 12);
+    expect(f.a).toBeCloseTo(0.3, 12);
+    expect(f.b).toBeCloseTo(Math.sqrt(0.36 - 0.09), 12);
+    expect(f.branch).toBe(1);
+  });
+
+  it("shapeToPiece nowych krzywych daje range, NIGDY arc", () => {
+    for (const s of [par, hyp]) {
+      const piece = shapeToPiece(s);
+      expect(piece.range).toBeDefined();
+      expect(piece.arc).toBeUndefined();
+    }
+  });
+
+  it("shapeToPiece daje range także przy opisie DŁUGOŚCIĄ", () => {
+    const dlugi = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, length: 0.7 });
+    const piece = shapeToPiece(dlugi);
+    expect(piece.range).toBeDefined();
+    expect(piece.arc).toBeUndefined();
+  });
+
+  it("końce kawałka leżą na postaci kwadratowej", () => {
+    for (const s of [par, hyp]) {
+      const piece = shapeToPiece(s);
+      const r = piece.range!;
+      for (const t of [r.from, (r.from + r.to) / 2, r.to]) {
+        expect(evalConic(piece.conic, framePoint(r.frame, t))).toBeCloseTo(0, 9);
+      }
+    }
+  });
+
+  it("shapeAxisAngle zna wszystkie trzy krzywe", () => {
+    expect(shapeAxisAngle(par)).toBeCloseTo(0, 12);
+    expect(shapeAxisAngle(hyp)).toBeCloseTo(0, 12);
+    expect(shapeAxisAngle(ellipse(vec(-1, 0), vec(1, 0), 2))).toBeCloseTo(0, 12);
+  });
+
+  it("shapeFoci zwraca ogniska każdej krzywej", () => {
+    expect(shapeFoci(par)).toEqual([vec(-0.5, 0)]);
+    expect(shapeFoci(hyp)).toEqual([vec(-0.5, 0), vec(0.7, 0)]);
   });
 });

@@ -62,7 +62,6 @@ jest błędem projektu — jest puentą.
 - **Nakładka diagnostyczna** z sekcji 9 (normalne, punkty odbicia, wartości parametrów),
   która miała zastępować automatyczne testy warstwy wizualnej.
 
-- Parabola i hiperbola (etap 3)
 - Edytor plansz i dzielenie poziomami przez link (etap 4)
 - Czarne dziury (etap 5)
 - Plansze nieeuklidesowe, torus (etap 6)
@@ -413,7 +412,7 @@ Każdy etap to osobna specyfikacja i osobny plan implementacji.
 |---|---|---|
 | **1 — v1** | silnik kwadratowy, elipsa i okrąg, ~8 poziomów, dowód ósemką, pełna warstwa wizualna | rdzeń projektu |
 | **2** | łuki i odcinki + poziomy je wykorzystujące: kaskady, krzywe współogniskowe — spec: `2026-09-19-golf-etap-2-luki-design.md` | **średni** — nowy typ `Piece` (krzywa + łuk), `rayConicAll`, `trace`, wachlarz dowodu, model poziomu z listą elementów |
-| **3** | parabola i hiperbola | mały — same dane i warunki zwycięstwa |
+| **3** | parabola i hiperbola — spec: `2026-09-20-golf-etap-3-parabola-hiperbola-design.md` | **średni-duży** — żadna z dwóch krzywych nie zbiega z jednego ogniska w drugie samodzielnie (parabola rozsyła równolegle, hiperbola rozbiega); wymagał konstrukcji dwustopniowych, nowego trybu ograniczania kawałka (zakres parametru, obok cięciwy) i nowej tabeli długości łuku — nie tylko nowych danych poziomów i warunku zwycięstwa. Wycena „mały" była błędna z przyczyn geometrycznych, nie implementacyjnych — patrz `2026-09-20-golf-etap-3-parabola-hiperbola-design.md` §1 i `decyzje-etap-3.md` |
 | **4** | edytor plansz, dzielenie linkiem | średni — nowy interfejs, ten sam model |
 | **5** | czarne dziury | **duży — nowy silnik**, tory krzywe, całkowanie numeryczne |
 | **6** | torus, plansze nieeuklidesowe | **duży — nowa przestrzeń**, zawijanie topologii |

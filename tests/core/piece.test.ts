@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Vec2, add, fromAngle, scale, vec } from "../../src/core/vec";
-import { ellipseFromFoci, lineThrough } from "../../src/core/conic";
+import { ellipseFromFoci, lineThrough, hyperbolaFromFoci, evalConic } from "../../src/core/conic";
 import { rayConic } from "../../src/core/intersect";
 import { Piece, onPiece, rayPiece, whole } from "../../src/core/piece";
+import { CurveFrame, framePoint } from "../../src/core/frame";
 
 // Okrąg NIE w środku układu: implementacja licząca stronę cięciwy względem (0,0)
 // zamiast względem `from` przeszłaby na okręgu wokół zera.
@@ -83,5 +84,70 @@ describe("półprosta a kawałek krzywej", () => {
       const d = fromAngle(i * 0.4 + 0.1);
       expect(rayPiece(vec(0.1, 0.2), d, whole(k))).toBe(rayConic(vec(0.1, 0.2), d, k));
     }
+  });
+});
+
+describe("kawałek ograniczony zakresem parametru", () => {
+  const f1 = vec(-0.5, 0), f2 = vec(0.5, 0), a = 0.3;
+  const frame: CurveFrame = {
+    kind: "hiperbola", center: vec(0, 0), axis: vec(1, 0),
+    a, b: Math.sqrt(0.25 - 0.09), branch: 1,
+  };
+  const piece: Piece = {
+    conic: hyperbolaFromFoci(f1, f2, a),
+    range: { from: -1, to: 1, frame },
+  };
+
+  it("punkt wewnątrz zakresu należy do kawałka", () => {
+    expect(onPiece(piece, framePoint(frame, 0))).toBe(true);
+    expect(onPiece(piece, framePoint(frame, 0.99))).toBe(true);
+  });
+
+  it("punkt poza zakresem nie należy", () => {
+    expect(onPiece(piece, framePoint(frame, 1.5))).toBe(false);
+    expect(onPiece(piece, framePoint(frame, -1.5))).toBe(false);
+  });
+
+  it("KLUCZOWE: punkt na nieczynnej gałęzi nie należy, choć leży na tej samej krzywej", () => {
+    const other = { ...frame, branch: -1 as const };
+    for (const t of [-0.5, 0, 0.5]) {
+      const p = framePoint(other, t);
+      expect(evalConic(piece.conic, p)).toBeCloseTo(0, 10);
+      expect(onPiece(piece, p)).toBe(false);
+    }
+  });
+
+  it("rayPiece pomija nieczynną gałąź i trafia w czynną", () => {
+    // promień z lewej w prawo wzdłuż osi: najpierw lewa gałąź (x = −0.3), potem prawa (x = 0.3)
+    const hits = rayPiece(vec(-2, 0), vec(1, 0), piece);
+    expect(hits).not.toBeNull();
+    expect(-2 + hits!).toBeCloseTo(0.3, 6);
+  });
+
+  it("końce zakresu liczą się włącznie", () => {
+    expect(onPiece(piece, framePoint(frame, 1))).toBe(true);
+    expect(onPiece(piece, framePoint(frame, -1))).toBe(true);
+  });
+
+  it("range wygrywa nad arc — punkt wewnątrz zakresu należy mimo bycia poza łukiem", () => {
+    // Konstruujemy piece z oboma ograniczeniami: arc od t=0.2 do t=0.8, range od t=-1 do t=1.
+    // Test point at t=0 jest wewnątrz range ale poza arc (przed cięciwą).
+    // Jeśli range wygrywa, punkt należy; gdyby arc wygrywa, punkt nie należy.
+    const testPoint = framePoint(frame, 0);
+    const arcPiece: Piece = {
+      conic: piece.conic,
+      arc: {
+        from: framePoint(frame, 0.2),
+        via: framePoint(frame, 0.5),
+        to: framePoint(frame, 0.8),
+      },
+      range: piece.range,
+    };
+    // Sprawdzenie: punkt jest wewnątrz range
+    expect(onPiece({ conic: piece.conic, range: piece.range }, testPoint)).toBe(true);
+    // Sprawdzenie: punkt byłby poza arc (przed cięciwą, po drugiej stronie niż via)
+    expect(onPiece({ conic: piece.conic, arc: arcPiece.arc }, testPoint)).toBe(false);
+    // Conclusive: z oboma, range wygrywa i punkt należy
+    expect(onPiece(arcPiece, testPoint)).toBe(true);
   });
 });

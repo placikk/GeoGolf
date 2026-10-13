@@ -1,11 +1,12 @@
 import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, isCircle, shapeToPiece } from "../levels";
+import { LEVELS, SNAP_RADIUS, Shape, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
 } from "../render/draw";
+import { curveHints, twinPolyline } from "../render/shapes";
 import { positionAt, trailSegment } from "../render/trails";
-import { HandleRef, applyDrag, handlePositions, pickHandle, snapTargets, snapTo } from "./handles";
+import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
   MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, settingsButton, settingsLayout,
@@ -161,14 +162,13 @@ export function mount(canvas: HTMLCanvasElement): void {
     const w = toWorld(e);
     pointer = w;
     const { piece, id } = dragging;
-    // przyskakują tylko ogniska; rozmiar i końce łuku idą za palcem
-    const snapped = id === "ognisko1" || id === "ognisko2"
+    // przyskakują tylko ogniska (elipsy, hiperboli i paraboli); rozmiar, wierzchołek
+    // i końce łuku idą za palcem
+    const snapped = id === "ognisko1" || id === "ognisko2" || id === "ognisko"
       ? snapTo(w, snapTargets(game.level, game.pieces, piece), SNAP_RADIUS)
       : w;
-    const def = game.level.pieces[piece];
-    // przy zablokowanym uchwycie rozmiaru rozmiar wraca do wartości poziomu, gdy ogniska
-    // znów się zejdą — patrz komentarz w `applyDrag`
-    const lockedA = def.locked.includes("rozmiar") ? def.start.a : undefined;
+    // przy zablokowanym uchwycie rozmiaru rozmiar wraca do wartości poziomu — patrz `lockedSize`
+    const lockedA = lockedSize(game.level.pieces[piece]);
     const pieces = game.pieces.map((s, i) => (i === piece ? applyDrag(s, id, snapped, lockedA) : s));
     game = { ...game, pieces };
   });
@@ -224,17 +224,38 @@ export function mount(canvas: HTMLCanvasElement): void {
       sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
     }
 
+    /** Linie pomocnicze krzywej (kierownica, asymptoty) — tylko przy włączonych
+     *  podpowiedziach; tak samo dla przeszkód i elementów gracza. */
+    const drawHints = (s: Shape): void => {
+      if (settings.hints && (s.kind === "parabola" || s.kind === "hiperbola")) {
+        for (const linia of curveHints(s)) {
+          glowPolyline(ctx, c, linia, PALETTE.hint, "rgba(0,0,0,0)", 1);
+        }
+      }
+    };
+
+    /** Druga gałąź hiperboli z flagą `twin` (dziś tylko poziom 23): blado, tak jak linie
+     *  pomocnicze, ale NIEZALEŻNIE od podpowiedzi — tam jest częścią poziomu, nie pomocą.
+     *  Rysowana przed samą krzywą, żeby krzywa leżała na wierzchu. */
+    const drawTwin = (s: Shape): void => {
+      const druga = twinPolyline(s);
+      if (druga !== undefined) glowPolyline(ctx, c, druga, PALETTE.hint, "rgba(0,0,0,0)", 1);
+    };
+
     for (const o of level.obstacles) {
+      drawHints(o);
+      drawTwin(o);
       drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
-      // ogniska stałych elips blado — lekcje kaskad to „trafić ogniskiem w to ognisko";
-      // okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
-      if (o.kind === "elipsa" && !isCircle(o)) {
-        glowDot(ctx, c, o.f1, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
-        glowDot(ctx, c, o.f2, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+      // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
+      // ogniskiem w to ognisko"; okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
+      if (o.kind !== "odcinek") {
+        for (const f of shapeFoci(o)) glowDot(ctx, c, f, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
       }
     }
 
     for (const s of game.pieces) {
+      drawHints(s);
+      drawTwin(s);
       drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
     }
 

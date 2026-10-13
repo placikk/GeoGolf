@@ -1,13 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { vec, dist } from "../../src/core/vec";
+import { Vec2, vec, dist } from "../../src/core/vec";
 import {
-  EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams, circle, ellipse,
-  ellipseParam, ellipsePoint, paramAtLength, perimeter, segment, shapeConic,
+  EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams,
+  circle, ellipse, ellipseParam, ellipsePoint, hyperbola, paramAtLength, parabola, perimeter, segment, shapeAxisAngle,
+  shapeConic,
 } from "../../src/levels";
-import { applyDrag, handlePositions, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
+import { applyDrag, handlePositions, lockedSize, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
 const state: EllipseShape = ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8);
+// wyniesione nad oba bloki: `par` z testów paraboli jest potrzebny też w ostatnim
+// teście hiperboli (przyskakiwanie widzi ogniska obu krzywych naraz)
+const par = parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 });
 
 describe("uchwyty", () => {
   it("daje trzy uchwyty, rozmiar na końcu osi wielkiej", () => {
@@ -156,9 +160,17 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
     expect(ends(below).end).toBeCloseTo(5.9, 9);
   });
 
-  it("łuk zachowuje długość, gdy elipsa rośnie, i obejmuje wtedy mniejszy zakres parametru", () => {
-    const bigger = applyDrag(shape, "rozmiar", vec(2, 2));
-    expect(bigger.a).toBeGreaterThan(2 * shape.a);
+  it("łuk zachowuje długość, gdy elipsa rośnie (uchwyt rozmiaru zaciśnięty do planszy), i obejmuje wtedy mniejszy zakres parametru", () => {
+    // Uchwyt rozmiaru NIE stoi pod palcem — z łukiem renderuje się w środku łuku
+    // (`ellipsePoint(s, arc.mid)`, zależnie od `a` przez półoś małą b = √(a²−c²)), nie na
+    // osi wielkiej. Zadanie 15c ścina `a` do największej wartości, przy której TA pozycja
+    // (nie punkt na osi) jeszcze mieści się w [-1,1]² — bisekcja (`maxSizeHandleA`), bo
+    // z łukiem nie ma tu prostego wzoru zamkniętego. Róg (−1,−1) daje `x = −1` dokładnie.
+    const bigger = applyDrag(shape, "rozmiar", vec(-1, -1));
+    expect(bigger.a).toBeCloseTo(1.4243789118635517, 6);
+    const pos = handlePositions(bigger).find((h) => h.id === "rozmiar")!.pos;
+    expect(pos.x).toBeCloseTo(-1, 6);
+    expect(pos.y).toBeLessThanOrEqual(1);
     expect(bigger.arc).toBe(shape.arc);
     expect(lengthOf(bigger)).toBeCloseTo(shape.arc.length, 9);
     expect(ends(bigger).end - ends(bigger).start).toBeLessThan(ends(shape).end - ends(shape).start);
@@ -168,10 +180,13 @@ describe("uchwyty łuku (łuk opisany długością)", () => {
     expect(applyDrag(state, "koniec", vec(0, 1))).toBe(state);
   });
 
-  it("ognisk nic nie ogranicza: przy dalekim przeciągnięciu rozmiar rośnie, ognisko jest pod palcem", () => {
+  it("ognisko poza planszą zostaje przycięte do brzegu, ale rozmiar i tak rośnie", () => {
+    // Zadanie 15c: ognisko idzie za palcem TYLKO w planszy — dalej niż x = −1 nie sięga,
+    // choć rozmiar wciąż rośnie, żeby elipsa istniała (jak dawniej, tyle że liczona od
+    // przyciętego ogniska, nie od surowego palca).
     const far = vec(-3, 0.2);
     const next = applyDrag(shape, "ognisko1", far);
-    expect(next.f1).toBe(far);
+    expect(next.f1).toEqual(vec(-1, 0.2));
     expect(next.a).toBeGreaterThan(dist(next.f1, next.f2) / 2);
     expect(next.arc).toBe(shape.arc);
   });
@@ -221,8 +236,197 @@ describe("przyskakiwanie etapu 2", () => {
 
   it("poziom kaskady: ognisko pierwszego łuku daje się postawić w M samym przyskokiem", () => {
     const kaskada = LEVELS.find((l) => l.id === "kaskada")!;
-    const m = kaskada.pieces[0].solution.f2;
-    const targets = snapTargets(kaskada, kaskada.pieces.map((p) => p.start), 0);
+    // poziom kaskady ma same elipsy — `asEllipse` zawęża typ, nie zmienia zachowania
+    const asEllipse = (s: MovableShape): EllipseShape => {
+      if (s.kind !== "elipsa") throw new Error("poziom kaskady ma mieć same elipsy");
+      return s;
+    };
+    const m = asEllipse(kaskada.pieces[0].solution).f2;
+    const targets = snapTargets(kaskada, kaskada.pieces.map((p) => asEllipse(p.start)), 0);
     expect(snapTo(vec(m.x + 0.05, m.y - 0.05), targets, SNAP_RADIUS)).toEqual(m);
+  });
+});
+
+describe("uchwyty paraboli", () => {
+  it("ma dokładnie dwa uchwyty: ognisko i wierzchołek", () => {
+    expect(handlePositions(par).map((h) => h.id).sort()).toEqual(["ognisko", "wierzcholek"]);
+  });
+
+  it("przeciągnięcie ogniska przenosi ognisko", () => {
+    const next = applyDrag(par, "ognisko", vec(-0.4, 0.2));
+    expect(next.kind).toBe("parabola");
+    if (next.kind === "parabola") expect(next.focus).toEqual(vec(-0.4, 0.2));
+  });
+
+  it("ognisko nie może usiąść na wierzchołku — parabola musi istnieć", () => {
+    const next = applyDrag(par, "ognisko", par.vertex);
+    if (next.kind !== "parabola") throw new Error("zły rodzaj");
+    expect(dist(next.focus, next.vertex)).toBeGreaterThan(0);
+    expect(() => shapeConic(next)).not.toThrow();
+  });
+
+  it("przeciągnięcie wierzchołka zmienia i oś, i rozmiar", () => {
+    const next = applyDrag(par, "wierzcholek", vec(-0.5, -0.4));
+    if (next.kind !== "parabola") throw new Error("zły rodzaj");
+    expect(next.vertex).toEqual(vec(-0.5, -0.4));
+    expect(shapeAxisAngle(next)).toBeCloseTo(Math.PI / 2, 9);
+  });
+});
+
+describe("uchwyty hiperboli", () => {
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+
+  it("ma ten sam komplet uchwytów co elipsa", () => {
+    expect(handlePositions(hyp).map((h) => h.id).sort()).toEqual(["ognisko1", "ognisko2", "rozmiar"]);
+  });
+
+  it("uchwyt rozmiaru siedzi w wierzchołku CZYNNEJ gałęzi", () => {
+    const poz = (s: typeof hyp) => handlePositions(s).find((h) => h.id === "rozmiar")!.pos;
+    expect(poz(hyp).x).toBeCloseTo(0.3, 9);
+    expect(poz({ ...hyp, branch: -1 }).x).toBeCloseTo(-0.3, 9);
+  });
+
+  it("NIEZMIENNIK: a zostaje w (0, c) po przeciągnięciu rozmiaru gdziekolwiek", () => {
+    for (const cel of [vec(5, 0), vec(-5, 0), vec(0, 0), vec(0.5, 0), vec(0.499, 0)]) {
+      const next = applyDrag(hyp, "rozmiar", cel);
+      if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+      expect(next.a).toBeGreaterThan(0);
+      expect(next.a).toBeLessThan(dist(next.f1, next.f2) / 2);
+      expect(() => shapeConic(next)).not.toThrow();
+    }
+  });
+
+  it("NIEZMIENNIK: a zostaje w (0, c) po przeciągnięciu ogniska na drugie", () => {
+    const next = applyDrag(hyp, "ognisko1", vec(0.5, 0));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(() => shapeConic(next)).not.toThrow();
+  });
+
+  it("NIEZMIENNIK: rozmiar nie przeskakuje między gałęziami", () => {
+    // palec po przeciwnej stronie środka niż czynna gałąź
+    const next = applyDrag(hyp, "rozmiar", vec(-0.4, 0.1));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(next.branch).toBe(1);
+  });
+
+  it("przyskakiwanie widzi ogniska nowych krzywych", () => {
+    const lvl = { ball: vec(0, 0), hole: vec(1, 1), obstacles: [] } as unknown as Level;
+    expect(snapTargets(lvl, [hyp, par], 0)).toContainEqual(vec(-0.5, 0));
+  });
+
+  it("NIEZMIENNIK: a zostaje w (0, c) nawet gdy c ciasne z danych poziomu, nie z przeciągnięcia ogniska", () => {
+    // c = 0.0005, poniżej dawnego stałego sufitu MIN_GAP*2 = 0.002 — `rozmiar` nigdy
+    // nie dotyka ognisk (więc `keepApart` go nie chroni), a mimo to sufit musi być
+    // ściśle mniejszy od tego ciasnego c
+    const tight = hyperbola(vec(-0.0005, 0), vec(0.0005, 0), 0.0002, 1, { mid: 0, span: 2 });
+    const next = applyDrag(tight, "rozmiar", vec(5, 0));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    const c = dist(next.f1, next.f2) / 2;
+    expect(next.a).toBeGreaterThan(0);
+    expect(next.a).toBeLessThan(c);
+    expect(() => shapeConic(next)).not.toThrow();
+  });
+
+  // Ta sama pułapka co dla elipsy (patrz test wyżej w "uchwyty"): poziom blokuje uchwyt
+  // rozmiaru i liczy na to, że `a` wraca do wartości poziomu, gdy ogniska znów się zejdą.
+  // Bez `lockedA` w `dragHyperbola` zacisk `0 < a < c` obniża `a`, gdy ogniska są blisko,
+  // ale nic go potem nie podnosi — gracz utyka na poziomie, którego nie da się wygrać.
+  it("z zablokowanym rozmiarem (lockedA) a wraca do wartości poziomu, gdy ognisko wróci na miejsce", () => {
+    const lockedA = hyp.a;
+    const near = vec(-0.49, 0); // blisko ognisko1 — c się zaciska do 0.005, a razem z nim
+    const away = applyDrag(hyp, "ognisko2", near, lockedA);
+    if (away.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(away.a).toBeLessThan(hyp.a);
+    const back = applyDrag(away, "ognisko2", hyp.f2, lockedA);
+    if (back.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(back.a).toBe(hyp.a);
+    // bez blokady a zostaje przycięte i NIE wraca samo — gracz ma wolny uchwyt rozmiaru
+    // i sam je poprawi, tak jak dla elipsy (patrz komentarz w `applyDrag`)
+    const backNoLock = applyDrag(away, "ognisko2", hyp.f2);
+    if (backNoLock.kind !== "hiperbola") throw new Error("zły rodzaj");
+    expect(backNoLock.a).toBeLessThan(hyp.a);
+  });
+});
+
+// Zadanie 15c: uchwyt idzie za palcem TYLKO w planszy [-1, 1]² — patrz WHY przy
+// `clampToBoard`/`applyDrag`. Bez tego poziom 21 miał dokładne rozwiązanie z ogniskiem
+// w (−0.2, 1.7) (zadanie 15b), którego żaden dołek nie usuwa; regresja na to jest
+// w `tests/levels.test.ts`. Tu sprawdzamy sam mechanizm przycięcia, dla każdego rodzaju
+// krzywej i każdego rodzaju uchwytu.
+describe("uchwyty nie wychodzą poza planszę (zadanie 15c)", () => {
+  const inBoard = (p: Vec2): void => {
+    expect(p.x).toBeGreaterThanOrEqual(-1);
+    expect(p.x).toBeLessThanOrEqual(1);
+    expect(p.y).toBeGreaterThanOrEqual(-1);
+    expect(p.y).toBeLessThanOrEqual(1);
+  };
+
+  it("ognisko elipsy przeciągnięte daleko poza planszę kończy się na jej brzegu", () => {
+    const next = applyDrag(state, "ognisko1", vec(50, -80));
+    expect(next.f1).toEqual(vec(1, -1));
+    inBoard(next.f1);
+  });
+
+  it("uchwyt rozmiaru elipsy przeciągnięty daleko poza planszę kończy się w planszy", () => {
+    // palec daleko w rogu — bez ścięcia `a` (patrz `applyDrag`) uchwyt renderowałby się
+    // wzdłuż osi elipsy dużo dalej niż plansza, mimo że palec sam JEST przycięty
+    const next = applyDrag(state, "rozmiar", vec(50, 50));
+    inBoard(handlePositions(next).find((h) => h.id === "rozmiar")!.pos);
+  });
+
+  // Kontrprzykład z przeglądu kodu: z łukiem uchwyt rozmiaru NIE siedzi na osi wielkiej
+  // (`środek + oś·a`), a w środku łuku (`ellipsePoint(s, arc.mid)`) — inna formuła, zależna
+  // od `a` przez półoś małą `b = √(a²−c²)`. Ognisko blisko brzegu (y = 0.9) i `mid = π/2`
+  // (środek łuku „nad” osią wielką) dawały bez tej poprawki uchwyt w (0, 1.899) — daleko
+  // poza planszą — mimo że sam palec był przycięty do (1, 1).
+  it("uchwyt rozmiaru elipsy Z ŁUKIEM (środek łuku poza osią wielką) też kończy się w planszy", () => {
+    const shape: EllipseShape & { arc: { mid: number; length: number } } = {
+      kind: "elipsa", f1: vec(-0.05, 0.9), f2: vec(0.05, 0.9), a: 0.5,
+      arc: { mid: Math.PI / 2, length: 1 },
+    };
+    const next = applyDrag(shape, "rozmiar", vec(50, 50));
+    inBoard(handlePositions(next).find((h) => h.id === "rozmiar")!.pos);
+  });
+
+  it("ognisko i wierzchołek paraboli przeciągnięte daleko poza planszę kończą się na jej brzegu", () => {
+    const withFocus = applyDrag(par, "ognisko", vec(-50, 30));
+    if (withFocus.kind !== "parabola") throw new Error("zły rodzaj");
+    inBoard(withFocus.focus);
+    const withVertex = applyDrag(par, "wierzcholek", vec(30, -50));
+    if (withVertex.kind !== "parabola") throw new Error("zły rodzaj");
+    inBoard(withVertex.vertex);
+  });
+
+  it("ognisko hiperboli przeciągnięte daleko poza planszę kończy się na jej brzegu", () => {
+    const hyp = hyperbola(vec(-0.5, 0), vec(0.5, 0), 0.3, 1, { mid: 0, span: 2 });
+    const next = applyDrag(hyp, "ognisko1", vec(-90, 40));
+    if (next.kind !== "hiperbola") throw new Error("zły rodzaj");
+    inBoard(next.f1);
+  });
+
+  it("ognisko wciąż przyskakuje do celu tuż przy brzegu planszy, mimo przycięcia", () => {
+    // Cel LEŻY na brzegu (poziomy mają tam ogniska), palec kawałek ZA planszą, w promieniu
+    // przyskakiwania liczonym od SUROWEJ pozycji palca — przyskok dzieje się PRZED
+    // przycięciem (w `screens.ts`), więc nie jest tym pogorszony.
+    const target = vec(1, 0.3);
+    const near = vec(1 + SNAP_RADIUS * 0.5, 0.3);
+    const snapped = snapTo(near, [target], SNAP_RADIUS);
+    expect(snapped).toEqual(target);
+    const next = applyDrag(state, "ognisko1", snapped);
+    expect(next.f1).toEqual(target);
+  });
+});
+
+describe("lockedSize", () => {
+  const hyp = hyperbola(vec(-0.5, 0), vec(0.7, 0), 0.3, 1, { mid: 0, span: 2 });
+  it("zablokowany rozmiar elipsy i hiperboli daje `a` ze startu, inaczej nic", () => {
+    expect(lockedSize({ start: state, solution: state, locked: ["rozmiar"] })).toBe(0.8);
+    expect(lockedSize({ start: hyp, solution: hyp, locked: ["ognisko1", "rozmiar"] })).toBe(0.3);
+    expect(lockedSize({ start: state, solution: state, locked: ["ognisko1"] })).toBeUndefined();
+    expect(lockedSize({ start: hyp, solution: hyp, locked: [] })).toBeUndefined();
+  });
+
+  it("parabola nie ma rozmiaru — nawet blokada `rozmiar` nic nie daje", () => {
+    expect(lockedSize({ start: par, solution: par, locked: ["rozmiar"] })).toBeUndefined();
   });
 });

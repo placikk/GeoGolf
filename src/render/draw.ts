@@ -29,6 +29,7 @@ export const PALETTE = {
   tile: "rgba(94, 234, 212, 0.05)",
   tileEdge: "rgba(203, 213, 225, 0.22)",
   fixedFocus: "rgba(248, 113, 113, 0.45)",
+  hint: "rgba(203, 213, 225, 0.30)",
   sector: "rgba(248, 250, 252, 0.05)",
   board: "#10161e",
   frame: MUTED,
@@ -144,7 +145,10 @@ export function drawPiece(
   ctx: Ctx, cam: Camera, piece: Piece, color: string, glow: string, width: number,
 ): void {
   const pts = piecePolyline(piece);
-  glowPolyline(ctx, cam, pts, color, glow, width, piece.arc === undefined && pts.length > 2);
+  // Zamknięty obrys TYLKO dla całej elipsy. Kawałek z zakresem parametru też nie ma
+  // cięciwy, a domknięcie połączyłoby mu ramiona pętlą przez pół planszy.
+  const zamkniety = piece.arc === undefined && piece.range === undefined && pts.length > 2;
+  glowPolyline(ctx, cam, pts, color, glow, width, zamkniety);
 }
 
 /** Blady klin wachlarza od piłki. Samo wypełnienie, bez obrysu i bez poświaty,

@@ -1,5 +1,6 @@
 import { dist } from "../core/vec";
 import { ArcRange, EllipseShape, MIN_ARC_LENGTH } from "./types";
+import { cumulativeIndexAt } from "./cumulative";
 
 const TAU = 2 * Math.PI;
 /** Próbek na obwód. Łamana przez 512 punktów zaniża długość elipsy o ~1e-5 względnie —
@@ -40,14 +41,8 @@ function paramAt(cum: Float64Array, v: number): number {
   const P = cum[SAMPLES];
   const k = Math.floor(v / P);
   const r = v - k * P;
-  let lo = 0, hi = SAMPLES;
-  while (hi - lo > 1) {
-    const m = (lo + hi) >> 1;
-    if (cum[m] <= r) lo = m; else hi = m;
-  }
-  const seg = cum[lo + 1] - cum[lo];
-  const f = seg > 0 ? (r - cum[lo]) / seg : 0;
-  return k * TAU + (TAU * (lo + f)) / SAMPLES;
+  const indexFrac = cumulativeIndexAt(cum, r);
+  return k * TAU + (TAU * indexFrac) / SAMPLES;
 }
 
 export const perimeter = (s: EllipseShape): number => cumulative(s)[SAMPLES];

@@ -267,7 +267,7 @@ dla elips i odcinków, bo dla hiperboli jest po prostu niepoprawna (§4).
 | 21 | Wspólne ognisko | elipsa (hiperbola stała) | hiperbola przejmuje zbieżny pęk i przenosi go |
 | 22 | Druga strona | hiperbola (elipsa stała) | to samo od drugiej strony |
 | 23 | Która gałąź | hiperbola, obie gałęzie na planszy | gałąź należy do swojego ogniska |
-| 24 | Zwieńczenie | elipsa + parabola + hiperbola | kaskada z trzech krzywych |
+| 24 | Zwieńczenie | dwie parabole + elipsa + hiperbola | dwie drogi do jednego dołka: pół wachlarza przez parę parabol, pół przez elipsę i hiperbolę |
 
 **Poziom 17 wymaga uwagi przy budowie danych.** Parabola ma tylko dwa uchwyty, a oba
 sterują kierunkiem osi: przy przybitym wierzchołku przeciągnięcie ogniska obraca oś
@@ -281,9 +281,21 @@ rozmiaru, gracz ma ją odkryć ciągnąc uchwyt i widząc, że ósemka dalej wpa
 względem elipsy jest pouczająca — przy elipsie nie znaczył nic rozmiar, przy paraboli
 nie znaczy nic rozmiar, ale znaczy wszystko **kierunek osi**.
 
-Poziom 23 jest jedynym, na którym obie gałęzie hiperboli są widoczne na planszy. Czynna
-jest ta wskazana przez `branch`; druga jest narysowana i **nie odbija**. To jest
-zamierzone i ma być wyjaśnione podpowiedzią poziomu, bo inaczej wygląda jak usterka.
+**Poziom 24 — zmiana z 2026-09-26 (decyzja właściciela).** Pierwotny zapis „kaskada z trzech
+krzywych" (parabola → elipsa → hiperbola w jednym łańcuchu) jest geometrycznie niewykonalny:
+parabola rozsyła z ogniska wiązkę RÓWNOLEGŁĄ, a elipsa wiązki równoległej w punkcie nie skupia —
+robi to wyłącznie druga parabola. Wykazane w trakcie realizacji teoretycznie i pomiarem.
+Zwieńczenie łączy więc obie konstrukcje etapu równolegle: wachlarz dzieli się na dwie części,
+jedna idzie przez parę parabol, druga przez elipsę i hiperbolę, a obie kończą w tym samym dołku.
+Każda krzywa na planszy musi odbić co najmniej jedną piłkę rozwiązania — żadnej dekoracji.
+
+Poziom 23 jest jedynym, na którym obie gałęzie hiperboli są widoczne na planszy — **z wyboru,
+nie z geometrii** (decyzja właściciela z 2026-09-26): druga gałąź zmieściłaby się na planszy
+także na poziomach 21, 22 i 24, ale rysuje się tylko tam, gdzie jest lekcją, pod flagą `twin`
+w danych poziomu. Czynna jest ta wskazana przez `branch`; druga jest tylko rysunkiem — blado,
+kolorem i grubością linii podpowiedzi, ale niezależnie od przełącznika podpowiedzi — i **nie
+odbija** (nie trafia do `shapeToPiece` ani do dowodu). To jest zamierzone i ma być wyjaśnione
+podpowiedzią poziomu, bo inaczej wygląda jak usterka.
 
 Parametry poziomów kalibruje się w trakcie implementacji; liczba i tematyka są ustalone.
 

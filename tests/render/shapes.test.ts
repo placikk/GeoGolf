@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { ellipseFromFoci, evalConic, lineThrough } from "../../src/core/conic";
+import { ellipseFromFoci, evalConic, hyperbolaFromFoci, lineThrough, parabolaFromFocusVertex } from "../../src/core/conic";
 import { makeCamera } from "../../src/render/camera";
-import { conicPolyline, piecePolyline } from "../../src/render/shapes";
+import { conicPolyline, piecePolyline, twinPolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
-import { arcEllipse, ellipse, ellipsePoint, segment, shapeToPiece } from "../../src/levels";
+import { arcEllipse, ellipse, ellipsePoint, hyperbola, parabola, segment, shapeFrame, shapeToPiece } from "../../src/levels";
+import { CurveFrame, frameParam, framePoint } from "../../src/core/frame";
 
 describe("kamera", () => {
   it("środek świata trafia w środek ekranu", () => {
@@ -97,5 +98,100 @@ describe("polilinia kawałka krzywej", () => {
     const k = ellipseFromFoci(vec(-0.3, 0.2), vec(0.4, -0.1), 0.75);
     const piece: Piece = whole(k);
     expect(piecePolyline(piece, 32)).toEqual(conicPolyline(k, 32));
+  });
+});
+
+describe("łamana kawałka z zakresem parametru", () => {
+  const frame: CurveFrame = {
+    kind: "hiperbola", center: vec(0, 0), axis: vec(1, 0), a: 0.3, b: 0.4, branch: 1,
+  };
+  const piece: Piece = {
+    conic: hyperbolaFromFoci(vec(-0.5, 0), vec(0.5, 0), 0.3),
+    range: { from: -1.2, to: 0.8, frame },
+  };
+
+  it("zaczyna się i kończy DOKŁADNIE na końcach zakresu", () => {
+    const pts = piecePolyline(piece, 32);
+    expect(pts[0].x).toBeCloseTo(framePoint(frame, -1.2).x, 12);
+    expect(pts[0].y).toBeCloseTo(framePoint(frame, -1.2).y, 12);
+    expect(pts[pts.length - 1].x).toBeCloseTo(framePoint(frame, 0.8).x, 12);
+    expect(pts[pts.length - 1].y).toBeCloseTo(framePoint(frame, 0.8).y, 12);
+  });
+
+  it("wszystkie punkty leżą na krzywej i na czynnej gałęzi", () => {
+    const pts = piecePolyline(piece, 32);
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      expect(evalConic(piece.conic, p)).toBeCloseTo(0, 9);
+      expect(p.x).toBeGreaterThan(0); // prawa gałąź
+      // parametr każdego punktu musi leżeć w zakresie
+      const { t } = frameParam(frame, p);
+      expect(t).toBeGreaterThanOrEqual(piece.range!.from - 1e-9);
+      expect(t).toBeLessThanOrEqual(piece.range!.to + 1e-9);
+      // parametry są monotoniczne rosnące
+      if (i > 0) {
+        const { t: prevT } = frameParam(frame, pts[i - 1]);
+        expect(t).toBeGreaterThan(prevT - 1e-9);
+      }
+    }
+  });
+
+  it("parabola też się rysuje", () => {
+    const pf: CurveFrame = { kind: "parabola", vertex: vec(-0.8, 0), axis: vec(1, 0), p: 0.3 };
+    const pp: Piece = {
+      conic: parabolaFromFocusVertex(vec(-0.5, 0), vec(-0.8, 0)),
+      range: { from: -0.6, to: 0.6, frame: pf },
+    };
+    const pts = piecePolyline(pp, 16);
+    expect(pts).toHaveLength(17);
+    // końce DOKŁADNIE
+    expect(pts[0].x).toBeCloseTo(framePoint(pf, -0.6).x, 12);
+    expect(pts[0].y).toBeCloseTo(framePoint(pf, -0.6).y, 12);
+    expect(pts[16].x).toBeCloseTo(framePoint(pf, 0.6).x, 12);
+    expect(pts[16].y).toBeCloseTo(framePoint(pf, 0.6).y, 12);
+    // wszystkie punkty
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      expect(evalConic(pp.conic, p)).toBeCloseTo(0, 9);
+      // parametr każdego punktu musi leżeć w zakresie
+      const { t } = frameParam(pf, p);
+      expect(t).toBeGreaterThanOrEqual(-0.6 - 1e-9);
+      expect(t).toBeLessThanOrEqual(0.6 + 1e-9);
+      // parametry są monotoniczne rosnące
+      if (i > 0) {
+        const { t: prevT } = frameParam(pf, pts[i - 1]);
+        expect(t).toBeGreaterThan(prevT - 1e-9);
+      }
+    }
+  });
+});
+
+describe("druga gałąź hiperboli (tylko rysunek)", () => {
+  // span opisany DŁUGOŚCIĄ i z mid ≠ 0 — gdyby druga gałąź liczyła zakres po swojemu
+  // albo gubiła `mid`, różnica by wyszła
+  const hyp = hyperbola(vec(-0.5, 0.1), vec(0.6, -0.2), 0.3, 1, { mid: 0.2, length: 0.9 });
+
+  it("bez flagi `twin` nie ma czego rysować; parabola i elipsa też nie", () => {
+    expect(twinPolyline(hyp)).toBeUndefined();
+    expect(twinPolyline(parabola(vec(-0.5, 0), vec(-0.8, 0), { mid: 0, span: 1.2 }))).toBeUndefined();
+    expect(twinPolyline(ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8))).toBeUndefined();
+  });
+
+  it("z flagą: ta sama rama z przeciwną gałęzią i TEN SAM zakres parametru co czynny kawałek", () => {
+    const s = { ...hyp, twin: true as const };
+    const pts = twinPolyline(s, 16);
+    if (pts === undefined) throw new Error("brak drugiej gałęzi");
+    expect(pts).toHaveLength(17);
+    const range = shapeToPiece(s).range;
+    if (range === undefined) throw new Error("hiperbola ma zawsze zakres");
+    const druga = { ...shapeFrame(s), branch: -1 as const };
+    expect(pts[0].x).toBeCloseTo(framePoint(druga, range.from).x, 12);
+    expect(pts[0].y).toBeCloseTo(framePoint(druga, range.from).y, 12);
+    expect(pts[16].x).toBeCloseTo(framePoint(druga, range.to).x, 12);
+    expect(pts[16].y).toBeCloseTo(framePoint(druga, range.to).y, 12);
+    for (const p of pts) {
+      expect(evalConic(shapeToPiece(s).conic, p)).toBeCloseTo(0, 9);
+      expect(frameParam(shapeFrame(s), p).branch).toBe(-1);
+    }
   });
 });
