@@ -1,4 +1,4 @@
-import { Vec2, add, dist, dot, norm, scale, sub } from "../core/vec";
+import { Vec2, add, dist, dot, norm, scale, sub, vec } from "../core/vec";
 import {
   ArcRange, EllipseShape, Handle, HyperbolaShape, Level, MIN_ARC_LENGTH, MovableShape, ParabolaShape, PlayerPiece,
   SegmentShape,
@@ -186,15 +186,23 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
  *  siebie niż promień łapania palcem, więc gracz nie umie złapać końca osobno od środka. */
 export const MIN_SEGMENT_LENGTH = 0.2;
 
-/** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH. Gdy odsunięcie
- *  wyprowadziłoby koniec poza planszę (drugi koniec przy brzegu), idzie w przeciwną stronę —
- *  plansza ma bok 2, więc jedna z dwóch stron zawsze się mieści. */
+/** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH. Najpierw
+ *  próbujemy dalej wzdłuż kierunku palca, potem w przeciwną stronę — odcinek zostaje na
+ *  swojej prostej. W rogu planszy po skosie obie strony mogą wypaść (np. drugi koniec w
+ *  (0.95, -0.95)), więc ostatnia próba idzie od drugiego końca ku środkowi planszy: każda
+ *  współrzędna maleje wtedy co do modułu (albo, gdy drugi koniec leży bliżej środka niż
+ *  MIN_SEGMENT_LENGTH, wynik ląduje w tej odległości od środka), więc zawsze się mieści. */
 const keepLength = (moved: Vec2, other: Vec2, fallback: Vec2): Vec2 => {
   const d = dist(moved, other);
   if (d >= MIN_SEGMENT_LENGTH) return moved;
-  const dir = d < 1e-12 ? norm(fallback) : norm(sub(moved, other));
+  // odcinek zdegenerowany (oba końce w jednym punkcie) nie ma kierunku do normalizacji
+  const dir = d < 1e-12 ? (dist(fallback, vec(0, 0)) < 1e-12 ? vec(1, 0) : norm(fallback)) : norm(sub(moved, other));
   const there = add(other, scale(dir, MIN_SEGMENT_LENGTH));
-  return inBoard(there) ? there : add(other, scale(dir, -MIN_SEGMENT_LENGTH));
+  if (inBoard(there)) return there;
+  const back = add(other, scale(dir, -MIN_SEGMENT_LENGTH));
+  if (inBoard(back)) return back;
+  const toCentre = dist(other, vec(0, 0)) < 1e-12 ? vec(1, 0) : norm(sub(vec(0, 0), other));
+  return add(other, scale(toCentre, MIN_SEGMENT_LENGTH));
 };
 
 /** Odcinek: końce idą za palcem (z minimalną długością), środek przesuwa cały odcinek bez

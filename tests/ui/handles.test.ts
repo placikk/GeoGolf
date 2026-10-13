@@ -489,6 +489,30 @@ describe("lustro-odcinek gracza", () => {
     expect(dist(moved.from, moved.to)).toBeCloseTo(MIN_SEGMENT_LENGTH, 12);
   });
 
+  it("w rogu planszy oba kierunki wzdłuż odcinka wypadają — koniec wraca w stronę środka", () => {
+    const wRogu = segment(vec(0.95, -0.95), vec(0.6, -0.6));
+    const moved = applyDrag(wRogu, "koniec2", vec(0.99, -0.9));
+    if (moved.kind !== "odcinek") throw new Error("zły rodzaj");
+    for (const p of [moved.from, moved.to]) {
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(p.y)).toBeLessThanOrEqual(1);
+    }
+    expect(dist(moved.from, moved.to)).toBeCloseTo(MIN_SEGMENT_LENGTH, 12);
+  });
+
+  it("koniec1 idzie za palcem, koniec2 stoi", () => {
+    const moved = applyDrag(lustro, "koniec1", vec(-0.5, 0.9));
+    expect(moved).toEqual(segment(vec(-0.5, 0.9), lustro.to));
+  });
+
+  it("zdegenerowany odcinek (oba końce w jednym punkcie) nie daje NaN", () => {
+    const punkt = segment(vec(0.2, 0.2), vec(0.2, 0.2));
+    const moved = applyDrag(punkt, "koniec2", vec(0.2, 0.2));
+    if (moved.kind !== "odcinek") throw new Error("zły rodzaj");
+    for (const v of [moved.from.x, moved.from.y, moved.to.x, moved.to.y]) expect(Number.isFinite(v)).toBe(true);
+    expect(dist(moved.from, moved.to)).toBeCloseTo(MIN_SEGMENT_LENGTH, 12);
+  });
+
   it("uchwytów odcinka nie dotyczy przyskakiwanie — nie ma ognisk", () => {
     expect(shapeFoci(lustro)).toEqual([]);
   });
