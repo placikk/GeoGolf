@@ -190,7 +190,7 @@ describe("poziomy", () => {
       const start = piece.start;
       const sol = piece.solution;
       // parabola nie ma uchwytu rozmiaru — nie ma czego przywracać
-      if (start.kind === "parabola" || sol.kind === "parabola") return;
+      if (start.kind === "parabola" || start.kind === "odcinek" || sol.kind === "parabola" || sol.kind === "odcinek") return;
       // pułapka dotyczy tylko ognisk, którymi gracz naprawdę może objechać — objazd
       // ciągnie WOLNE ogniska; gdy oba są też zablokowane (np. okrąg poziomu 11),
       // nie ma czym objeżdżać. Na poziomach z zablokowanym tylko jednym ogniskiem
@@ -205,7 +205,7 @@ describe("poziomy", () => {
       // wyżej — to tylko odzyskuje dla TypeScriptu zawężenie zgubione przez ogólne
       // przeciążenie applyDrag (zwraca MovableShape)
       const narrow = (s: MovableShape) => {
-        if (s.kind === "parabola") throw new Error("zły rodzaj");
+        if (s.kind === "parabola" || s.kind === "odcinek") throw new Error("zły rodzaj");
         return s;
       };
 
@@ -235,7 +235,7 @@ describe("poziomy", () => {
     level.pieces.forEach((piece, k) => {
       const sol = piece.solution;
       // parabola nie ma uchwytu `ognisko1` — jej jedyne ognisko sprawdza osobny test niżej
-      if (piece.locked.includes("ognisko1") || sol.kind === "parabola") return;
+      if (piece.locked.includes("ognisko1") || sol.kind === "parabola" || sol.kind === "odcinek") return;
       for (let i = 0; i < 8; i++) {
         const shifted: MovableShape = { ...sol, f1: add(sol.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
         const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
@@ -253,7 +253,7 @@ describe("poziomy", () => {
     level.pieces.forEach((piece, k) => {
       const sol = piece.solution;
       // parabola nie ma uchwytu `ognisko2` — jej jedyne ognisko sprawdza osobny test niżej
-      if (piece.locked.includes("ognisko2") || sol.kind === "parabola") return;
+      if (piece.locked.includes("ognisko2") || sol.kind === "parabola" || sol.kind === "odcinek") return;
       let missed = 0;
       for (let i = 0; i < 8; i++) {
         const shifted: MovableShape = { ...sol, f2: add(sol.f2, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
@@ -295,7 +295,8 @@ describe("poziomy", () => {
   const shrinkSpan = (span: Span, d: number): Span =>
     span.length !== undefined ? { ...span, length: span.length - 2 * d } : { ...span, span: span.span - 2 * d };
   const shrinkMovable = (s: MovableShape, d: number): MovableShape =>
-    s.kind === "elipsa"
+    s.kind === "odcinek" ? s
+    : s.kind === "elipsa"
       ? (s.arc === undefined ? s : { ...s, arc: { ...s.arc, length: s.arc.length - 2 * d } })
       : { ...s, span: shrinkSpan(s.span, d) };
   const shrinkShape = (s: Shape, d: number): Shape => (s.kind === "odcinek" ? s : shrinkMovable(s, d));
@@ -498,8 +499,8 @@ describe("poziomy", () => {
       const sol = piece.solution;
       const lockedA = lockedSize(piece);
       // każde wolne ognisko elementu razem z jego celem
-      const wolne: { uchwyt: Handle; cel: Vec2 }[] = sol.kind === "parabola"
-        ? [{ uchwyt: "ognisko", cel: sol.focus }]
+      const wolne: { uchwyt: Handle; cel: Vec2 }[] = sol.kind === "odcinek" ? []
+        : sol.kind === "parabola" ? [{ uchwyt: "ognisko", cel: sol.focus }]
         : [{ uchwyt: "ognisko1", cel: sol.f1 }, { uchwyt: "ognisko2", cel: sol.f2 }];
       for (const { uchwyt, cel } of wolne) {
         if (piece.locked.includes(uchwyt)) continue;

@@ -69,6 +69,7 @@ export function shapeFrame(s: ParabolaShape | HyperbolaShape): CurveFrame {
 /** Ogniska kształtu — cele przyskakiwania. Okrąg (f1 = f2) zwraca pustą listę:
  *  jego „ognisko" to środek przeszkody, nigdy nie jest sensownym celem (etap 2). */
 export function shapeFoci(s: MovableShape): Vec2[] {
+  if (s.kind === "odcinek") return [];
   if (s.kind === "parabola") return [s.focus];
   if (s.kind === "hiperbola") return [s.f1, s.f2];
   return isCircle(s) ? [] : [s.f1, s.f2];
@@ -79,6 +80,7 @@ export function shapeAxisAngle(s: MovableShape): number {
   const u =
     s.kind === "elipsa" ? ellipseAxis(s)
     : s.kind === "parabola" ? norm(sub(s.focus, s.vertex))
+    : s.kind === "odcinek" ? norm(sub(s.to, s.from))
     : norm(sub(s.f2, s.f1));
   return Math.atan2(u.y, u.x);
 }

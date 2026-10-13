@@ -1,6 +1,7 @@
 import { Vec2, add, dist, dot, norm, scale, sub } from "../core/vec";
 import {
   ArcRange, EllipseShape, Handle, HyperbolaShape, Level, MIN_ARC_LENGTH, MovableShape, ParabolaShape, PlayerPiece,
+  SegmentShape,
 } from "../levels/types";
 import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, shapeFoci } from "../levels/shape";
 import { arcFromParams, arcLengthBetween, arcParams, paramAtLength, perimeter } from "../levels/arc";
@@ -17,6 +18,13 @@ const hyperbolaVertex = (s: HyperbolaShape): Vec2 =>
   add(scale(add(s.f1, s.f2), 0.5), scale(norm(sub(s.f2, s.f1)), s.branch * s.a));
 
 export function handlePositions(state: MovableShape): { id: Handle; pos: Vec2 }[] {
+  if (state.kind === "odcinek") {
+    return [
+      { id: "koniec1", pos: state.from },
+      { id: "koniec2", pos: state.to },
+      { id: "srodek", pos: scale(add(state.from, state.to), 0.5) },
+    ];
+  }
   if (state.kind === "parabola") {
     return [{ id: "ognisko", pos: state.focus }, { id: "wierzcholek", pos: state.vertex }];
   }
@@ -174,6 +182,34 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
   return { ...s, vertex };
 }
 
+/** Najkrótsze lustro-odcinek. Nie MIN_GAP: przy krótszym trzy uchwyty odcinka leżą bliżej
+ *  siebie niż promień łapania palcem, więc gracz nie umie złapać końca osobno od środka. */
+export const MIN_SEGMENT_LENGTH = 0.2;
+
+/** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH. Gdy odsunięcie
+ *  wyprowadziłoby koniec poza planszę (drugi koniec przy brzegu), idzie w przeciwną stronę —
+ *  plansza ma bok 2, więc jedna z dwóch stron zawsze się mieści. */
+const keepLength = (moved: Vec2, other: Vec2, fallback: Vec2): Vec2 => {
+  const d = dist(moved, other);
+  if (d >= MIN_SEGMENT_LENGTH) return moved;
+  const dir = d < 1e-12 ? norm(fallback) : norm(sub(moved, other));
+  const there = add(other, scale(dir, MIN_SEGMENT_LENGTH));
+  return inBoard(there) ? there : add(other, scale(dir, -MIN_SEGMENT_LENGTH));
+};
+
+/** Odcinek: końce idą za palcem (z minimalną długością), środek przesuwa cały odcinek bez
+ *  obrotu — o tyle, o ile oba końce zostają w planszy. */
+function dragSegment(s: SegmentShape, handle: Handle, to: Vec2): SegmentShape {
+  if (handle === "koniec1") return { ...s, from: keepLength(to, s.to, sub(s.from, s.to)) };
+  if (handle === "koniec2") return { ...s, to: keepLength(to, s.from, sub(s.to, s.from)) };
+  if (handle !== "srodek") return s;
+  const d = sub(to, scale(add(s.from, s.to), 0.5));
+  const dx = clamp(d.x, BOARD_MIN - Math.min(s.from.x, s.to.x), BOARD_MAX - Math.max(s.from.x, s.to.x));
+  const dy = clamp(d.y, BOARD_MIN - Math.min(s.from.y, s.to.y), BOARD_MAX - Math.max(s.from.y, s.to.y));
+  const delta = { x: dx, y: dy };
+  return { ...s, from: add(s.from, delta), to: add(s.to, delta) };
+}
+
 /** Gdy przeciągane ognisko usiądzie na drugim, c → 0 i żadne a nie mieści się w (0, c) —
  *  `fit` poniżej wtedy nie ma z czego wybrać. Tak jak parabola broni się przed ogniskiem
  *  w wierzchołku, odsuwamy przeciągane ognisko o MIN_FOCUS_GAP od drugiego, zamiast
@@ -254,6 +290,7 @@ export function applyDrag(
   // niż promień). Cele przyskakiwania (ogniska poziomu) same leżą w planszy, więc
   // wynik przyskoku i tak przechodzi przez przycięcie bez zmiany.
   const clamped = clampToBoard(to);
+  if (state.kind === "odcinek") return dragSegment(state, handle, clamped);
   if (state.kind === "parabola") return dragParabola(state, handle, clamped);
   if (state.kind === "hiperbola") return dragHyperbola(state, handle, clamped, lockedA);
   if (handle === "poczatek" || handle === "koniec") {

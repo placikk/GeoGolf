@@ -3,9 +3,11 @@ import { Vec2, vec, dist } from "../../src/core/vec";
 import {
   EllipseShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, arcEllipse, arcLengthBetween, arcParams,
   circle, ellipse, ellipseParam, ellipsePoint, hyperbola, paramAtLength, parabola, perimeter, segment, shapeAxisAngle,
-  shapeConic,
+  shapeConic, shapeFoci,
 } from "../../src/levels";
-import { applyDrag, handlePositions, lockedSize, moveArcEnd, pickHandle, snapTargets, snapTo } from "../../src/ui/handles";
+import {
+  MIN_SEGMENT_LENGTH, applyDrag, handlePositions, lockedSize, moveArcEnd, pickHandle, snapTargets, snapTo,
+} from "../../src/ui/handles";
 import { ellipseFromFoci, evalConic } from "../../src/core/conic";
 
 const state: EllipseShape = ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8);
@@ -428,5 +430,70 @@ describe("lockedSize", () => {
 
   it("parabola nie ma rozmiaru — nawet blokada `rozmiar` nic nie daje", () => {
     expect(lockedSize({ start: par, solution: par, locked: ["rozmiar"] })).toBeUndefined();
+  });
+});
+
+describe("lustro-odcinek gracza", () => {
+  const lustro = segment(vec(-0.2, 0.3), vec(0.2, 0.5));
+
+  it("ma trzy uchwyty: dwa końce i środek", () => {
+    const hs = handlePositions(lustro);
+    expect(hs.map((h) => h.id)).toEqual(["koniec1", "koniec2", "srodek"]);
+    expect(hs[0].pos).toEqual(lustro.from);
+    expect(hs[1].pos).toEqual(lustro.to);
+    expect(hs[2].pos.x).toBeCloseTo(0, 12);
+    expect(hs[2].pos.y).toBeCloseTo(0.4, 12);
+  });
+
+  it("koniec idzie za palcem, drugi koniec stoi", () => {
+    const moved = applyDrag(lustro, "koniec2", vec(0.5, -0.1));
+    expect(moved).toEqual(segment(lustro.from, vec(0.5, -0.1)));
+  });
+
+  it("środek przesuwa cały odcinek bez obrotu i bez zmiany długości", () => {
+    const moved = applyDrag(lustro, "srodek", vec(0.3, -0.2));
+    if (moved.kind !== "odcinek") throw new Error("zły rodzaj");
+    expect(moved.from.x).toBeCloseTo(0.1, 12);
+    expect(moved.from.y).toBeCloseTo(-0.3, 12);
+    expect(moved.to.x).toBeCloseTo(0.5, 12);
+    expect(moved.to.y).toBeCloseTo(-0.1, 12);
+  });
+
+  it("środek nie wyprowadza żadnego końca poza planszę", () => {
+    const moved = applyDrag(lustro, "srodek", vec(0.95, 0.95));
+    if (moved.kind !== "odcinek") throw new Error("zły rodzaj");
+    for (const p of [moved.from, moved.to]) {
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(p.y)).toBeLessThanOrEqual(1);
+    }
+    // kierunek i długość bez zmian — przesunięcie, nie obrót
+    expect(moved.to.x - moved.from.x).toBeCloseTo(0.4, 12);
+    expect(moved.to.y - moved.from.y).toBeCloseTo(0.2, 12);
+    // dosunięty do brzegu, nie zatrzymany wcześniej
+    expect(Math.max(moved.from.y, moved.to.y)).toBeCloseTo(1, 12);
+  });
+
+  it("koniec nie zbliża się do drugiego bardziej niż MIN_SEGMENT_LENGTH", () => {
+    for (const cel of [lustro.from, vec(-0.15, 0.32)]) {
+      const moved = applyDrag(lustro, "koniec2", cel);
+      if (moved.kind !== "odcinek") throw new Error("zły rodzaj");
+      expect(dist(moved.from, moved.to)).toBeCloseTo(MIN_SEGMENT_LENGTH, 12);
+    }
+  });
+
+  it("przy brzegu odsunięcie końca idzie w stronę planszy", () => {
+    const przyBrzegu = segment(vec(0.95, 0), vec(0.5, 0));
+    const moved = applyDrag(przyBrzegu, "koniec2", vec(1, 0));
+    if (moved.kind !== "odcinek") throw new Error("zły rodzaj");
+    expect(moved.to.x).toBeCloseTo(0.75, 12);
+    expect(dist(moved.from, moved.to)).toBeCloseTo(MIN_SEGMENT_LENGTH, 12);
+  });
+
+  it("uchwytów odcinka nie dotyczy przyskakiwanie — nie ma ognisk", () => {
+    expect(shapeFoci(lustro)).toEqual([]);
+  });
+
+  it("kąt osi odcinka to kierunek od from do to", () => {
+    expect(shapeAxisAngle(lustro)).toBeCloseTo(Math.atan2(0.2, 0.4), 12);
   });
 });
