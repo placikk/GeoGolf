@@ -21,8 +21,9 @@ const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
   const store = browserStore();
-  let progress = loadProgress(store, LEVELS.length);
-  let levelIndex = progress.last;
+  let progress = loadProgress(store, LEVELS.map((l) => l.id));
+  // brak zapisu (albo poziom, którego już nie ma) → -1 → pierwszy poziom
+  let levelIndex = Math.max(0, LEVELS.findIndex((l) => l.id === progress.lastId));
   let game: GameState = newGame(LEVELS[levelIndex]);
   let menuOpen = false;
   let settings = loadSettings(store);
@@ -61,7 +62,7 @@ export function mount(canvas: HTMLCanvasElement): void {
   function goTo(index: number): void {
     levelIndex = index;
     game = newGame(LEVELS[index]);
-    progress = { ...progress, last: index };
+    progress = { ...progress, lastId: LEVELS[index].id };
     saveProgress(store, progress);
   }
 
