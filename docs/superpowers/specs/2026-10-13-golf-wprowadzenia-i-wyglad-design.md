@@ -179,8 +179,8 @@ kształtu, z wariantem „stały” (przygaszony).
 
 - Stałe elipsy, parabole i hiperbole: kolor rodzaju, przygaszony, bez poświaty i bez
   uchwytów; ich ogniska to blade kropki w tym samym kolorze.
-- Czerwone zostają tylko **przeszkody**: okręgi (elipsa, której oba ogniska są tym samym punktem — tak buduje je `circle()`
-  punkt) i odcinki stałe (bandy). Ogniska okręgów dalej nie są rysowane.
+- Czerwone zostają tylko **przeszkody**: okręgi (elipsa, której oba ogniska są tym samym punktem — tak buduje je
+  `circle()`) i odcinki stałe (bandy). Ogniska okręgów dalej nie są rysowane.
 
 Zmiana wobec stanu obecnego (wszystko stałe na czerwono) — decyzja właściciela.
 
