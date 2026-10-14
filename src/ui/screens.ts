@@ -81,12 +81,14 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (menuOpen && game.phase === "dowod") game = retry(game);
   }
 
-  /** „?" — plansza mechaniki bieżącego poziomu. Jak menu przerywa trwający dowód. */
+  /** „?" jest rysowane i dotykalne tylko poza menu, ustawieniami i dowodem (wtedy napis
+   *  „Poziom N / M" obok niego też nie jest rysowany). */
+  const helpVisible = (): boolean => !menuOpen && !settingsOpen && game.phase !== "dowod";
+
+  /** „?" — plansza mechaniki bieżącego poziomu. Dowód nie może trwać, gdy „?" jest
+   *  dotykalne (patrz `helpVisible`), więc nie ma czego przerywać. */
   function openHelp(): void {
     card = cardFor(LEVELS.map((l) => l.id), levelIndex) ?? null;
-    menuOpen = false;
-    settingsOpen = false;
-    if (game.phase === "dowod") game = retry(game);
   }
 
   function toggleSettings(): void {
@@ -122,7 +124,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       consumedReset = true;
       return;
     }
-    if (hitRect(helpButton(viewW()), p)) {
+    if (helpVisible() && hitRect(helpButton(viewW()), p)) {
       openHelp();
       consumedReset = true;
       return;
@@ -248,7 +250,9 @@ export function mount(canvas: HTMLCanvasElement): void {
     boardFrame(ctx, c, PALETTE.board, PALETTE.frame, PALETTE.frameGlow, 1);
 
     // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
-    // gdzie lecą piłki" wyglądałby na błąd gry; mały i przycięty do planszy
+    // gdzie lecą piłki" wyglądałby na błąd gry; klin jest mały i przycięty do planszy,
+    // strzałka nie jest przycinana, ale się mieści: piłki etapu 0 leżą co najmniej 0.4
+    // pod górną ścianą (patrz test w `tests/levels.test.ts`)
     if (game.phase === "edycja" && level.sector !== undefined) {
       // jedna piłka (wachlarz zerowej szerokości) — klin byłby pusty, więc strzałka kierunku
       if (level.sector.width === 0) {
@@ -361,7 +365,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     }
     drawMenuButton();
     drawSettingsButton();
-    drawHelpButton();
+    if (helpVisible()) drawHelpButton();
 
     function banner(title: string, hint: string, action: string | [string, string]): void {
       const w = viewW();
