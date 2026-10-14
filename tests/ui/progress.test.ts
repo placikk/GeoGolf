@@ -53,8 +53,8 @@ describe("postęp", () => {
   });
 
   // Stary zapis (przed etapem 0) trzymał INDEKS w kolejności 24 poziomów. Indeks 20 to był
-  // poziom 21 „wspolne-ognisko" — po dodaniu etapu 0 i zamianie z „druga-strona" stoi on
-  // pod innym numerem, a gracz ma wrócić dokładnie do niego, nie do poziomu 21 nowej listy.
+  // poziom „wspolne-ognisko" — po dodaniu etapu 0 i zamianie z „druga-strona" stoi on
+  // pod innym numerem, a gracz ma wrócić dokładnie do niego, nie do poziomu o starym numerze.
   it("stary zapis z indeksem przelicza się na ten sam poziom, nie na ten sam numer", () => {
     const p = loadProgress(memory({ [KEY]: '{"solved":["ogniska"],"last":20}' }), IDS);
     expect(p).toEqual({ solved: ["ogniska"], lastId: "wspolne-ognisko" });

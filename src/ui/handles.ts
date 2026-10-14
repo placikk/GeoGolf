@@ -182,8 +182,10 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
   return { ...s, vertex };
 }
 
-/** Najkrótsze lustro-odcinek. Nie MIN_GAP: przy krótszym trzy uchwyty odcinka leżą bliżej
- *  siebie niż promień łapania palcem, więc gracz nie umie złapać końca osobno od środka. */
+/** Najkrótsze lustro-odcinek. Nie MIN_GAP: przy krótszym uchwyty końców zlewałyby się ze
+ *  środkowym. Przy 0.2 środkowy leży 0.1 od każdego końca, czyli nadal w promieniu łapania
+ *  (ok. 0.19), ale osobne łapanie działa, bo `pickHandle` bierze NAJBLIŻSZY uchwyt; 0.2
+ *  trzyma trzy uchwyty wyraźnie osobno (ok. 17 px każdy na telefonie). */
 export const MIN_SEGMENT_LENGTH = 0.2;
 
 /** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH (L). Dwie

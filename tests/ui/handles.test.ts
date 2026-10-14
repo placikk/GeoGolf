@@ -351,7 +351,7 @@ describe("uchwyty hiperboli", () => {
 });
 
 // Zadanie 15c: uchwyt idzie za palcem TYLKO w planszy [-1, 1]² — patrz WHY przy
-// `clampToBoard`/`applyDrag`. Bez tego poziom 21 miał dokładne rozwiązanie z ogniskiem
+// `clampToBoard`/`applyDrag`. Bez tego „wspolne-ognisko" miało dokładne rozwiązanie z ogniskiem
 // w (−0.2, 1.7) (zadanie 15b), którego żaden dołek nie usuwa; regresja na to jest
 // w `tests/levels.test.ts`. Tu sprawdzamy sam mechanizm przycięcia, dla każdego rodzaju
 // krzywej i każdego rodzaju uchwytu.

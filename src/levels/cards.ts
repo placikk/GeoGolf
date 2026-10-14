@@ -104,8 +104,9 @@ export const CARDS: Card[] = [
   },
 ];
 
-/** Punkt daleko za planszą: scena bez dołka i tak potrzebuje go dla `trace`, a tor opuszcza
- *  [-2, 2]² (granica `trace`), zanim zbliży się do niego na promień dołka. */
+/** Punkt daleko za planszą: scena bez dołka i tak potrzebuje go dla `trace`. Każdy odcinek
+ *  toru zostaje w [-2, 2]² (granica `trace`), więc jego najmniejsza odległość od (99, 99)
+ *  jest o wiele większa niż promień dołka. */
 const NO_HOLE = vec(99, 99);
 
 /** Tory miniscenki — ten sam `trace` co w dowodzie, ze ścianami planszy. */
@@ -126,8 +127,8 @@ export const autoCard = (id: string, solved: readonly string[]): Card | undefine
   solved.includes(id) ? undefined : introCard(id);
 
 /** Plansza mechaniki, do której należy poziom o indeksie `index`: ostatnia plansza, której
- *  `before` stoi w `ids` nie dalej niż on. Tak „?" na poziomie 22 przypomina parabolę, choć
- *  sama plansza paraboli stoi przed 20. */
+ *  `before` stoi w `ids` nie dalej niż on. Tak „?" na poziomie „obrot-osi" przypomina parabolę, choć
+ *  sama plansza paraboli stoi przed „ognisko-paraboli". */
 export function cardFor(ids: readonly string[], index: number): Card | undefined {
   let found: Card | undefined;
   let foundAt = -1;

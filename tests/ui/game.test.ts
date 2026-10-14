@@ -81,7 +81,7 @@ describe("stan gry", () => {
     expect(advance(g, 1 / 60)).toBe(g);
   });
 
-  describe("stan gry etapu 2", () => {
+  describe("stan gry na wszystkich poziomach", () => {
     it("poziom z dwoma elementami startuje z oboma", () => {
       const two = LEVELS.find((l) => l.pieces.length === 2)!;
       expect(newGame(two).pieces).toEqual(two.pieces.map((p) => p.start));
@@ -97,7 +97,7 @@ describe("stan gry", () => {
       }
     });
 
-    it.each(LEVELS.slice(8).map((l) => [l.id, l] as const))(
+    it.each(LEVELS.map((l) => [l.id, l] as const))(
       "poziom %s: rozwiązanie kończy się wygraną w pętli gry",
       (_id, lvl) => {
         let g = startProof({ ...newGame(lvl), pieces: lvl.pieces.map((p) => p.solution) });

@@ -114,7 +114,7 @@ describe("kształty poziomu", () => {
   });
 
   it("piłka, która przedtem przepadała poza planszą, teraz odbija się od ramki", () => {
-    // start poziomu 8: piłka leży poza małą elipsą startową, więc piłki lecą w brzeg planszy
+    // start poziomu „zwienczenie": piłka leży poza małą elipsą startową, więc piłki lecą w brzeg planszy
     // (bez ścian przepadały za nim; zmierzone: wszystkie osiem trafia w ramkę)
     const level = LEVELS.find((l) => l.id === "zwienczenie")!;
     const pieces = level.pieces.map((p) => p.start);
