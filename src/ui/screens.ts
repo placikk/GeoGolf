@@ -1,6 +1,8 @@
 import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, Shape, shapeFoci, shapeToPiece } from "../levels";
-import { makeCamera } from "../render/camera";
+import {
+  Card, LEVELS, SNAP_RADIUS, Shape, autoCard, cardFor, sceneTraces, shapeFoci, shapeToPiece,
+} from "../levels";
+import { makeCamera, rectCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, dashedPolyline, drawPiece, glowDot, glowPolyline, handleShape, holeMark,
   sectorWedge,
@@ -11,8 +13,8 @@ import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner, settingsButton,
-  settingsLayout, winAction, winLabels,
+  MENU_BUTTON, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner,
+  settingsButton, settingsLayout, winAction, winLabels,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -30,6 +32,8 @@ export function mount(canvas: HTMLCanvasElement): void {
   let menuOpen = false;
   let settings = loadSettings(store);
   let settingsOpen = false;
+  /** otwarta plansza z zasadą; `null` — żadna */
+  let card: Card | null = autoCard(LEVELS[levelIndex].id, progress.solved) ?? null;
   let dragging: HandleRef | null = null;
   let pointer: Vec2 | null = null;
   let consumedReset = false;
@@ -66,6 +70,8 @@ export function mount(canvas: HTMLCanvasElement): void {
     game = newGame(LEVELS[index]);
     progress = { ...progress, lastId: LEVELS[index].id };
     saveProgress(store, progress);
+    // pierwszy poziom nowej mechaniki, jeszcze niezaliczony: najpierw zasada
+    card = autoCard(LEVELS[index].id, progress.solved) ?? null;
   }
 
   function toggleMenu(): void {
@@ -73,6 +79,14 @@ export function mount(canvas: HTMLCanvasElement): void {
     settingsOpen = false;
     // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
     if (menuOpen && game.phase === "dowod") game = retry(game);
+  }
+
+  /** „?" — plansza mechaniki bieżącego poziomu. Jak menu przerywa trwający dowód. */
+  function openHelp(): void {
+    card = cardFor(LEVELS.map((l) => l.id), levelIndex) ?? null;
+    menuOpen = false;
+    settingsOpen = false;
+    if (game.phase === "dowod") game = retry(game);
   }
 
   function toggleSettings(): void {
@@ -101,6 +115,18 @@ export function mount(canvas: HTMLCanvasElement): void {
 
   canvas.addEventListener("pointerdown", (e) => {
     const p = toScreenPoint(e);
+    if (card !== null) {
+      // plansza z zasadą zamyka się tylko przyciskiem „Gram" (dolny pas) — przypadkowe
+      // dotknięcie tekstu czy rysunku nie zabiera jej sprzed oczu
+      if (inActionBand(p, viewH())) card = null;
+      consumedReset = true;
+      return;
+    }
+    if (hitRect(helpButton(viewW()), p)) {
+      openHelp();
+      consumedReset = true;
+      return;
+    }
     if (hitRect(MENU_BUTTON, p)) {
       toggleMenu();
       consumedReset = true;
@@ -200,7 +226,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     time = now / 1000;
-    if (!menuOpen && !settingsOpen) {
+    if (!menuOpen && !settingsOpen && card === null) {
       const before = game.phase;
       game = advance(game, dt);
       if (before === "dowod" && game.phase === "wygrana") {
@@ -329,8 +355,13 @@ export function mount(canvas: HTMLCanvasElement): void {
 
     if (menuOpen) drawMenu();
     if (settingsOpen) drawSettings();
+    if (card !== null) {
+      drawCard(card);
+      return;
+    }
     drawMenuButton();
     drawSettingsButton();
+    drawHelpButton();
 
     function banner(title: string, hint: string, action: string | [string, string]): void {
       const w = viewW();
@@ -374,6 +405,55 @@ export function mount(canvas: HTMLCanvasElement): void {
       for (let i = -1; i <= 1; i++) {
         ctx.fillRect(b.x + b.w / 2 - 10, b.y + b.h / 2 + i * 6 - 1, 20, 2);
       }
+    }
+
+    /** „?" w kółku tuż za napisem „Poziom N / M" (ten sam wiersz, `helpButton` obejmuje oba).
+     *  Kółko liniami i „?" znakiem ASCII — nie polegamy na glifie ⓘ w czcionce telefonu. */
+    function drawHelpButton(): void {
+      ctx.font = "12px system-ui, sans-serif";
+      const tw = ctx.measureText(`Poziom ${levelIndex + 1} / ${LEVELS.length}`).width;
+      const cx = viewW() / 2 + tw / 2 + 14;
+      ctx.strokeStyle = PALETTE.muted;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, 18, 8, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.muted;
+      ctx.fillText("?", cx, 22);
+      ctx.textAlign = "left";
+    }
+
+    /** Plansza z zasadą: tytuł, zdanie, miniscenki liczone silnikiem i „Gram" w dolnym pasie.
+     *  Rysunek tymi samymi funkcjami co gra — te same kolory rodzajów, tory i dołek. */
+    function drawCard(k: Card): void {
+      const w = viewW();
+      const h = viewH();
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.fillRect(0, 0, w, h);
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText(k.title, w / 2, 34);
+      ctx.font = "15px system-ui, sans-serif";
+      wrapByWords(k.text, w - 32).slice(0, 4).forEach((line, i) => ctx.fillText(line, w / 2, 70 + i * 20));
+      cardLayout(w, h, k.scenes.length).forEach((r, i) => {
+        const scene = k.scenes[i];
+        const rc = rectCamera(r);
+        boardFrame(ctx, rc, PALETTE.board, PALETTE.frame, PALETTE.frameGlow, 1);
+        for (const s of scene.shapes) {
+          const st = shapeStyle(s, "gracz");
+          if (s.kind === "parabola") dashedPolyline(ctx, rc, parabolaAxis(s), st.line, 1);
+          drawPiece(ctx, rc, shapeToPiece(s), st.line, st.glow, 2);
+        }
+        for (const t of sceneTraces(scene)) glowPolyline(ctx, rc, t.path, PALETTE.trail, PALETTE.trailGlow, 1.5);
+        if (scene.hole !== undefined) holeMark(ctx, rc, scene.hole, PALETTE.hole, PALETTE.holeGlow, PALETTE.holeInside, 6);
+        for (const shot of scene.shots) glowDot(ctx, rc, shot.from, PALETTE.ball, PALETTE.ballGlow, 4);
+      });
+      ctx.font = "600 16px system-ui, sans-serif";
+      ctx.fillStyle = PALETTE.curve;
+      ctx.fillText("Gram", w / 2, h * 0.93);
+      ctx.textAlign = "left";
     }
 
     /** Zębatka rysowana liniami — nie polegamy na glifie ⚙ w czcionce telefonu. */

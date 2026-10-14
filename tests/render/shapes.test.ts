@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Vec2, dist, fromAngle, vec } from "../../src/core/vec";
 import { ellipseFromFoci, evalConic, hyperbolaFromFoci, lineThrough, parabolaFromFocusVertex } from "../../src/core/conic";
-import { makeCamera } from "../../src/render/camera";
+import { makeCamera, rectCamera } from "../../src/render/camera";
 import { conicPolyline, parabolaAxis, piecePolyline, shotArrow, twinPolyline } from "../../src/render/shapes";
 import { Piece, onPiece, whole } from "../../src/core/piece";
 import {
@@ -253,5 +253,21 @@ describe("strzałka strzału", () => {
     const d = fromAngle(0.3);
     expect(trzon[1].x).toBeCloseTo(d.x, 12);
     expect(trzon[1].y).toBeCloseTo(d.y, 12);
+  });
+});
+
+describe("kamera prostokąta (miniscenki)", () => {
+  it("plansza [-1, 1]² wpasowana w prostokąt i wyśrodkowana w nim", () => {
+    const r = { x: 40, y: 200, w: 300, h: 200 };
+    const c = rectCamera(r, 0);
+    expect(c.toScreen(vec(0, 0))).toEqual(vec(190, 300));
+    // krótszy bok wyznacza skalę: wysokość 200 → 100 px na jednostkę
+    expect(c.scale).toBeCloseTo(100, 9);
+    const g = c.toScreen(vec(-1, 1));
+    expect(g.x).toBeCloseTo(90, 9);
+    expect(g.y).toBeCloseTo(200, 9);
+    const back = c.toWorld(c.toScreen(vec(0.3, -0.7)));
+    expect(back.x).toBeCloseTo(0.3, 12);
+    expect(back.y).toBeCloseTo(-0.7, 12);
   });
 });

@@ -117,8 +117,13 @@ export function sceneTraces(scene: CardScene): TraceResult[] {
     }));
 }
 
-/** Plansza, którą gra pokazuje sama przy wejściu na poziom `id` (jeśli ten nie jest zaliczony). */
+/** Plansza, która stoi przed poziomem `id` (albo żadna). */
 export const introCard = (id: string): Card | undefined => CARDS.find((c) => c.before === id);
+
+/** Plansza, którą gra pokazuje sama przy wejściu na poziom `id`: jego plansza, dopóki poziom
+ *  nie jest zaliczony. Zaliczony — gracz zna zasadę, plansza została pod „?". */
+export const autoCard = (id: string, solved: readonly string[]): Card | undefined =>
+  solved.includes(id) ? undefined : introCard(id);
 
 /** Plansza mechaniki, do której należy poziom o indeksie `index`: ostatnia plansza, której
  *  `before` stoi w `ids` nie dalej niż on. Tak „?" na poziomie 22 przypomina parabolę, choć

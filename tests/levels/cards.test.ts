@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Vec2, dot, norm, sub } from "../../src/core/vec";
-import { CARDS, LEVELS, cardFor, introCard, sceneTraces } from "../../src/levels";
+import { CARDS, LEVELS, autoCard, cardFor, introCard, sceneTraces } from "../../src/levels";
 
 const IDS = LEVELS.map((l) => l.id);
 /** Kierunek ostatniego odcinka toru — dokąd piłka leci po ostatnim odbiciu. */
@@ -64,6 +64,13 @@ describe("która plansza dla którego poziomu", () => {
   it("plansza pokazuje się sama tylko na swoim poziomie", () => {
     expect(introCard("ogniska")?.id).toBe("elipsa");
     expect(introCard("rozmiar")).toBeUndefined();
+  });
+
+  it("sama — dopóki poziom nie jest zaliczony; potem tylko pod „?\"", () => {
+    expect(autoCard("ogniska", [])?.id).toBe("elipsa");
+    expect(autoCard("ogniska", ["skos"])?.id).toBe("elipsa");
+    expect(autoCard("ogniska", ["ogniska"])).toBeUndefined();
+    expect(autoCard("rozmiar", [])).toBeUndefined();
   });
 });
 
