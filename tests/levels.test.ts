@@ -7,6 +7,7 @@ import {
   levelCurves,
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
+import { SECTOR_REACH } from "../src/render/draw";
 import { piecePolyline, twinPolyline } from "../src/render/shapes";
 import { applyDrag, handlePositions, lockedSize } from "../src/ui/handles";
 
@@ -341,6 +342,26 @@ describe("poziomy", () => {
         expect(solves(level, moved), `element ${k}, ${deg}°`).toBe(false);
       }
     });
+  });
+
+  it("każde lustro-odcinek na starcie ma długość co najmniej 0.9 — obrót palcem potrzebuje ramienia", () => {
+    for (const level of LEVELS) {
+      level.pieces.forEach((piece, k) => {
+        if (piece.start.kind !== "odcinek") return;
+        expect(dist(piece.start.from, piece.start.to), `${level.id}, element ${k}`).toBeGreaterThanOrEqual(0.9);
+      });
+    }
+  });
+
+  // Strzałka strzału nie jest przycinana do planszy (klin tak) — mieści się, bo piłki
+  // etapu 0 leżą co najmniej 0.4 pod górną ścianą.
+  it("grot strzałki strzału jednej piłki leży wewnątrz planszy", () => {
+    for (const level of LEVELS.filter((l) => l.test.balls === 1)) {
+      if (level.sector === undefined) throw new Error(`${level.id}: jedna piłka bez wachlarza`);
+      const tip = add(level.ball, scale(fromAngle(level.sector.center), SECTOR_REACH));
+      expect(Math.abs(tip.x), level.id).toBeLessThanOrEqual(1);
+      expect(Math.abs(tip.y), level.id).toBeLessThanOrEqual(1);
+    }
   });
 
   // Skracamy o 0.02 z każdej strony — dawny 1° parametru na elipsie a ≈ 1 to ok. 0.017.

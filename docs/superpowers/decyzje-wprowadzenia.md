@@ -64,8 +64,9 @@ Pięć świadomych, z nagłówka planu:
 4. **Dodatki wynikające z jednej piłki:** podgląd torów strzela `min(2, balls)` piłkami
    (dwie piłki jednopiłkowego poziomu leciałyby tym samym torem), a baner po dowodzie mówi
    w liczbie pojedynczej („Wpadła" / „Chybiła" zamiast „Chybiło 1 z 1").
-5. **Numery poziomów w komentarzach** etapów 2–3 i w testach zostają historyczne (każdy plik
-   z takimi numerami ma notkę na górze); **nazwy testów** podają identyfikatory zamiast
+5. **Numery poziomów w komentarzach** etapów 2–3 i w testach zostają historyczne (pliki z
+   historycznymi numerami — `tests/levels.test.ts`, `src/levels/stage2.ts`, `stage3.ts` —
+   mają notkę na górze; w pozostałych komentarze podają identyfikatory); **nazwy testów** podają identyfikatory zamiast
    numerów, bo nazwa testu pojawia się w wyniku i nie może kłamać.
 
 ### Rozstrzygnięcia w trakcie realizacji
@@ -105,7 +106,7 @@ któregokolwiek poziomu (+1 test; razem 663).
 
 ## 4. Kalibracja
 
-Polecenia i wyniki (commit f7d62c5):
+Polecenia i wyniki (commit f7d62c5; wiersze trzech poziomów bilardowych przeliczone po fali końcowej):
 
 - `npx tsc --noEmit` — bez błędów (kod wyjścia 0).
 - `npx vitest run` — 26 plików, **663 testy zielone**.
@@ -114,15 +115,21 @@ Polecenia i wyniki (commit f7d62c5):
 
 | Poziom | Rozwiązanie | Start | Obrót ±3° | Obrót ±2° |
 |---|---|---|---|---|
-| `odbicie` | 1/1 | 0/1 | 0/1 (odpada) | 1/1 (jeszcze wygrywa) |
-| `dwa-odbicia` | 1/1 | 0/1 | 0/1 (odpada) | 1/1 (jeszcze wygrywa) |
-| `za-rogiem` | 1/1 | 0/1 | 0/1 (odpada) | 0/1 (odpada) |
+| `odbicie` | 1/1 | 0/1 | 0/1 (odpada) | 1/1 (jeszcze wygrywa; okno ±2.15°) |
+| `dwa-odbicia` | 1/1 | 0/1 | 0/1 (odpada) | 1/1 (jeszcze wygrywa; okno ±2.43°) |
+| `za-rogiem` | 1/1 | 0/1 | 0/1 (odpada) | 1/1 (jeszcze wygrywa; okno ±2.19°) |
 | `druga-strona` | 8/8 | 0/8 | — (nie dotyczy) | — |
 | `wspolne-ognisko` | 8/8 | 0/8 | — (nie dotyczy) | — |
 
-Uwaga: zapas tolerancji na `odbicie` i `dwa-odbicia` jest cienki — obrót o ±3° odpada, ale
-±2° jeszcze wygrywa (to znaczy: gracz musi ustawić lustro z dokładnością ok. 2–3°). Zapisane
-jako uwaga odłożona w sekcji 7.
+Uwaga: po fali końcowej lustra startowe mają długość 1.0 (było 0.4), a „Za rogiem" ma dołek
+2.5× zamiast 1.5×. Okna wygrywającego obrotu: `odbicie` ±2.15°, `dwa-odbicia` ±2.43°,
+`za-rogiem` ±2.19°. Najcieńszy był „Za rogiem" — przedtem tylko ±1.31°; pozostałe dwa
+miały okno między ±2° a ±3° przy krótkim lustrze (ramię dźwigni 0.4). Gracz obraca lustro, przeciągając
+jeden koniec wokół drugiego, więc ramię to długość lustra (1.0): na telefonie 390 px to ok.
+±6–7 px na końcu, przedtem ±1.6–2.9 px.
+
+Ruling: tolerancje poszerzone w granicach spec §1.4 (kryterium „obrót o ±3° daje pudło"
+zostaje bez zmian). Poluzowanie samego kryterium ±3° to decyzja właściciela.
 
 Miniscenki plansz (silnik `sceneTraces`; „odbić" to liczba odbić na torze strzału):
 
@@ -196,6 +203,7 @@ wyczyść dane witryny.
 - [ ] Uchwyty odcinka: kwadraty na końcach i kwadrat w środku da się złapać osobno.
 - [ ] Przeciąganie środka nie wyprowadza lustra za ramkę planszy.
 - [ ] Po sprawdzeniu pojawia się baner „Wpadła" albo „Chybiła".
+- [ ] Wszystkie trzy poziomy bilardowe wypróbowane na telefonie: czy precyzja obrotu lustra palcem jest do przyjęcia?
 
 **Plansze**
 - [ ] Plansza pokazuje się sama przed poziomami `ogniska` (4), `polelipsa` (12), `kaskada` (16), `ognisko-paraboli` (20), `druga-strona` (24).
