@@ -17,6 +17,17 @@ describe("plansze z zasadą — dane", () => {
     expect(new Set(CARDS.map((c) => c.before)).size).toBe(CARDS.length);
   });
 
+  // plansza uczy zasady, nie podaje rozwiązania — żaden kształt sceny nie jest kształtem
+  // rozwiązania ani przeszkody żadnego poziomu
+  it("żaden kształt sceny nie jest wzięty z rozwiązania ani przeszkód poziomu", () => {
+    const zPoziomow = LEVELS.flatMap((l) => [...l.pieces.map((p) => p.solution), ...l.obstacles]);
+    for (const c of CARDS) {
+      for (const s of c.scenes) {
+        for (const k of s.shapes) expect(zPoziomow, c.id).not.toContainEqual(k);
+      }
+    }
+  });
+
   it("kolejność plansz to kolejność ich poziomów", () => {
     const at = CARDS.map((c) => IDS.indexOf(c.before));
     for (let i = 1; i < at.length; i++) expect(at[i], CARDS[i].id).toBeGreaterThan(at[i - 1]);
@@ -75,9 +86,12 @@ describe("sceny plansz pokazują to, co mówi zdanie", () => {
     const przed = norm(sub(tor.path[1], tor.path[0]));
     const po = norm(sub(tor.path[2], tor.path[1]));
     const wzdluz = norm(sub(lustro.to, lustro.from));
-    // składowa wzdłuż lustra bez zmian, składowa w poprzek — ta sama co do wartości, odwrócona
+    // wzdłuż lustra: składowa bez zmian
     expect(dot(po, wzdluz)).toBeCloseTo(dot(przed, wzdluz), 12);
-    expect(Math.abs(1 - dot(po, wzdluz) ** 2 - (1 - dot(przed, wzdluz) ** 2))).toBeLessThan(1e-12);
+    const wPoprzek = { x: -wzdluz.y, y: wzdluz.x };
+    // w poprzek: ta sama wartość, odwrócony znak — piłka nie przelatuje przez lustro
+    expect(dot(po, wPoprzek)).toBeCloseTo(-dot(przed, wPoprzek), 12);
+    expect(Math.abs(dot(przed, wPoprzek))).toBeGreaterThan(0.1);
     expect(tor.path[1].y).toBeCloseTo(0.4, 12);
   });
 

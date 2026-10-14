@@ -44,8 +44,8 @@ export const CARDS: Card[] = [
     scenes: [
       { shots: from(vec(0, -0.6), fan(Math.PI / 2, deg(60), 7)), shapes: [segment(vec(-0.8, 0.3), vec(0.8, 0.3))], bounces: 1 },
       {
-        shots: from(vec(-0.5, 0), fan(0, 2 * Math.PI, 8)), shapes: [ellipse(vec(-0.5, 0), vec(0.5, 0), 0.8)],
-        hole: vec(0.5, 0), bounces: 1,
+        shots: from(vec(-0.55, -0.1), fan(0, 2 * Math.PI, 8)), shapes: [ellipse(vec(-0.55, -0.1), vec(0.45, 0.15), 0.75)],
+        hole: vec(0.45, 0.15), bounces: 1,
       },
     ],
   },
@@ -53,32 +53,42 @@ export const CARDS: Card[] = [
     id: "luk", before: "polelipsa", title: "Łuk",
     text: "Lustro nie musi być całe — wystarczy kawałek tam, dokąd lecą piłki. Jego końce też da się przesuwać.",
     scenes: [{
-      shots: from(vec(-0.5, -0.3), fan(Math.PI / 2, Math.PI, 8)),
-      shapes: [arcEllipse(vec(-0.5, -0.3), vec(0.5, -0.3), 0.8, 0, Math.PI)],
-      hole: vec(0.5, -0.3), bounces: 1,
+      shots: from(vec(-0.55, -0.4), fan(Math.PI / 2, Math.PI, 8)),
+      shapes: [arcEllipse(vec(-0.55, -0.4), vec(0.45, -0.4), 0.7, 0, Math.PI)],
+      hole: vec(0.45, -0.4), bounces: 1,
     }],
   },
   {
-    // układ poziomu „kaskada" odbity względem osi x — ta sama lekcja, nie jego rozwiązanie
     id: "kaskada", before: "kaskada", title: "Kaskada",
     text: "Piłki zebrane w ognisku lecą dalej, jakby wyleciały z nowej piłki. Ognisko jednego lustra może być ogniskiem następnego.",
+    // ten sam pomysł co poziom „kaskada", ale inne ogniska i rozmiary — plansza pokazuje
+    // zasadę, nie rozwiązanie poziomu, przed którym stoi
     scenes: [{
-      shots: from(vec(-0.6, -0.1), fan(deg(-45), deg(60), 8)),
+      shots: from(vec(-0.7, -0.3), fan(deg(45), deg(60), 8)),
       shapes: [
-        arcEllipse(vec(-0.6, -0.1), vec(-0.1, -0.1), 0.4, deg(-120), deg(-20)),
-        arcEllipse(vec(-0.1, -0.1), vec(0.5, -0.1), 0.4, deg(40), deg(175)),
+        arcEllipse(vec(-0.7, -0.3), vec(-0.1, -0.3), 0.45, deg(20), deg(120)),
+        arcEllipse(vec(-0.1, -0.3), vec(0.6, -0.3), 0.5, deg(-175), deg(-40)),
       ],
-      hole: vec(0.5, -0.1), bounces: 2,
+      hole: vec(0.6, -0.3), bounces: 2,
     }],
   },
   {
     id: "parabola", before: "ognisko-paraboli", title: "Parabola",
     text: "Piłka z ogniska paraboli odbija się równolegle do osi. Wiązka równoległa do osi zbiega się z powrotem w ognisku.",
-    scenes: [{
-      shots: from(vec(-0.3, 0), fan(Math.PI, 2, 8)),
-      shapes: [parabola(vec(-0.3, 0), vec(-0.6, 0), { mid: 0, span: 1.6 })],
-      bounces: 1,
-    }],
+    scenes: [
+      {
+        shots: from(vec(-0.3, 0), fan(Math.PI, 2, 8)),
+        shapes: [parabola(vec(-0.3, 0), vec(-0.6, 0), { mid: 0, span: 1.6 })],
+        bounces: 1,
+      },
+      {
+        // odwrotnie: wiązka równoległa do osi wpada do ogniska; |y| ≥ 0.2, żeby żaden tor nie
+        // przeleciał przez dołek w ognisku przed odbiciem
+        shots: [-0.6, -0.4, -0.2, 0.2, 0.4, 0.6].map((y) => ({ from: vec(0.9, y), angle: Math.PI })),
+        shapes: [parabola(vec(-0.3, 0), vec(-0.6, 0), { mid: 0, span: 1.6 })],
+        hole: vec(-0.3, 0), bounces: 1,
+      },
+    ],
   },
   {
     // strzały spoza gałęzi, wycelowane w jej ognisko M = (0.4, 0); dołek w drugim ognisku
