@@ -20,17 +20,16 @@ export const PALETTE = {
   holeInside: "#05070a",
   obstacle: "#f87171",
   obstacleGlow: "rgba(248, 113, 113, 0.16)",
-  handle: "#5eead4",
-  handleGlow: "rgba(94, 234, 212, 0.22)",
   miss: "#f87171",
   text: "#cbd5e1",
   muted: MUTED,
   overlay: "rgba(11, 15, 20, 0.94)",
   tile: "rgba(94, 234, 212, 0.05)",
   tileEdge: "rgba(203, 213, 225, 0.22)",
-  fixedFocus: "rgba(248, 113, 113, 0.45)",
   hint: "rgba(203, 213, 225, 0.30)",
   sector: "rgba(248, 250, 252, 0.05)",
+  // strzałka strzału jednopiłkowego — wyraźniejsza niż klin, bo to jeden kierunek, nie pole
+  shot: "rgba(248, 250, 252, 0.45)",
   board: "#10161e",
   frame: MUTED,
   // ta sama barwa co `frame`/`muted`, tylko przy niskiej krycia — poświata ramki
@@ -81,6 +80,24 @@ export function glowPolyline(
   ctx.stroke();
 }
 
+/** Cienka przerywana łamana bez poświaty — oś paraboli. Kreskowanie wyłączane na końcu,
+ *  żeby nie przeciekło do następnych rysunków na tym samym kontekście. */
+export function dashedPolyline(ctx: Ctx, cam: Camera, pts: Vec2[], color: string, width: number): void {
+  if (pts.length < 2) return;
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  const s0 = cam.toScreen(pts[0]);
+  ctx.moveTo(s0.x, s0.y);
+  for (let i = 1; i < pts.length; i++) {
+    const s = cam.toScreen(pts[i]);
+    ctx.lineTo(s.x, s.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
 export function glowDot(
   ctx: Ctx, cam: Camera, p: Vec2, color: string, glow: string, radius: number,
 ): void {
@@ -113,6 +130,45 @@ export function ringHandle(
   ctx.lineWidth = 2.5;
   ring();
   ctx.stroke();
+}
+
+/** Kształty uchwytów — patrz `handleMark` w `style.ts`. */
+export type HandleMark = "pierscien" | "romb" | "kwadrat";
+
+/** Pusty wielokąt z poświatą — ten sam podwójny obrys co pierścień, inne obrysy. */
+function polygonHandle(ctx: Ctx, pts: Vec2[], color: string, glow: string): void {
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+  };
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 10;
+  path();
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  path();
+  ctx.stroke();
+}
+
+/** Uchwyt w kształcie `mark`. `radius` jak w `ringHandle`: romb ma wierzchołki w tej
+ *  odległości od środka, kwadrat — pół boku równe 0.8 promienia (podobna powierzchnia). */
+export function handleShape(
+  ctx: Ctx, cam: Camera, p: Vec2, mark: HandleMark, color: string, glow: string, radius: number,
+): void {
+  if (mark === "pierscien") {
+    ringHandle(ctx, cam, p, color, glow, radius);
+    return;
+  }
+  const s = cam.toScreen(p);
+  const r = mark === "romb" ? radius : 0.8 * radius;
+  const pts = mark === "romb"
+    ? [{ x: s.x, y: s.y - r }, { x: s.x + r, y: s.y }, { x: s.x, y: s.y + r }, { x: s.x - r, y: s.y }]
+    : [{ x: s.x - r, y: s.y - r }, { x: s.x + r, y: s.y - r }, { x: s.x + r, y: s.y + r }, { x: s.x - r, y: s.y + r }];
+  polygonHandle(ctx, pts, color, glow);
 }
 
 /** Dołek: ciemny środek z jasną obwódką — wygląda jak otwór, nie jak kolejna kropka. */

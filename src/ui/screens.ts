@@ -1,16 +1,20 @@
 import { Vec2, vec } from "../core/vec";
-import { LEVELS, SNAP_RADIUS, Shape, shapeFoci, shapeToPiece } from "../levels";
-import { makeCamera } from "../render/camera";
 import {
-  PALETTE, SECTOR_REACH, boardFrame, drawPiece, glowDot, glowPolyline, holeMark, ringHandle, sectorWedge,
+  Card, LEVELS, SNAP_RADIUS, Shape, autoCard, cardFor, sceneTraces, shapeFoci, shapeToPiece,
+} from "../levels";
+import { makeCamera, rectCamera } from "../render/camera";
+import {
+  PALETTE, SECTOR_REACH, boardFrame, dashedPolyline, drawPiece, glowDot, glowPolyline, handleShape, holeMark,
+  sectorWedge,
 } from "../render/draw";
-import { curveHints, twinPolyline } from "../render/shapes";
+import { curveHints, parabolaAxis, shotArrow, twinPolyline } from "../render/shapes";
+import { handleMark, shapeStyle } from "../render/style";
 import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  MENU_BUTTON, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea, settingsButton, settingsLayout,
-  winAction, winLabels,
+  MENU_BUTTON, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner,
+  settingsButton, settingsLayout, winAction, winLabels,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -21,12 +25,15 @@ const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
   const store = browserStore();
-  let progress = loadProgress(store, LEVELS.length);
-  let levelIndex = progress.last;
+  let progress = loadProgress(store, LEVELS.map((l) => l.id));
+  // brak zapisu (albo poziom, którego już nie ma) → -1 → pierwszy poziom
+  let levelIndex = Math.max(0, LEVELS.findIndex((l) => l.id === progress.lastId));
   let game: GameState = newGame(LEVELS[levelIndex]);
   let menuOpen = false;
   let settings = loadSettings(store);
   let settingsOpen = false;
+  /** otwarta plansza z zasadą; `null` — żadna */
+  let card: Card | null = autoCard(LEVELS[levelIndex].id, progress.solved) ?? null;
   let dragging: HandleRef | null = null;
   let pointer: Vec2 | null = null;
   let consumedReset = false;
@@ -61,8 +68,10 @@ export function mount(canvas: HTMLCanvasElement): void {
   function goTo(index: number): void {
     levelIndex = index;
     game = newGame(LEVELS[index]);
-    progress = { ...progress, last: index };
+    progress = { ...progress, lastId: LEVELS[index].id };
     saveProgress(store, progress);
+    // pierwszy poziom nowej mechaniki, jeszcze niezaliczony: najpierw zasada
+    card = autoCard(LEVELS[index].id, progress.solved) ?? null;
   }
 
   function toggleMenu(): void {
@@ -70,6 +79,16 @@ export function mount(canvas: HTMLCanvasElement): void {
     settingsOpen = false;
     // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
     if (menuOpen && game.phase === "dowod") game = retry(game);
+  }
+
+  /** „?" jest rysowane i dotykalne tylko poza menu, ustawieniami i dowodem (wtedy napis
+   *  „Poziom N / M" obok niego też nie jest rysowany). */
+  const helpVisible = (): boolean => !menuOpen && !settingsOpen && game.phase !== "dowod";
+
+  /** „?" — plansza mechaniki bieżącego poziomu. Dowód nie może trwać, gdy „?" jest
+   *  dotykalne (patrz `helpVisible`), więc nie ma czego przerywać. */
+  function openHelp(): void {
+    card = cardFor(LEVELS.map((l) => l.id), levelIndex) ?? null;
   }
 
   function toggleSettings(): void {
@@ -98,6 +117,18 @@ export function mount(canvas: HTMLCanvasElement): void {
 
   canvas.addEventListener("pointerdown", (e) => {
     const p = toScreenPoint(e);
+    if (card !== null) {
+      // plansza z zasadą zamyka się tylko przyciskiem „Gram" (dolny pas) — przypadkowe
+      // dotknięcie tekstu czy rysunku nie zabiera jej sprzed oczu
+      if (inActionBand(p, viewH())) card = null;
+      consumedReset = true;
+      return;
+    }
+    if (helpVisible() && hitRect(helpButton(viewW()), p)) {
+      openHelp();
+      consumedReset = true;
+      return;
+    }
     if (hitRect(MENU_BUTTON, p)) {
       toggleMenu();
       consumedReset = true;
@@ -197,7 +228,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     time = now / 1000;
-    if (!menuOpen && !settingsOpen) {
+    if (!menuOpen && !settingsOpen && card === null) {
       const before = game.phase;
       game = advance(game, dt);
       if (before === "dowod" && game.phase === "wygrana") {
@@ -219,9 +250,18 @@ export function mount(canvas: HTMLCanvasElement): void {
     boardFrame(ctx, c, PALETTE.board, PALETTE.frame, PALETTE.frameGlow, 1);
 
     // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
-    // gdzie lecą piłki" wyglądałby na błąd gry; mały i przycięty do planszy
+    // gdzie lecą piłki" wyglądałby na błąd gry; klin jest mały i przycięty do planszy,
+    // strzałka nie jest przycinana, ale się mieści: piłki etapu 0 leżą co najmniej 0.4
+    // pod górną ścianą (patrz test w `tests/levels.test.ts`)
     if (game.phase === "edycja" && level.sector !== undefined) {
-      sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
+      // jedna piłka (wachlarz zerowej szerokości) — klin byłby pusty, więc strzałka kierunku
+      if (level.sector.width === 0) {
+        for (const linia of shotArrow(level.ball, level.sector.center, SECTOR_REACH)) {
+          glowPolyline(ctx, c, linia, PALETTE.shot, "rgba(0,0,0,0)", 1.5);
+        }
+      } else {
+        sectorWedge(ctx, c, level.ball, level.sector, SECTOR_REACH, PALETTE.sector);
+      }
     }
 
     /** Linie pomocnicze krzywej (kierownica, asymptoty) — tylko przy włączonych
@@ -234,7 +274,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       }
     };
 
-    /** Druga gałąź hiperboli z flagą `twin` (dziś tylko poziom 23): blado, tak jak linie
+    /** Druga gałąź hiperboli z flagą `twin` (dziś tylko „ktora-galaz"): blado, tak jak linie
      *  pomocnicze, ale NIEZALEŻNIE od podpowiedzi — tam jest częścią poziomu, nie pomocą.
      *  Rysowana przed samą krzywą, żeby krzywa leżała na wierzchu. */
     const drawTwin = (s: Shape): void => {
@@ -245,22 +285,28 @@ export function mount(canvas: HTMLCanvasElement): void {
     for (const o of level.obstacles) {
       drawHints(o);
       drawTwin(o);
-      drawPiece(ctx, c, shapeToPiece(o), PALETTE.obstacle, PALETTE.obstacleGlow, 2);
+      const st = shapeStyle(o, "staly");
+      // oś paraboli zawsze (nie tylko przy podpowiedziach) — pod krzywą, żeby jej nie przecinać
+      if (o.kind === "parabola") dashedPolyline(ctx, c, parabolaAxis(o), st.line, 1);
+      drawPiece(ctx, c, shapeToPiece(o), st.line, st.glow, 2);
       // ogniska stałych elips/paraboli/hiperboli blado — lekcje kaskad to „trafić
-      // ogniskiem w to ognisko"; okręgi pomijamy: ich „ognisko" to środek przeszkody, nie cel
-      if (o.kind !== "odcinek") {
-        for (const f of shapeFoci(o)) glowDot(ctx, c, f, PALETTE.fixedFocus, PALETTE.obstacleGlow, 2.5);
+      // ogniskiem w to ognisko"; przeszkody (okręgi, odcinki) ich nie mają (`focus: null`)
+      if (st.focus !== null) {
+        for (const f of shapeFoci(o)) glowDot(ctx, c, f, st.focus, "rgba(0,0,0,0)", 2.5);
       }
     }
 
     for (const s of game.pieces) {
       drawHints(s);
       drawTwin(s);
-      drawPiece(ctx, c, shapeToPiece(s), PALETTE.curve, PALETTE.curveGlow, 2);
+      const st = shapeStyle(s, "gracz");
+      if (s.kind === "parabola") dashedPolyline(ctx, c, parabolaAxis(s), st.line, 1);
+      drawPiece(ctx, c, shapeToPiece(s), st.line, st.glow, 2);
     }
 
     // Stałe punkty są pełne (piłka) albo wyglądają jak otwór (dołek); wszystko, co da się
-    // przeciągnąć, to pulsujący pusty pierścień w kolorze elipsy. Pierścienie rysujemy
+    // przeciągnąć, to pulsujący pusty znak w kolorze swojej krzywej — pierścień (ognisko),
+    // romb (wierzchołek) albo kwadrat (reszta), patrz `handleMark`. Uchwyty rysujemy
     // na końcu, żeby ognisko postawione na piłce otaczało ją, a nie znikało pod nią.
     holeMark(ctx, c, level.hole, PALETTE.hole, PALETTE.holeGlow, PALETTE.holeInside, 9);
     glowDot(ctx, c, level.ball, PALETTE.ball, PALETTE.ballGlow, 6);
@@ -271,7 +317,8 @@ export function mount(canvas: HTMLCanvasElement): void {
           if (level.pieces[piece].locked.includes(h.id)) continue;
           const active = dragging !== null && dragging.piece === piece && dragging.id === h.id;
           const r = active ? 15 : 12 + 1.5 * Math.sin(time * 3.2);
-          ringHandle(ctx, c, h.pos, PALETTE.handle, PALETTE.handleGlow, r);
+          const st = shapeStyle(s, "gracz");
+          handleShape(ctx, c, h.pos, handleMark(h.id), st.line, st.glow, r);
         }
       });
       // podgląd na żywo: dwie piłki, blade tory — tylko gdy gracz włączył to w ustawieniach
@@ -302,17 +349,23 @@ export function mount(canvas: HTMLCanvasElement): void {
         // pod tytułem tylko dopisek ostatniego poziomu; na pozostałych — nic
         const allSolved = LEVELS.every((l) => progress.solved.includes(l.id));
         const { right, note } = winLabels(isLast(), allSolved);
-        banner("Wpadły wszystkie", note ?? "", ["Jeszcze raz", right]);
+        banner(resultBanner(game.proof.balls.length, 0).title, note ?? "", ["Jeszcze raz", right]);
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
-        banner("Nie wszystkie", `Chybiło ${missed} z ${game.proof.balls.length}. Zobacz, którędy.`, "Jeszcze raz");
+        const { title, note } = resultBanner(game.proof.balls.length, missed);
+        banner(title, note, "Jeszcze raz");
       }
     }
 
     if (menuOpen) drawMenu();
     if (settingsOpen) drawSettings();
+    if (card !== null) {
+      drawCard(card);
+      return;
+    }
     drawMenuButton();
     drawSettingsButton();
+    if (helpVisible()) drawHelpButton();
 
     function banner(title: string, hint: string, action: string | [string, string]): void {
       const w = viewW();
@@ -356,6 +409,55 @@ export function mount(canvas: HTMLCanvasElement): void {
       for (let i = -1; i <= 1; i++) {
         ctx.fillRect(b.x + b.w / 2 - 10, b.y + b.h / 2 + i * 6 - 1, 20, 2);
       }
+    }
+
+    /** „?" w kółku tuż za napisem „Poziom N / M" (ten sam wiersz, `helpButton` obejmuje oba).
+     *  Kółko liniami i „?" znakiem ASCII — nie polegamy na glifie ⓘ w czcionce telefonu. */
+    function drawHelpButton(): void {
+      ctx.font = "12px system-ui, sans-serif";
+      const tw = ctx.measureText(`Poziom ${levelIndex + 1} / ${LEVELS.length}`).width;
+      const cx = viewW() / 2 + tw / 2 + 14;
+      ctx.strokeStyle = PALETTE.muted;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, 18, 8, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.muted;
+      ctx.fillText("?", cx, 22);
+      ctx.textAlign = "left";
+    }
+
+    /** Plansza z zasadą: tytuł, zdanie, miniscenki liczone silnikiem i „Gram" w dolnym pasie.
+     *  Rysunek tymi samymi funkcjami co gra — te same kolory rodzajów, tory i dołek. */
+    function drawCard(k: Card): void {
+      const w = viewW();
+      const h = viewH();
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.fillRect(0, 0, w, h);
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText(k.title, w / 2, 34);
+      ctx.font = "15px system-ui, sans-serif";
+      wrapByWords(k.text, w - 32).slice(0, 4).forEach((line, i) => ctx.fillText(line, w / 2, 70 + i * 20));
+      cardLayout(w, h, k.scenes.length).forEach((r, i) => {
+        const scene = k.scenes[i];
+        const rc = rectCamera(r);
+        boardFrame(ctx, rc, PALETTE.board, PALETTE.frame, PALETTE.frameGlow, 1);
+        for (const s of scene.shapes) {
+          const st = shapeStyle(s, "gracz");
+          if (s.kind === "parabola") dashedPolyline(ctx, rc, parabolaAxis(s), st.line, 1);
+          drawPiece(ctx, rc, shapeToPiece(s), st.line, st.glow, 2);
+        }
+        for (const t of sceneTraces(scene)) glowPolyline(ctx, rc, t.path, PALETTE.trail, PALETTE.trailGlow, 1.5);
+        if (scene.hole !== undefined) holeMark(ctx, rc, scene.hole, PALETTE.hole, PALETTE.holeGlow, PALETTE.holeInside, 6);
+        for (const shot of scene.shots) glowDot(ctx, rc, shot.from, PALETTE.ball, PALETTE.ballGlow, 4);
+      });
+      ctx.font = "600 16px system-ui, sans-serif";
+      ctx.fillStyle = PALETTE.curve;
+      ctx.fillText("Gram", w / 2, h * 0.93);
+      ctx.textAlign = "left";
     }
 
     /** Zębatka rysowana liniami — nie polegamy na glifie ⚙ w czcionce telefonu. */

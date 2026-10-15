@@ -4,7 +4,14 @@ import { LEVELS, Level, parabola, HOLE_RADIUS } from "../../src/levels";
 import { pathLength } from "../../src/render/trails";
 import { advance, newGame, preview, retry, startProof, BALL_SPEED } from "../../src/ui/game";
 
-const level = LEVELS[0];
+/** Poziom po identyfikatorze — numery przesuwa każdy nowy etap (etap 0 dodał trzy na początku). */
+const byId = (id: string): Level => {
+  const l = LEVELS.find((x) => x.id === id);
+  if (l === undefined) throw new Error(`brak poziomu ${id}`);
+  return l;
+};
+
+const level = byId("ogniska");
 
 describe("stan gry", () => {
   it("nowa gra startuje w edycji, ze stanem początkowym poziomu", () => {
@@ -16,6 +23,10 @@ describe("stan gry", () => {
 
   it("podgląd używa dwóch piłek, nie ośmiu", () => {
     expect(preview(newGame(level)).balls).toHaveLength(2);
+  });
+
+  it("podgląd na poziomie jednopiłkowym ma jedną piłkę, nie dwie tym samym torem", () => {
+    expect(preview(newGame(byId("odbicie"))).balls).toHaveLength(1);
   });
 
   it("uruchomienie dowodu daje osiem piłek i fazę dowodu", () => {
@@ -44,7 +55,7 @@ describe("stan gry", () => {
     // każde `a`, więc a=0.75 daje tor 1.5, a a=1.0 daje 2.0. Jeśli faza zmienia się
     // dokładnie po `długość / BALL_SPEED` w obu przypadkach, stała prędkości jest ta sama
     // na obu dystansach — czyli odwzorowanie jest wprost proporcjonalne, a nie wygładzone.
-    const free = LEVELS[1];
+    const free = byId("rozmiar");
     for (const a of [0.75, 1.0]) {
       const resized = { ...free.pieces[0].solution, a };
       let g = startProof({ ...newGame(free), pieces: [resized] });
@@ -70,14 +81,14 @@ describe("stan gry", () => {
     expect(advance(g, 1 / 60)).toBe(g);
   });
 
-  describe("stan gry etapu 2", () => {
+  describe("stan gry na wszystkich poziomach", () => {
     it("poziom z dwoma elementami startuje z oboma", () => {
       const two = LEVELS.find((l) => l.pieces.length === 2)!;
       expect(newGame(two).pieces).toEqual(two.pieces.map((p) => p.start));
     });
 
     it("podgląd na poziomie z wachlarzem strzela w wachlarz", () => {
-      const fan = LEVELS.find((l) => l.sector !== undefined)!;
+      const fan = byId("polelipsa");
       const { center, width } = fan.sector!;
       for (const b of preview(newGame(fan)).balls) {
         const t = Math.atan2(b.path[1].y - b.path[0].y, b.path[1].x - b.path[0].x);
@@ -86,7 +97,7 @@ describe("stan gry", () => {
       }
     });
 
-    it.each(LEVELS.slice(8).map((l) => [l.id, l] as const))(
+    it.each(LEVELS.map((l) => [l.id, l] as const))(
       "poziom %s: rozwiązanie kończy się wygraną w pętli gry",
       (_id, lvl) => {
         let g = startProof({ ...newGame(lvl), pieces: lvl.pieces.map((p) => p.solution) });
@@ -98,7 +109,7 @@ describe("stan gry", () => {
 });
 
 describe("jeszcze raz", () => {
-  const lvl = LEVELS[1];
+  const lvl = byId("rozmiar");
   // ustawienie gracza inne niż start i inne niż zapisane rozwiązanie
   const mine = { ...lvl.pieces[0].solution, a: 0.9 };
 

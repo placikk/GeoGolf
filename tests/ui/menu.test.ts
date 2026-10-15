@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
-  ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, editAction, hitRect, hitTile, inActionBand, menuLayout, playArea,
-  settingsButton, settingsLayout, winAction, winLabels,
+  ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand,
+  menuLayout, playArea, resultBanner, settingsButton, settingsLayout, winAction, winLabels,
 } from "../../src/ui/menu";
 import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
@@ -198,4 +198,48 @@ describe("tekst ekranu wygranej", () => {
     const src = readFileSync("src/ui/screens.ts", "utf8");
     expect(src.includes("Osiem torów")).toBe(false);
   });
+});
+
+describe("napisy po dowodzie", () => {
+  it("wiele piłek: liczba mnoga i licznik chybionych", () => {
+    expect(resultBanner(8, 0).title).toBe("Wpadły wszystkie");
+    expect(resultBanner(8, 3)).toEqual({ title: "Nie wszystkie", note: "Chybiło 3 z 8. Zobacz, którędy." });
+  });
+
+  it("jedna piłka: liczba pojedyncza, bez „1 z 1\"", () => {
+    expect(resultBanner(1, 0).title).toBe("Wpadła");
+    expect(resultBanner(1, 1)).toEqual({ title: "Chybiła", note: "Zobacz, którędy poleciała." });
+  });
+});
+
+describe("przycisk „?\"", () => {
+  for (const w of [320, 390, 844, 1280]) {
+    it(`szerokość ${w}: wygodny cel dotykowy, na środku u góry, nie wchodzi na ☰ ani ⚙`, () => {
+      const b = helpButton(w);
+      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(44);
+      expect(b.x + b.w / 2).toBeCloseTo(w / 2, 9);
+      expect(b.y + b.h).toBeLessThanOrEqual(TOP_BAND);
+      expect(overlap(b, MENU_BUTTON)).toBe(false);
+      expect(overlap(b, settingsButton(w))).toBe(false);
+    });
+  }
+});
+
+describe("plansza z zasadą — układ rysunków", () => {
+  for (const [name, w, h] of [["pion", 390, 844], ["poziom", 844, 390], ["mały", 320, 568]] as const) {
+    for (const n of [1, 2]) {
+      it(`${name}, ${n === 1 ? "jeden rysunek" : "dwa rysunki"}: kwadraty pod tekstem, nad „Gram", bez nakładania`, () => {
+        const rs = cardLayout(w, h, n);
+        expect(rs).toHaveLength(n);
+        rs.forEach((r, i) => {
+          expect(r.w).toBeCloseTo(r.h, 9);
+          expect(r.w, `rysunek ${i}`).toBeGreaterThan(100);
+          expect(r.x >= 0 && r.x + r.w <= w, `rysunek ${i} w poziomie`).toBe(true);
+          expect(r.y, `rysunek ${i} pod tekstem`).toBeGreaterThanOrEqual(150);
+          expect(r.y + r.h, `rysunek ${i} nad pasem`).toBeLessThanOrEqual(h * ACTION_BAND);
+          rs.slice(i + 1).forEach((u) => expect(overlap(r, u)).toBe(false));
+        });
+      });
+    }
+  }
 });

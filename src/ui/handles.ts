@@ -1,6 +1,7 @@
-import { Vec2, add, dist, dot, norm, scale, sub } from "../core/vec";
+import { Vec2, add, dist, dot, norm, scale, sub, vec } from "../core/vec";
 import {
   ArcRange, EllipseShape, Handle, HyperbolaShape, Level, MIN_ARC_LENGTH, MovableShape, ParabolaShape, PlayerPiece,
+  SegmentShape,
 } from "../levels/types";
 import { ellipseAxis, ellipseCenter, ellipseParam, ellipsePoint, shapeFoci } from "../levels/shape";
 import { arcFromParams, arcLengthBetween, arcParams, paramAtLength, perimeter } from "../levels/arc";
@@ -17,6 +18,13 @@ const hyperbolaVertex = (s: HyperbolaShape): Vec2 =>
   add(scale(add(s.f1, s.f2), 0.5), scale(norm(sub(s.f2, s.f1)), s.branch * s.a));
 
 export function handlePositions(state: MovableShape): { id: Handle; pos: Vec2 }[] {
+  if (state.kind === "odcinek") {
+    return [
+      { id: "koniec1", pos: state.from },
+      { id: "koniec2", pos: state.to },
+      { id: "srodek", pos: scale(add(state.from, state.to), 0.5) },
+    ];
+  }
   if (state.kind === "parabola") {
     return [{ id: "ognisko", pos: state.focus }, { id: "wierzcholek", pos: state.vertex }];
   }
@@ -93,11 +101,11 @@ const BOARD_MAX = 1;
 
 /** DLACZEGO tu: `applyDrag` jest jedynym miejscem, przez które przechodzi i gra
  *  (`screens.ts` woła go po `toWorld`/`snapTo`), i testy, które chcą modelować grę
- *  (np. szara strefa poziomów 21–24 w `tests/levels.test.ts`) — wołają `applyDrag`
+ *  (np. szara strefa poziomów z hiperbolą w `tests/levels.test.ts`) — wołają `applyDrag`
  *  PROSTO, z pominięciem `screens.ts`. Przycięcie w samym `screens.ts` byłoby
  *  obejściem: testy sterujące `applyDrag` nadal eksplorowałyby pozycje poza planszą,
  *  których gra już nie umie wytworzyć (patrz zadanie 15b — dokładne rozwiązanie
- *  poziomu 21 z ogniskiem w (−0.2, 1.7)). Jeden punkt obsługuje obu wywołujących. */
+ *  poziomu „wspolne-ognisko" z ogniskiem w (−0.2, 1.7)). Jeden punkt obsługuje obu wywołujących. */
 const clampToBoard = (p: Vec2): Vec2 => {
   const x = clamp(p.x, BOARD_MIN, BOARD_MAX);
   const y = clamp(p.y, BOARD_MIN, BOARD_MAX);
@@ -172,6 +180,45 @@ function dragParabola(s: ParabolaShape, handle: Handle, to: Vec2): ParabolaShape
   if (handle !== "wierzcholek") return s;
   const vertex = dist(s.focus, to) < MIN_GAP ? add(s.focus, scale(os, -MIN_GAP)) : to;
   return { ...s, vertex };
+}
+
+/** Najkrótsze lustro-odcinek. Nie MIN_GAP: przy krótszym uchwyty końców zlewałyby się ze
+ *  środkowym. Przy 0.2 środkowy leży 0.1 od każdego końca, czyli nadal w promieniu łapania
+ *  (ok. 0.19), ale osobne łapanie działa, bo `pickHandle` bierze NAJBLIŻSZY uchwyt; 0.2
+ *  trzyma trzy uchwyty wyraźnie osobno (ok. 17 px każdy na telefonie). */
+export const MIN_SEGMENT_LENGTH = 0.2;
+
+/** Koniec odcinka odsunięty od drugiego końca na co najmniej MIN_SEGMENT_LENGTH (L). Dwie
+ *  pierwsze próby zostawiają odcinek na jego prostej: dalej wzdłuż kierunku palca, potem
+ *  w przeciwną stronę. W rogu planszy po skosie obie mogą wypaść (np. drugi koniec w
+ *  (0.95, −0.95)), więc ostatnia próba schodzi z prostej: punkt w odległości L od drugiego
+ *  końca, w stronę środka planszy. Ten zawsze się mieści — gdy drugi koniec leży co
+ *  najmniej L od środka, każda współrzędna maleje co do modułu; gdy bliżej (r < L), wynik
+ *  leży w odległości L − r < L od środka. */
+const keepLength = (moved: Vec2, other: Vec2, fallback: Vec2): Vec2 => {
+  const d = dist(moved, other);
+  if (d >= MIN_SEGMENT_LENGTH) return moved;
+  // odcinek zdegenerowany (oba końce w jednym punkcie) nie ma kierunku do normalizacji
+  const dir = d < 1e-12 ? (dist(fallback, vec(0, 0)) < 1e-12 ? vec(1, 0) : norm(fallback)) : norm(sub(moved, other));
+  const there = add(other, scale(dir, MIN_SEGMENT_LENGTH));
+  if (inBoard(there)) return there;
+  const back = add(other, scale(dir, -MIN_SEGMENT_LENGTH));
+  if (inBoard(back)) return back;
+  const toCentre = dist(other, vec(0, 0)) < 1e-12 ? vec(1, 0) : norm(sub(vec(0, 0), other));
+  return add(other, scale(toCentre, MIN_SEGMENT_LENGTH));
+};
+
+/** Odcinek: końce idą za palcem (z minimalną długością), środek przesuwa cały odcinek bez
+ *  obrotu — o tyle, o ile oba końce zostają w planszy. */
+function dragSegment(s: SegmentShape, handle: Handle, to: Vec2): SegmentShape {
+  if (handle === "koniec1") return { ...s, from: keepLength(to, s.to, sub(s.from, s.to)) };
+  if (handle === "koniec2") return { ...s, to: keepLength(to, s.from, sub(s.to, s.from)) };
+  if (handle !== "srodek") return s;
+  const d = sub(to, scale(add(s.from, s.to), 0.5));
+  const dx = clamp(d.x, BOARD_MIN - Math.min(s.from.x, s.to.x), BOARD_MAX - Math.max(s.from.x, s.to.x));
+  const dy = clamp(d.y, BOARD_MIN - Math.min(s.from.y, s.to.y), BOARD_MAX - Math.max(s.from.y, s.to.y));
+  const delta = { x: dx, y: dy };
+  return { ...s, from: add(s.from, delta), to: add(s.to, delta) };
 }
 
 /** Gdy przeciągane ognisko usiądzie na drugim, c → 0 i żadne a nie mieści się w (0, c) —
@@ -254,6 +301,7 @@ export function applyDrag(
   // niż promień). Cele przyskakiwania (ogniska poziomu) same leżą w planszy, więc
   // wynik przyskoku i tak przechodzi przez przycięcie bez zmiany.
   const clamped = clampToBoard(to);
+  if (state.kind === "odcinek") return dragSegment(state, handle, clamped);
   if (state.kind === "parabola") return dragParabola(state, handle, clamped);
   if (state.kind === "hiperbola") return dragHyperbola(state, handle, clamped, lockedA);
   if (handle === "poczatek" || handle === "koniec") {

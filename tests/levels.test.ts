@@ -3,9 +3,11 @@ import { Vec2, add, dist, fromAngle, len, norm, scale, sub, vec } from "../src/c
 import { rayPiece } from "../src/core/piece";
 import { runProof } from "../src/core/verify";
 import {
-  DIAGONAL, Handle, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, Shape, Span, levelCurves,
+  DIAGONAL, Handle, HyperbolaShape, Level, LEVELS, MIN_ARC_LENGTH, MovableShape, SNAP_RADIUS, SegmentShape, Shape, Span,
+  levelCurves,
   perimeter, shapeAxisAngle, shapeConic, shapeFoci, shapeToPiece,
 } from "../src/levels";
+import { SECTOR_REACH } from "../src/render/draw";
 import { piecePolyline, twinPolyline } from "../src/render/shapes";
 import { applyDrag, handlePositions, lockedSize } from "../src/ui/handles";
 
@@ -35,22 +37,41 @@ const solves = (level: Level, pieces: MovableShape[]): boolean => {
 const solutions = (level: Level) => level.pieces.map((p) => p.solution);
 const byId = LEVELS.map((l) => [l.id, l] as const);
 
+// Numery poziomów w komentarzach tego pliku to numeracja z czasów, gdy powstawał dany test
+// (etapy 1–3: 1–24). W grze są o 3 większe — etap 0 dodał trzy poziomy na początku — a
+// „druga-strona" (stary 22) stoi teraz przed „wspolne-ognisko" (stary 21). Nazwy testów
+// podają identyfikatory.
 const STAGE_1_IDS = [
   "ogniska", "rozmiar", "skos", "blisko", "ciasna", "przeszkoda", "dwie-przeszkody", "zwienczenie",
 ];
 
 describe("poziomy", () => {
   it("liczba poziomów i unikalne identyfikatory", () => {
-    expect(LEVELS).toHaveLength(24);
+    expect(LEVELS).toHaveLength(27);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(LEVELS.length);
   });
 
+  it("etap 0 otwiera grę: trzy poziomy bilardowe", () => {
+    expect(LEVELS.slice(0, 3).map((l) => l.id)).toEqual(["odbicie", "dwa-odbicia", "za-rogiem"]);
+  });
+
+  // numery się przesunęły o etap 0, ale identyfikatory i ich wzajemna kolejność zostały —
+  // zapis postępu trzyma identyfikatory (`progress.ts`, `LEGACY_ORDER`)
   it("identyfikatory etapu 1 zostały, w tej samej kolejności — zapisany postęp przetrwa", () => {
-    expect(LEVELS.slice(0, 8).map((l) => l.id)).toEqual(STAGE_1_IDS);
+    expect(LEVELS.slice(3, 11).map((l) => l.id)).toEqual(STAGE_1_IDS);
+  });
+
+  // Jedyna zmiana kolejności od wydania: „druga-strona" (jeden uchwyt) wprowadza hiperbolę,
+  // więc stoi przed „wspolne-ognisko". Zapis postępu przelicza stare indeksy (`LEGACY_ORDER`).
+  it("etap 3: parabole, potem hiperbole od najprostszej", () => {
+    expect(LEVELS.slice(19, 27).map((l) => l.id)).toEqual([
+      "ognisko-paraboli", "parabola-rozmiar", "obrot-osi", "teleskop",
+      "druga-strona", "wspolne-ognisko", "ktora-galaz", "zwienczenie-3",
+    ]);
   });
 
   it("identyfikatory etapu 2 zostały, w tej samej kolejności", () => {
-    expect(LEVELS.slice(8, 16).map((l) => l.id)).toEqual([
+    expect(LEVELS.slice(11, 19).map((l) => l.id)).toEqual([
       "polelipsa", "bandy", "przycinanie", "wspologniskowe",
       "kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2",
     ]);
@@ -68,8 +89,18 @@ describe("poziomy", () => {
   // byłby to naprawdę inny zestaw kierunków. Niezmiennik pilnowany tu, nie w rdzeniu:
   // nieparzyste count jest świadomie dopuszczone przez specyfikację etapu 1 (jedna piłka
   // celowo na osi), więc `launchAngles`/`runProof` nie mają prawa tego zabraniać.
-  it("każdy poziom ma PARZYSTĄ liczbę piłek — inaczej kierunek osi przestaje być obojętny", () => {
-    for (const l of LEVELS) expect(l.test.balls % 2).toBe(0);
+  // Dotyczy tylko dowodu na 360° — z wachlarzem kierunki liczy `sector`, nie oś, więc
+  // obrót bazy o π niczego nie zmienia (i poziomy jednopiłkowe mogą istnieć).
+  it("każdy poziom bez wachlarza ma PARZYSTĄ liczbę piłek — inaczej kierunek osi przestaje być obojętny", () => {
+    for (const l of LEVELS.filter((x) => x.sector === undefined)) expect(l.test.balls % 2, l.id).toBe(0);
+  });
+
+  // Jedna piłka ma sens tylko z wachlarzem zerowej szerokości (jeden znany kierunek strzału);
+  // i odwrotnie — wachlarz zerowej szerokości przy wielu piłkach puściłby je wszystkie jednym torem.
+  it("poziom jednopiłkowy ma wachlarz zerowej szerokości — i tylko on", () => {
+    for (const l of LEVELS) {
+      expect(l.test.balls === 1, l.id).toBe(l.sector !== undefined && l.sector.width === 0);
+    }
   });
 
   // Hiperbola poziomu bywa przeszkodą (odbija piłkę, poziom 21) ALBO elementem gracza
@@ -123,7 +154,8 @@ describe("poziomy", () => {
       }
     }
     if (level.sector !== undefined) {
-      expect(level.sector.width).toBeGreaterThan(0);
+      // zero tylko przy jednej piłce — pilnuje osobny test wyżej
+      expect(level.sector.width).toBeGreaterThanOrEqual(0);
       expect(level.sector.width).toBeLessThanOrEqual(2 * Math.PI);
     }
   });
@@ -154,6 +186,12 @@ describe("poziomy", () => {
         expect(sol.span).toEqual(start.span);
         // rysowanie drugiej gałęzi to też dana poziomu, nie stan gracza
         expect(sol.twin).toBe(start.twin);
+        continue;
+      }
+      if (start.kind === "odcinek" && sol.kind === "odcinek") {
+        if (locked.includes("koniec1")) expect(sol.from).toEqual(start.from);
+        if (locked.includes("koniec2")) expect(sol.to).toEqual(start.to);
+        if (locked.includes("srodek")) expect(scale(add(sol.from, sol.to), 0.5)).toEqual(scale(add(start.from, start.to), 0.5));
         continue;
       }
       // tu zostaje elipsa: rodzaje startu i rozwiązania są równe, sprawdzone wyżej
@@ -190,7 +228,7 @@ describe("poziomy", () => {
       const start = piece.start;
       const sol = piece.solution;
       // parabola nie ma uchwytu rozmiaru — nie ma czego przywracać
-      if (start.kind === "parabola" || sol.kind === "parabola") return;
+      if (start.kind === "parabola" || start.kind === "odcinek" || sol.kind === "parabola" || sol.kind === "odcinek") return;
       // pułapka dotyczy tylko ognisk, którymi gracz naprawdę może objechać — objazd
       // ciągnie WOLNE ogniska; gdy oba są też zablokowane (np. okrąg poziomu 11),
       // nie ma czym objeżdżać. Na poziomach z zablokowanym tylko jednym ogniskiem
@@ -205,7 +243,7 @@ describe("poziomy", () => {
       // wyżej — to tylko odzyskuje dla TypeScriptu zawężenie zgubione przez ogólne
       // przeciążenie applyDrag (zwraca MovableShape)
       const narrow = (s: MovableShape) => {
-        if (s.kind === "parabola") throw new Error("zły rodzaj");
+        if (s.kind === "parabola" || s.kind === "odcinek") throw new Error("zły rodzaj");
         return s;
       };
 
@@ -235,7 +273,7 @@ describe("poziomy", () => {
     level.pieces.forEach((piece, k) => {
       const sol = piece.solution;
       // parabola nie ma uchwytu `ognisko1` — jej jedyne ognisko sprawdza osobny test niżej
-      if (piece.locked.includes("ognisko1") || sol.kind === "parabola") return;
+      if (piece.locked.includes("ognisko1") || sol.kind === "parabola" || sol.kind === "odcinek") return;
       for (let i = 0; i < 8; i++) {
         const shifted: MovableShape = { ...sol, f1: add(sol.f1, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
         const moved = solutions(level).map((s, j) => (j === k ? shifted : s));
@@ -253,7 +291,7 @@ describe("poziomy", () => {
     level.pieces.forEach((piece, k) => {
       const sol = piece.solution;
       // parabola nie ma uchwytu `ognisko2` — jej jedyne ognisko sprawdza osobny test niżej
-      if (piece.locked.includes("ognisko2") || sol.kind === "parabola") return;
+      if (piece.locked.includes("ognisko2") || sol.kind === "parabola" || sol.kind === "odcinek") return;
       let missed = 0;
       for (let i = 0; i < 8; i++) {
         const shifted: MovableShape = { ...sol, f2: add(sol.f2, scale(fromAngle((i * Math.PI) / 4), SNAP_RADIUS)) };
@@ -282,6 +320,50 @@ describe("poziomy", () => {
     });
   });
 
+  // Kryterium 5% nie pasuje do odcinka: przesunięcie środka wzdłuż własnej prostej lustra
+  // niczego nie zmienia, dopóki piłka w lustro trafia. Odpowiednik dla lustra płaskiego to
+  // obrót — o ±3° wokół środka musi dać pudło (spec wprowadzeń §1.4).
+  const rotate = (s: SegmentShape, deg: number): SegmentShape => {
+    const c = scale(add(s.from, s.to), 0.5);
+    const t = (deg * Math.PI) / 180;
+    const turn = (p: Vec2) => {
+      const d = sub(p, c);
+      return add(c, vec(d.x * Math.cos(t) - d.y * Math.sin(t), d.x * Math.sin(t) + d.y * Math.cos(t)));
+    };
+    return { ...s, from: turn(s.from), to: turn(s.to) };
+  };
+
+  it.each(byId)("poziom %s: każde lustro-odcinek obrócone o ±3° odpada", (_id, level) => {
+    level.pieces.forEach((piece, k) => {
+      const sol = piece.solution;
+      if (sol.kind !== "odcinek") return;
+      for (const deg of [-3, 3]) {
+        const moved = solutions(level).map((s, j) => (j === k ? rotate(sol, deg) : s));
+        expect(solves(level, moved), `element ${k}, ${deg}°`).toBe(false);
+      }
+    });
+  });
+
+  it("każde lustro-odcinek na starcie ma długość co najmniej 0.9 — obrót palcem potrzebuje ramienia", () => {
+    for (const level of LEVELS) {
+      level.pieces.forEach((piece, k) => {
+        if (piece.start.kind !== "odcinek") return;
+        expect(dist(piece.start.from, piece.start.to), `${level.id}, element ${k}`).toBeGreaterThanOrEqual(0.9);
+      });
+    }
+  });
+
+  // Strzałka strzału nie jest przycinana do planszy (klin tak) — mieści się, bo piłki
+  // etapu 0 leżą co najmniej 0.4 pod górną ścianą.
+  it("grot strzałki strzału jednej piłki leży wewnątrz planszy", () => {
+    for (const level of LEVELS.filter((l) => l.test.balls === 1)) {
+      if (level.sector === undefined) throw new Error(`${level.id}: jedna piłka bez wachlarza`);
+      const tip = add(level.ball, scale(fromAngle(level.sector.center), SECTOR_REACH));
+      expect(Math.abs(tip.x), level.id).toBeLessThanOrEqual(1);
+      expect(Math.abs(tip.y), level.id).toBeLessThanOrEqual(1);
+    }
+  });
+
   // Skracamy o 0.02 z każdej strony — dawny 1° parametru na elipsie a ≈ 1 to ok. 0.017.
   // Elipsa: tylko jeśli ma łuk (`arc`). Parabola/hiperbola: `span` jest OBOWIĄZKOWY
   // (parabola jest nieograniczona), więc kawałek zawsze się skraca — wariant `length`
@@ -295,7 +377,8 @@ describe("poziomy", () => {
   const shrinkSpan = (span: Span, d: number): Span =>
     span.length !== undefined ? { ...span, length: span.length - 2 * d } : { ...span, span: span.span - 2 * d };
   const shrinkMovable = (s: MovableShape, d: number): MovableShape =>
-    s.kind === "elipsa"
+    s.kind === "odcinek" ? s
+    : s.kind === "elipsa"
       ? (s.arc === undefined ? s : { ...s, arc: { ...s.arc, length: s.arc.length - 2 * d } })
       : { ...s, span: shrinkSpan(s.span, d) };
   const shrinkShape = (s: Shape, d: number): Shape => (s.kind === "odcinek" ? s : shrinkMovable(s, d));
@@ -318,11 +401,11 @@ describe("poziomy", () => {
 
   // Poziomy 21–22 SĄ kaskadami: ich rozwiązania mają ognisko we wspólnym punkcie M,
   // poza piłką i dołkiem — stąd rozszerzenie tej sztywnej listy.
-  it("kaskady istnieją tam, gdzie powinny: 13, 14, 15, 16, 21, 22, 23, 24", () => {
+  it("kaskady istnieją tam, gdzie powinny: cztery z etapu 2 i cztery hiperboliczne z etapu 3", () => {
     expect(LEVELS.filter(isCascade).map((l) => l.id)).toEqual(
       [
         "kaskada", "kaskada-od-konca", "dwie-elipsy", "zwienczenie-2",
-        "wspolne-ognisko", "druga-strona", "ktora-galaz", "zwienczenie-3",
+        "druga-strona", "wspolne-ognisko", "ktora-galaz", "zwienczenie-3",
       ],
     );
   });
@@ -376,7 +459,7 @@ describe("poziomy", () => {
   };
 
   it.each(["start", "solution"] as const)(
-    "poziom 23 (%s): druga gałąź jest rysowana — cała na planszy, po drugiej stronie niż czynna",
+    "poziom ktora-galaz (%s): druga gałąź jest rysowana — cała na planszy, po drugiej stronie niż czynna",
     (ktory) => {
       const s = ktoraGalaz().pieces[0][ktory];
       if (s.kind !== "hiperbola") throw new Error("zły rodzaj");
@@ -394,14 +477,14 @@ describe("poziomy", () => {
     },
   );
 
-  it("druga gałąź jest rysowana tylko na poziomie 23 — na 21, 22 i 24 (i wszystkich innych) nie", () => {
+  it("druga gałąź jest rysowana tylko na poziomie ktora-galaz — na pozostałych hiperbolicznych (i wszystkich innych) nie", () => {
     const zDrugaGalezia = LEVELS.filter((l) =>
       [...l.pieces.flatMap((p) => [p.start, p.solution]), ...l.obstacles].some((s) => twinPolyline(s) !== undefined),
     ).map((l) => l.id);
     expect(zDrugaGalezia).toEqual(["ktora-galaz"]);
   });
 
-  it("poziom 23: flaga drugiej gałęzi przeżywa przeciąganie (applyDrag, każdy uchwyt)", () => {
+  it("poziom ktora-galaz: flaga drugiej gałęzi przeżywa przeciąganie (applyDrag, każdy uchwyt)", () => {
     const piece = ktoraGalaz().pieces[0];
     const cel = piece.solution.kind === "hiperbola" ? piece.solution.f2 : vec(0.4, 0.6);
     for (const h of handlePositions(piece.start)) {
@@ -411,7 +494,7 @@ describe("poziomy", () => {
     }
   });
 
-  it("poziom 23: odbija tylko czynna gałąź — żadne odbicie rozwiązania nie leży na drugiej", () => {
+  it("poziom ktora-galaz: odbija tylko czynna gałąź — żadne odbicie rozwiązania nie leży na drugiej", () => {
     const l = ktoraGalaz();
     const s = l.pieces[0].solution;
     if (s.kind !== "hiperbola") throw new Error("zły rodzaj");
@@ -435,7 +518,7 @@ describe("poziomy", () => {
   // krzywej ono było (ta sama reguła co w `trace`: najbliższe trafienie wzdłuż odcinka).
   // Każdy element gracza i każda przeszkoda musi odbić co najmniej jedną piłkę, a ściany
   // żadnej — obie drogi mają działać na lustrach, nie na bandach.
-  it("poziom 24: każda krzywa (elementy gracza i przeszkody) odbija co najmniej jedną piłkę rozwiązania", () => {
+  it("poziom zwienczenie-3: każda krzywa (elementy gracza i przeszkody) odbija co najmniej jedną piłkę rozwiązania", () => {
     const l = LEVELS.find((x) => x.id === "zwienczenie-3");
     if (l === undefined) throw new Error("brak poziomu zwienczenie-3");
     const rodzaje = new Set([...solutions(l).map((s) => s.kind), ...l.obstacles.map((o) => o.kind)]);
@@ -487,7 +570,7 @@ describe("poziomy", () => {
   // Druga liczba to liczba wolnych ognisk poziomu — test sprawdza, że przejrzał je wszystkie
   // (21: oba ogniska elipsy, 22–23: M, 24: ognisko paraboli A i dalsze ognisko hiperboli).
   const BEZ_SZAREJ_STREFY: [string, number][] = [
-    ["wspolne-ognisko", 2], ["druga-strona", 1], ["ktora-galaz", 1], ["zwienczenie-3", 2],
+    ["druga-strona", 1], ["wspolne-ognisko", 2], ["ktora-galaz", 1], ["zwienczenie-3", 2],
   ];
 
   /** Położenia wolnych ognisk poziomu w pierścieniu SNAP_RADIUS … rMax, które wygrywają. */
@@ -498,8 +581,8 @@ describe("poziomy", () => {
       const sol = piece.solution;
       const lockedA = lockedSize(piece);
       // każde wolne ognisko elementu razem z jego celem
-      const wolne: { uchwyt: Handle; cel: Vec2 }[] = sol.kind === "parabola"
-        ? [{ uchwyt: "ognisko", cel: sol.focus }]
+      const wolne: { uchwyt: Handle; cel: Vec2 }[] = sol.kind === "odcinek" ? []
+        : sol.kind === "parabola" ? [{ uchwyt: "ognisko", cel: sol.focus }]
         : [{ uchwyt: "ognisko1", cel: sol.f1 }, { uchwyt: "ognisko2", cel: sol.f2 }];
       for (const { uchwyt, cel } of wolne) {
         if (piece.locked.includes(uchwyt)) continue;
@@ -552,7 +635,7 @@ describe("poziomy", () => {
     expect(solves(level, [bypass])).toBe(false);
   });
 
-  it("poziom 12: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
+  it("poziom wspologniskowe: każdy rozmiar powyżej pasma przegrywa (duża elipsa nie omija okręgu)", () => {
     const level = LEVELS.find((l) => l.id === "wspologniskowe")!;
     const base = level.pieces[0].solution;
     for (let i = 0; i <= 119; i++) {

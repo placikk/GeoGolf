@@ -4,6 +4,9 @@ import { arcEllipse, circle, ellipse, segment } from "./shape";
 
 const t = { balls: 8, maxBounces: 4, holeRadius: HOLE_RADIUS };
 
+// Numery poziomów w komentarzach tego pliku to numeracja z czasów etapu 2 (9–16).
+// W grze są o 3 większe — etap 0 dodał trzy poziomy na początku. Szukaj po identyfikatorze.
+
 const deg = (x: number): number => (x * Math.PI) / 180;
 
 /** Start i rozwiązanie elementu gracza z łukiem: długość łuku liczona na rozwiązaniu,

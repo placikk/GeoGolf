@@ -14,7 +14,8 @@ export const MIN_ARC_LENGTH = 0.05;
 
 export type Handle =
   | "ognisko1" | "ognisko2" | "rozmiar" | "poczatek" | "koniec"   // elipsa i jej łuk
-  | "ognisko" | "wierzcholek";                                     // parabola
+  | "ognisko" | "wierzcholek"                                       // parabola
+  | "koniec1" | "koniec2" | "srodek";                              // odcinek
 
 /** Dwa sposoby opisania kawałka krzywej; twórca poziomu wybiera pasujący.
  *  `length` — długość wzdłuż krzywej: gdy krzywa rośnie, ten sam kawałek obejmuje jej
@@ -47,11 +48,14 @@ export interface HyperbolaShape {
   kind: "hiperbola"; f1: Vec2; f2: Vec2; a: number; branch: 1 | -1; span: Span; twin?: true;
 }
 
-/** Czym gracz może ruszać. Odcinki są stałe — jak w etapie 2. */
-export type MovableShape = EllipseShape | ParabolaShape | HyperbolaShape;
-
 export interface SegmentShape { kind: "odcinek"; from: Vec2; to: Vec2 }
-export type Shape = MovableShape | SegmentShape;
+
+/** Krzywe z ogniskami — to, co ma ogniska do przyskakiwania i kolor rodzaju. */
+export type CurveShape = EllipseShape | ParabolaShape | HyperbolaShape;
+export type Shape = CurveShape | SegmentShape;
+
+/** Czym gracz może ruszać — od etapu 0 także lustrem-odcinkiem, więc każdym kształtem. */
+export type MovableShape = Shape;
 
 /** Element, którym rusza gracz. Blokady są per element, nie per poziom. */
 export interface PlayerPiece { start: MovableShape; solution: MovableShape; locked: Handle[] }
