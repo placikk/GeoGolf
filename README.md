@@ -14,7 +14,7 @@ Built for phones first (touch controls, portrait layout) but it also runs on des
 
 Most minigolf games are about aiming and luck. GeoGolf is closer to [Euclidea](https://www.euclidea.xyz/): a construction puzzle.
 
-You get a ball, a hole and a few mirrors shaped like conic sections (ellipses, arcs, parabolas, hyperbolas). You change their shape by dragging touch handles such as foci, vertices, size and arc ends. When you press **Sprawdź** ("Check"), the game fires **8 balls at once, each in a different direction**. The level counts only if **all eight** reach the hole.
+You get a ball, a hole and a few mirrors shaped like conic sections (ellipses, arcs, parabolas, hyperbolas). You change their shape by dragging touch handles such as foci, vertices, size and arc ends. When you press **Sprawdź** ("Check"), the game fires **8 balls at once, each in a different direction** (from stage 1 on; the warm-up stage uses a single ball). The level counts only if **all eight** reach the hole.
 
 One lucky shot can't pass that test, but a correct construction always does. To solve a level you have to use the reflective properties of conics. An ellipse with one focus on the ball and the other on the hole sends every ball into the hole. A parabola turns a fan of shots into a parallel beam. A hyperbola redirects rays aimed at one focus toward the other. Later levels chain these into cascades, where one mirror's focus is the next mirror's source.
 
