@@ -35,6 +35,44 @@ const TOP = 72;       // miejsce na przycisk menu i nagłówek „Poziomy”
 const GAP = 12;
 const MAX_TILE_H = 120;
 
+/** Zawija tekst po słowach; `measure` podaje szerokość napisu w bieżącej czcionce.
+ *  Słowo szersze niż cała linia dzieli się z dywizem — inaczej wystawałoby poza kafelek
+ *  („Współogniskowe" przy trzech kolumnach na telefonie). */
+export function wrapByWords(text: string, maxWidth: number, measure: (t: string) => number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const candidate = line === "" ? word : `${line} ${word}`;
+    if (measure(candidate) <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    if (line !== "") lines.push(line);
+    line = word;
+    while (line.length > 1 && measure(line) > maxWidth) {
+      let cut = line.length - 1;
+      while (cut > 1 && measure(`${line.slice(0, cut)}-`) > maxWidth) cut--;
+      lines.push(`${line.slice(0, cut)}-`);
+      line = line.slice(cut);
+    }
+  }
+  if (line !== "") lines.push(line);
+  return lines;
+}
+
+const TITLE_SIZES = [13, 12, 11];
+
+/** Tytuł w kafelku menu: największa czcionka (13 → 11 px), przy której każde słowo mieści się
+ *  w całości — dzielenie słowa dopiero, gdy nie wystarcza nawet 11 px. Najwyżej 3 linie. */
+export function tileTitle(
+  title: string, maxWidth: number, measureAt: (size: number) => (t: string) => number,
+): { size: number; lines: string[] } {
+  const words = title.split(" ");
+  const size = TITLE_SIZES.find((s) => words.every((w) => measureAt(s)(w) <= maxWidth))
+    ?? TITLE_SIZES[TITLE_SIZES.length - 1];
+  return { size, lines: wrapByWords(title, maxWidth, measureAt(size)).slice(0, 3) };
+}
+
 export const hitRect = (r: Rect, p: Vec2): boolean =>
   p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 

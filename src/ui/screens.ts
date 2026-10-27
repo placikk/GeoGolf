@@ -14,7 +14,7 @@ import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTarg
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
   MENU_BUTTON, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner,
-  settingsButton, settingsLayout, winAction, winLabels,
+  settingsButton, settingsLayout, tileTitle, winAction, winLabels, wrapByWords,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -98,22 +98,8 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (settingsOpen && game.phase === "dowod") game = retry(game);
   }
 
-  /** Zawija tekst po słowach. Wymaga ustawionego wcześniej `ctx.font`. */
-  const wrapByWords = (text: string, maxWidth: number): string[] => {
-    const lines: string[] = [];
-    let line = "";
-    for (const word of text.split(" ")) {
-      const candidate = line === "" ? word : `${line} ${word}`;
-      if (line !== "" && ctx.measureText(candidate).width > maxWidth) {
-        lines.push(line);
-        line = word;
-      } else {
-        line = candidate;
-      }
-    }
-    if (line !== "") lines.push(line);
-    return lines;
-  };
+  /** Szerokość napisu w bieżącej czcionce — wymaga ustawionego wcześniej `ctx.font`. */
+  const measure = (t: string): number => ctx.measureText(t).width;
 
   canvas.addEventListener("pointerdown", (e) => {
     const p = toScreenPoint(e);
@@ -382,7 +368,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       // które mówi mu, co ma zrobić. Dotyczy większości z ośmiu poziomów, nie tylko
       // pierwszego: podpowiedzi mają 61-79 znaków przy 14 px na 390 px szerokości.
       ctx.font = "14px system-ui, sans-serif";
-      wrapByWords(hint, w - 32).forEach((line, i) => {
+      wrapByWords(hint, w - 32, measure).forEach((line, i) => {
         ctx.fillText(line, w / 2, 70 + i * 18);
       });
       ctx.font = "600 16px system-ui, sans-serif";
@@ -440,7 +426,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.font = "600 18px system-ui, sans-serif";
       ctx.fillText(k.title, w / 2, 34);
       ctx.font = "15px system-ui, sans-serif";
-      wrapByWords(k.text, w - 32).slice(0, 4).forEach((line, i) => ctx.fillText(line, w / 2, 70 + i * 20));
+      wrapByWords(k.text, w - 32, measure).slice(0, 4).forEach((line, i) => ctx.fillText(line, w / 2, 70 + i * 20));
       cardLayout(w, h, k.scenes.length).forEach((r, i) => {
         const scene = k.scenes[i];
         const rc = rectCamera(r);
@@ -536,8 +522,12 @@ export function mount(canvas: HTMLCanvasElement): void {
           ctx.textAlign = "left";
         }
         ctx.fillStyle = PALETTE.muted;
-        ctx.font = "13px system-ui, sans-serif";
-        wrapByWords(lvl.title, t.w - 24).slice(0, 3).forEach((line, j) => {
+        const title = tileTitle(lvl.title, t.w - 24, (size) => {
+          ctx.font = `${size}px system-ui, sans-serif`;
+          return measure;
+        });
+        ctx.font = `${title.size}px system-ui, sans-serif`;
+        title.lines.forEach((line, j) => {
           ctx.fillText(line, t.x + 12, t.y + 54 + j * 16);
         });
       });

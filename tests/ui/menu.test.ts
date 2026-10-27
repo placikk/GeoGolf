@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
   ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand,
-  menuLayout, playArea, resultBanner, settingsButton, settingsLayout, winAction, winLabels,
+  menuLayout, playArea, resultBanner, settingsButton, settingsLayout, tileTitle, winAction, winLabels, wrapByWords,
 } from "../../src/ui/menu";
 import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
@@ -242,4 +242,47 @@ describe("plansza z zasadą — układ rysunków", () => {
       });
     }
   }
+});
+
+// sztuczna czcionka: każdy znak ma szerokość równą rozmiarowi czcionki × 0,5 (13 px → 6,5 px na znak)
+const measureAt = (size: number) => (t: string) => t.length * size * 0.5;
+
+describe("wrapByWords", () => {
+  const measure = measureAt(10); // 5 px na znak
+
+  it("zawija po słowach, gdy słowa się mieszczą", () => {
+    expect(wrapByWords("Teraz rozmiar ma znaczenie", 70, measure)).toEqual(["Teraz rozmiar", "ma znaczenie"]);
+  });
+
+  it("dzieli słowo dłuższe niż cała linia, żeby nic nie wystawało poza kafelek", () => {
+    const lines = wrapByWords("Współogniskowe", 40, measure);
+    expect(lines.length).toBeGreaterThan(1);
+    lines.forEach((l) => expect(measure(l)).toBeLessThanOrEqual(40));
+    expect(lines.map((l) => l.replace(/-$/, "")).join("")).toBe("Współogniskowe");
+  });
+});
+
+describe("tileTitle — tytuł w kafelku menu", () => {
+  it("zostawia pełną czcionkę, gdy każde słowo się mieści", () => {
+    expect(tileTitle("Dwa ogniska", 120, measureAt)).toEqual({ size: 13, lines: ["Dwa ogniska"] });
+  });
+
+  it("zmniejsza czcionkę, zanim podzieli słowo", () => {
+    // „Współogniskowe" (14 znaków): 91 px przy 13 px, 77 px przy 11 px
+    expect(tileTitle("Współogniskowe", 87, measureAt)).toEqual({ size: 12, lines: ["Współogniskowe"] });
+  });
+
+  it("na bardzo wąskim kafelku dzieli słowo przy najmniejszej czcionce", () => {
+    const { size, lines } = tileTitle("Współogniskowe", 64, measureAt);
+    expect(size).toBe(11);
+    lines.forEach((l) => expect(measureAt(11)(l)).toBeLessThanOrEqual(64));
+  });
+
+  it("żaden tytuł poziomu nie wystaje poza kafelek na telefonie 390 × 844", () => {
+    const tiles = menuLayout(390, 844, LEVELS.length);
+    LEVELS.forEach((lvl, i) => {
+      const { size, lines } = tileTitle(lvl.title, tiles[i].w - 24, measureAt);
+      lines.forEach((l) => expect(measureAt(size)(l)).toBeLessThanOrEqual(tiles[i].w - 24));
+    });
+  });
 });
