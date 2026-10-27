@@ -38,7 +38,7 @@ The first level of each new mechanic opens with a one-sentence rule card. Its sm
 <p align="center">
   <img src="docs/images/screen-construct.png" width="260" alt="Level in progress: an ellipse mirror with focus and size handles, an obstacle, and two faint live-preview paths">
   <img src="docs/images/screen-final-level.png" width="260" alt="The final level solved: a parabola and a hyperbola feed each other and all eight balls reach the hole">
-  <img src="docs/images/screen-levels.png" width="260" alt="Level selection screen with 27 levels, solved ones ticked">
+  <img src="docs/images/screen-levels.png" width="260" alt="Level selection screen with all 27 levels">
 </p>
 
 ---
