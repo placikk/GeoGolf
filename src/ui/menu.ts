@@ -35,6 +35,19 @@ const TOP = 72;       // miejsce na przycisk menu i nagłówek „Poziomy”
 const GAP = 12;
 const MAX_TILE_H = 120;
 
+/** Linie bazowe tekstu w kafelku menu: numer na 30 px, tytuł od 48 px co 16 px; 4 px zapasu
+ *  na ogonki liter (ą, ę, j). Wysokość kafelka zależy od ekranu (44–120 px), więc liczba linii
+ *  tytułu też — na niskich telefonach zostaje sam numer. */
+export const TILE_NUMBER_Y = 30;
+export const TILE_TITLE_Y = 48;
+export const TILE_LINE_H = 16;
+export const TILE_DESCENT = 4;
+
+/** Kafelek, w którym pod numerem mieszczą się dwie linie tytułu, i najwęższy kafelek,
+ *  dla którego warto dokładać kolumnę, żeby go osiągnąć. */
+const COMFORT_TILE_H = TILE_TITLE_Y + TILE_LINE_H + TILE_DESCENT;
+const MIN_TEXT_TILE_W = 96;
+
 /** Zawija tekst po słowach; `measure` podaje szerokość napisu w bieżącej czcionce.
  *  Słowo szersze niż cała linia dzieli się z dywizem — inaczej wystawałoby poza kafelek
  *  („Współogniskowe" przy trzech kolumnach na telefonie). */
@@ -62,15 +75,30 @@ export function wrapByWords(text: string, maxWidth: number, measure: (t: string)
 
 const TITLE_SIZES = [13, 12, 11];
 
+/** Ile linii tytułu (0–3) mieści się pod numerem w kafelku o wysokości `h`. */
+export const titleLineCount = (h: number): number =>
+  Math.min(3, Math.max(0, Math.floor((h - TILE_TITLE_Y - TILE_DESCENT) / TILE_LINE_H) + 1));
+
 /** Tytuł w kafelku menu: największa czcionka (13 → 11 px), przy której każde słowo mieści się
- *  w całości — dzielenie słowa dopiero, gdy nie wystarcza nawet 11 px. Najwyżej 3 linie. */
+ *  w całości — dzielenie słowa dopiero, gdy nie wystarcza nawet 11 px. Tytuł dłuższy niż
+ *  `maxLines` linii kończy się wielokropkiem. */
 export function tileTitle(
-  title: string, maxWidth: number, measureAt: (size: number) => (t: string) => number,
+  title: string, maxWidth: number, measureAt: (size: number) => (t: string) => number, maxLines = 3,
 ): { size: number; lines: string[] } {
   const words = title.split(" ");
   const size = TITLE_SIZES.find((s) => words.every((w) => measureAt(s)(w) <= maxWidth))
     ?? TITLE_SIZES[TITLE_SIZES.length - 1];
-  return { size, lines: wrapByWords(title, maxWidth, measureAt(size)).slice(0, 3) };
+  const measure = measureAt(size);
+  const all = wrapByWords(title, maxWidth, measure);
+  if (all.length <= maxLines) return { size, lines: all };
+  const lines = all.slice(0, maxLines);
+  if (maxLines > 0) {
+    // ostatnia linia bierze resztę tytułu („Dwa og…", nie „Dwa…"); słowa podzielone dywizem sklejamy
+    let last = all.slice(maxLines - 1).reduce((acc, l) => (acc.endsWith("-") ? `${acc.slice(0, -1)}${l}` : `${acc} ${l}`));
+    while (last.length > 0 && measure(`${last}…`) > maxWidth) last = last.slice(0, -1);
+    lines[maxLines - 1] = `${last.trimEnd()}…`;
+  }
+  return { size, lines };
 }
 
 export const hitRect = (r: Rect, p: Vec2): boolean =>
@@ -79,15 +107,24 @@ export const hitRect = (r: Rect, p: Vec2): boolean =>
 /** Siatka kafelków: w pionie 2 kolumny, w poziomie 4 — ale nie za cenę celu dotykowego.
  *  Gdy tylu wierszy przy tej bazowej liczbie kolumn zepchnęłoby kafelek pod 44 px
  *  (od ok. 21 poziomów na małych telefonach), siatka dostaje dodatkową kolumnę — dokładnie tyle,
- *  by wiersze zmieściły się w `maxRows`. Przy liczbie poziomów z etapów 1–2 (≤ 16) to
- *  zawsze `base`, więc stare ekrany wyglądają tak jak wcześniej. */
+ *  by wiersze zmieściły się w `maxRows`. Kolejną dostaje, gdy kafelek byłby za niski na numer
+ *  i dwie linie tytułu, a nie zrobi się przez to węższy niż `MIN_TEXT_TILE_W`. Przy liczbie
+ *  poziomów z etapów 1–2 (≤ 16) to zawsze `base`, więc stare ekrany wyglądają tak jak wcześniej. */
 export function menuLayout(width: number, height: number, count: number): Rect[] {
   const base = width >= height ? 4 : 2;
   const maxRows = Math.max(1, Math.floor((height - TOP - SIDE + GAP) / (44 + GAP)));
-  const cols = Math.max(base, Math.ceil(count / maxRows));
+  const tileW = (cols: number): number => (width - 2 * SIDE - (cols - 1) * GAP) / cols;
+  const tileH = (cols: number): number => {
+    const rows = Math.ceil(count / cols);
+    return Math.min(MAX_TILE_H, (height - TOP - SIDE - (rows - 1) * GAP) / rows);
+  };
+  let cols = Math.max(base, Math.ceil(count / maxRows));
+  // kafelek za niski na tytuł (412 × 915 przy 27 poziomach: 2 kolumny po 48 px) — kolumna
+  // więcej, o ile kafelek nie zrobi się za wąski na tekst
+  while (cols < count && tileH(cols) < COMFORT_TILE_H && tileW(cols + 1) >= MIN_TEXT_TILE_W) cols++;
   const rows = Math.ceil(count / cols);
-  const w = (width - 2 * SIDE - (cols - 1) * GAP) / cols;
-  const h = Math.min(MAX_TILE_H, (height - TOP - SIDE - (rows - 1) * GAP) / rows);
+  const w = tileW(cols);
+  const h = tileH(cols);
   const top = TOP + Math.max(0, (height - TOP - SIDE - rows * h - (rows - 1) * GAP) / 2);
   return Array.from({ length: count }, (_, i) => ({
     x: SIDE + (i % cols) * (w + GAP),

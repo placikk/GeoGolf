@@ -14,7 +14,8 @@ import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTarg
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
   MENU_BUTTON, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner,
-  settingsButton, settingsLayout, tileTitle, winAction, winLabels, wrapByWords,
+  settingsButton, settingsLayout, TILE_LINE_H, TILE_NUMBER_Y, TILE_TITLE_Y, tileTitle, titleLineCount, winAction,
+  winLabels, wrapByWords,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
@@ -514,21 +515,21 @@ export function mount(canvas: HTMLCanvasElement): void {
         ctx.textAlign = "left";
         ctx.fillStyle = PALETTE.text;
         ctx.font = "600 22px system-ui, sans-serif";
-        ctx.fillText(String(i + 1), t.x + 12, t.y + 30);
+        ctx.fillText(String(i + 1), t.x + 12, t.y + TILE_NUMBER_Y);
         if (progress.solved.includes(lvl.id)) {
           ctx.textAlign = "right";
           ctx.fillStyle = PALETTE.curve;
-          ctx.fillText("✓", t.x + t.w - 12, t.y + 30);
+          ctx.fillText("✓", t.x + t.w - 12, t.y + TILE_NUMBER_Y);
           ctx.textAlign = "left";
         }
         ctx.fillStyle = PALETTE.muted;
         const title = tileTitle(lvl.title, t.w - 24, (size) => {
           ctx.font = `${size}px system-ui, sans-serif`;
           return measure;
-        });
+        }, titleLineCount(t.h));
         ctx.font = `${title.size}px system-ui, sans-serif`;
         title.lines.forEach((line, j) => {
-          ctx.fillText(line, t.x + 12, t.y + 54 + j * 16);
+          ctx.fillText(line, t.x + 12, t.y + TILE_TITLE_Y + j * TILE_LINE_H);
         });
       });
       ctx.textAlign = "left";

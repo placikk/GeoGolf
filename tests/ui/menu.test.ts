@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
   ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand,
-  menuLayout, playArea, resultBanner, settingsButton, settingsLayout, tileTitle, winAction, winLabels, wrapByWords,
+  menuLayout, playArea, resultBanner, settingsButton, settingsLayout, TILE_DESCENT, TILE_LINE_H, TILE_TITLE_Y, tileTitle, titleLineCount, winAction,
+  winLabels, wrapByWords,
 } from "../../src/ui/menu";
 import { makeCamera } from "../../src/render/camera";
 import { LEVELS } from "../../src/levels";
@@ -278,11 +279,57 @@ describe("tileTitle — tytuł w kafelku menu", () => {
     lines.forEach((l) => expect(measureAt(11)(l)).toBeLessThanOrEqual(64));
   });
 
-  it("żaden tytuł poziomu nie wystaje poza kafelek na telefonie 390 × 844", () => {
-    const tiles = menuLayout(390, 844, LEVELS.length);
-    LEVELS.forEach((lvl, i) => {
-      const { size, lines } = tileTitle(lvl.title, tiles[i].w - 24, measureAt);
-      lines.forEach((l) => expect(measureAt(size)(l)).toBeLessThanOrEqual(tiles[i].w - 24));
-    });
+  it("tytuł, który się nie mieści, kończy się wielokropkiem w granicach kafelka", () => {
+    const { size, lines } = tileTitle("Rozmiar bez znaczenia", 87, measureAt, 1);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].endsWith("…")).toBe(true);
+    expect(measureAt(size)(lines[0])).toBeLessThanOrEqual(87);
   });
+
+  it("wielokropek wypełnia linię resztą tytułu, a nie tylko pierwszym słowem", () => {
+    // „Dwa ogniska" przy 50 px zawija się na „Dwa" / „ogniska" — skrót ma brzmieć „Dwa og…"
+    const { size, lines } = tileTitle("Dwa ogniska", 50, measureAt, 1);
+    expect(lines[0]).toBe("Dwa og…");
+    expect(measureAt(size)(lines[0])).toBeLessThanOrEqual(50);
+  });
+
+  it("bez miejsca na tytuł zostaje sam numer", () => {
+    expect(tileTitle("Dwa ogniska", 120, measureAt, 0).lines).toEqual([]);
+  });
+
+  it("titleLineCount: im niższy kafelek, tym mniej linii (0–3)", () => {
+    expect(titleLineCount(44)).toBe(0);
+    expect(titleLineCount(62)).toBe(1);
+    expect(titleLineCount(73)).toBe(2);
+    expect(titleLineCount(120)).toBe(3);
+  });
+
+  // 27 poziomów na typowych telefonach: przy minimalnej liczbie kolumn kafelki miały ok. 48 px
+  // i tytuły wchodziły na następny wiersz (412 × 915) — siatka dostaje wtedy kolumnę więcej
+  for (const [w, h] of [[390, 844], [412, 915]]) {
+    it(`na ekranie ${w} × ${h} pod numerem mieszczą się dwie linie tytułu`, () => {
+      menuLayout(w, h, LEVELS.length).forEach((t) => expect(titleLineCount(t.h)).toBeGreaterThanOrEqual(2));
+    });
+  }
+
+  it("dodatkowa kolumna nie robi kafelka węższego niż 96 px (360 × 740 zostaje przy 3)", () => {
+    const tiles = menuLayout(360, 740, LEVELS.length);
+    expect(new Set(tiles.map((t) => t.x)).size).toBe(3);
+    tiles.forEach((t) => expect(t.w).toBeGreaterThanOrEqual(96));
+  });
+
+  // od starego iPhone'a SE po duże Androidy i poziomy ekran
+  for (const [w, h] of [[320, 568], [320, 640], [360, 740], [390, 844], [412, 915], [844, 390]]) {
+    it(`żaden tytuł nie wystaje poza kafelek na ekranie ${w} × ${h}`, () => {
+      const tiles = menuLayout(w, h, LEVELS.length);
+      LEVELS.forEach((lvl, i) => {
+        const t = tiles[i];
+        const { size, lines } = tileTitle(lvl.title, t.w - 24, measureAt, titleLineCount(t.h));
+        lines.forEach((l) => expect(measureAt(size)(l)).toBeLessThanOrEqual(t.w - 24));
+        if (lines.length > 0) {
+          expect(TILE_TITLE_Y + (lines.length - 1) * TILE_LINE_H + TILE_DESCENT).toBeLessThanOrEqual(t.h);
+        }
+      });
+    });
+  }
 });
