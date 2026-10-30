@@ -11,7 +11,7 @@ import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  EDITOR_ACTIONS, MENU_BUTTON, MenuTab, SECTION_HEADER_H, addSheetLayout, cardLayout, editorBar, editorBarHit, clampScroll, communityLayout, editAction, helpButton, hitCommunity,
+  ACTION_BAND, EDITOR_ACTIONS, MENU_BUTTON, MenuTab, SECTION_HEADER_H, addSheetLayout, cardLayout, editorBar, editorBarHit, clampScroll, communityLayout, editAction, helpButton, hitCommunity,
   hitRect, hitTile, inActionBand, isTap, menuLayout, playArea, resultBanner, settingsButton, settingsLayout, tabRects,
   TILE_LINE_H, TILE_NUMBER_Y, TILE_TITLE_Y, tileTitle, titleLineCount, winAction, winLabels, wrapByWords,
 } from "./menu";
@@ -526,7 +526,11 @@ export function mount(canvas: HTMLCanvasElement): void {
   });
 
   const endDrag = (): void => { dragging = null; pointer = null; listPointer = null; editorDrag = null; };
-  canvas.addEventListener("pointercancel", endDrag);
+  canvas.addEventListener("pointercancel", () => {
+    // przerwane przeciąganie w edytorze: sesja trzyma już przesunięty stan, więc zapisujemy go
+    if (editorDrag !== null && editorDrag.moved && editor !== null) saveProject(editor);
+    endDrag();
+  });
 
   /** Stuknięcie w listę społeczności: kafelek otwiera poziom swojej sekcji (w „Twoich
    *  poziomach" — edytor albo nowy projekt), tło zamyka menu. */
@@ -905,12 +909,17 @@ export function mount(canvas: HTMLCanvasElement): void {
       banner(st.title, hint, ["", ""]);
       // dolny pas: pięć przycisków; nieaktywne przygaszone
       ctx.fillStyle = PALETTE.overlay;
-      ctx.fillRect(0, h * 0.86, w, h * 0.14);
+      ctx.fillRect(0, h * ACTION_BAND, w, h * (1 - ACTION_BAND));
       const enabled = [canAddPiece(st) || canAddObstacle(st), true, canToggleArc(st), true, true];
       editorBar(w, h).forEach((r, i) => {
         const label = i === EDITOR_ACTIONS.length - 1 && ed.ready ? "Udostępnij" : EDITOR_ACTIONS[i];
         ctx.textAlign = "center";
-        ctx.font = "600 14px system-ui, sans-serif";
+        // „Udostępnij" przy 14 px nie mieści się w polu 64 px (320 px szerokości) — zmniejszamy czcionkę
+        const size = [14, 13, 12, 11].find((sz) => {
+          ctx.font = `600 ${sz}px system-ui, sans-serif`;
+          return measure(label) <= r.w - 6;
+        }) ?? 11;
+        ctx.font = `600 ${size}px system-ui, sans-serif`;
         ctx.fillStyle = !enabled[i] ? PALETTE.muted : i === EDITOR_ACTIONS.length - 1 ? PALETTE.curve : PALETTE.text;
         ctx.fillText(label, r.x + r.w / 2, h * 0.93);
       });
