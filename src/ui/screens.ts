@@ -1130,12 +1130,12 @@ export function mount(canvas: HTMLCanvasElement): void {
         ctx.textAlign = "left";
         ctx.font = "600 15px system-ui, sans-serif";
         ctx.fillStyle = PALETTE.text;
-        ctx.fillText(titles[section], 16, head.y + 22);
+        ctx.fillText(titles[section], layout.left, head.y + 22);
         if (countOf(section) === 0) {
           ctx.font = "13px system-ui, sans-serif";
           ctx.fillStyle = PALETTE.muted;
-          wrapByWords(empty[section], viewW() - 32, measure)
-            .forEach((line, j) => ctx.fillText(line, 16, head.y + SECTION_HEADER_H + 24 + j * 16));
+          wrapByWords(empty[section], layout.contentW, measure)
+            .forEach((line, j) => ctx.fillText(line, layout.left, head.y + SECTION_HEADER_H + 24 + j * 16));
         }
       }
       for (const t of layout.tiles) {

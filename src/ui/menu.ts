@@ -35,6 +35,17 @@ const TOP = 72;       // miejsce na przycisk menu i nagłówek „Poziomy”
 const GAP = 12;
 const MAX_TILE_H = 120;
 
+/** Najszersza kolumna menu (kafelki poziomów, lista społeczności, zakładki). Na komputerze
+ *  siatka na całą szerokość dawała kafelki po ok. 340 px — kolumna stoi na środku, a na
+ *  telefonach (węższych niż 640 px) to po prostu cały ekran. */
+export const MENU_MAX_W = 640;
+
+/** Lewy brzeg i szerokość kolumny menu na ekranie o szerokości `width`. */
+export function menuColumn(width: number): { x: number; w: number } {
+  const w = Math.min(width, MENU_MAX_W);
+  return { x: (width - w) / 2, w };
+}
+
 /** Linie bazowe tekstu w kafelku menu: numer na 30 px, tytuł od 48 px co 16 px; 4 px zapasu
  *  na ogonki liter (ą, ę, j). Wysokość kafelka zależy od ekranu (44–120 px), więc liczba linii
  *  tytułu też — na niskich telefonach zostaje sam numer. */
@@ -112,8 +123,9 @@ export const hitRect = (r: Rect, p: Vec2): boolean =>
  *  poziomów z etapów 1–2 (≤ 16) to zawsze `base`, więc stare ekrany wyglądają tak jak wcześniej. */
 export function menuLayout(width: number, height: number, count: number): Rect[] {
   const base = width >= height ? 4 : 2;
+  const column = menuColumn(width);
   const maxRows = Math.max(1, Math.floor((height - TOP - SIDE + GAP) / (44 + GAP)));
-  const tileW = (cols: number): number => (width - 2 * SIDE - (cols - 1) * GAP) / cols;
+  const tileW = (cols: number): number => (column.w - 2 * SIDE - (cols - 1) * GAP) / cols;
   const tileH = (cols: number): number => {
     const rows = Math.ceil(count / cols);
     return Math.min(MAX_TILE_H, (height - TOP - SIDE - (rows - 1) * GAP) / rows);
@@ -127,7 +139,7 @@ export function menuLayout(width: number, height: number, count: number): Rect[]
   const h = tileH(cols);
   const top = TOP + Math.max(0, (height - TOP - SIDE - rows * h - (rows - 1) * GAP) / 2);
   return Array.from({ length: count }, (_, i) => ({
-    x: SIDE + (i % cols) * (w + GAP),
+    x: column.x + SIDE + (i % cols) * (w + GAP),
     y: top + Math.floor(i / cols) * (h + GAP),
     w, h,
   }));
@@ -215,10 +227,11 @@ export function cardLayout(width: number, height: number, count: number): Rect[]
 
 export type MenuTab = "tworcy" | "spolecznosc";
 
-/** Dwie zakładki u góry menu, między ☰ i ⚙ — każda co najmniej 44 px wysokości. Odstęp od
- *  brzegów: szerokość ☰ z marginesami (⚙ ma tę samą szerokość po prawej). */
+/** Dwie zakładki u góry menu, między ☰ i ⚙ — każda co najmniej 44 px wysokości. Stoją nad
+ *  kolumną menu, ale nigdy bliżej brzegu niż szerokość ☰ z marginesami (⚙ ma tę samą
+ *  szerokość po prawej) — na telefonie to ten odstęp wyznacza zakładki. */
 export function tabRects(width: number): [Rect, Rect] {
-  const x0 = MENU_BUTTON.x + MENU_BUTTON.w + 6;
+  const x0 = Math.max(MENU_BUTTON.x + MENU_BUTTON.w + 6, menuColumn(width).x + SIDE);
   const w = (width - 2 * x0) / 2;
   return [{ x: x0, y: 6, w, h: 44 }, { x: x0 + w, y: 6, w, h: 44 }];
 }
@@ -235,6 +248,9 @@ export interface CommunityLayout {
   /** pas listy na ekranie — rysujemy i łapiemy dotknięcia tylko w nim */
   viewport: Rect;
   maxScroll: number;
+  /** lewy brzeg i szerokość treści kolumny — tu stoją nagłówki sekcji i napisy pustych sekcji */
+  left: number;
+  contentW: number;
 }
 
 /** Lista społeczności: sekcje jedna pod drugą (nagłówek, potem kafelki w siatce — w pionie 2
@@ -242,7 +258,10 @@ export interface CommunityLayout {
  *  rząd na napis „Na razie pusto". `counts[i]` — liczba kafelków sekcji `i`. */
 export function communityLayout(width: number, height: number, counts: number[], scroll: number): CommunityLayout {
   const cols = width >= height ? 4 : 2;
-  const w = (width - 2 * SIDE - (cols - 1) * GAP) / cols;
+  const column = menuColumn(width);
+  const left = column.x + SIDE;
+  const contentW = column.w - 2 * SIDE;
+  const w = (contentW - (cols - 1) * GAP) / cols;
   const viewport = { x: 0, y: TOP, w: width, h: Math.max(0, height - TOP - SIDE) };
   const headers: { section: number; y: number }[] = [];
   const tiles: CommunityTile[] = [];
@@ -255,7 +274,7 @@ export function communityLayout(width: number, height: number, counts: number[],
       tiles.push({
         section, index,
         rect: {
-          x: SIDE + (index % cols) * (w + GAP),
+          x: left + (index % cols) * (w + GAP),
           y: viewport.y + y + Math.floor(index / cols) * (COMMUNITY_TILE_H + GAP) - scroll,
           w, h: COMMUNITY_TILE_H,
         },
@@ -263,7 +282,7 @@ export function communityLayout(width: number, height: number, counts: number[],
     }
     y += rows * COMMUNITY_TILE_H + (rows - 1) * GAP + GAP;
   });
-  return { headers, tiles, viewport, maxScroll: Math.max(0, y - viewport.h) };
+  return { headers, tiles, viewport, maxScroll: Math.max(0, y - viewport.h), left, contentW };
 }
 
 /** Przewinięcie przycięte do [0, maxScroll] — lista nie odjeżdża za swój początek ani koniec. */

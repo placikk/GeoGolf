@@ -69,7 +69,7 @@ The game is a small exact ray tracer for conic sections. There is no physics eng
 ## Engineering
 
 - **Zero runtime dependencies.** TypeScript in strict mode, Canvas 2D, Vite. The production bundle is about 24 KB gzipped.
-- **808 tests** in Vitest (34 files), including:
+- **812 tests** in Vitest (34 files), including:
   - **property tests** of the math itself, e.g. for 300 random ellipses and random directions, the path focus → mirror → focus must be exactly `2a`, and the reflected ray must aim at the other focus;
   - **level tests:** for every level, the stored solution must solve it, the starting position must not, and a focus nudged off target by the snap radius must fail (so the hole tolerance can't pass sloppy solutions);
   - **a bundle budget:** the test builds the production bundle, fails above **100 KB gzip**, and checks that the build registers the service worker;

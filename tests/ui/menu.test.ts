@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
-  ACTION_BAND, COMMUNITY_TILE_H, EDITOR_ACTIONS, MENU_BUTTON, addSheetLayout, editorBar, editorBarHit, Rect, SECTION_HEADER_H, TOP_BAND, cardLayout, clampScroll, communityLayout,
+  ACTION_BAND, COMMUNITY_TILE_H, EDITOR_ACTIONS, MENU_BUTTON, MENU_MAX_W, addSheetLayout, editorBar, editorBarHit, Rect, SECTION_HEADER_H, TOP_BAND, cardLayout, clampScroll, communityLayout,
   editAction, helpButton, hitCommunity, hitRect, hitTile, inActionBand, isTap, tabRects,
   menuLayout, playArea, resultBanner, settingsButton, settingsLayout, TILE_DESCENT, TILE_LINE_H, TILE_TITLE_Y, tileTitle, titleLineCount, winAction,
   winLabels, wrapByWords,
@@ -400,6 +400,41 @@ describe("lista społeczności", () => {
   it("dotknięcie a przeciągnięcie", () => {
     expect(isTap(vec(10, 10), vec(14, 13))).toBe(true);
     expect(isTap(vec(10, 10), vec(10, 30))).toBe(false);
+  });
+});
+
+describe("menu na szerokim ekranie", () => {
+  // na komputerze (1440 px) siatka rozciągała się na całą szerokość, a kafelki miały ok. 340 px
+  const W = 1440, H = 860;
+  const span = (rs: Rect[]) => {
+    const left = Math.min(...rs.map((r) => r.x));
+    const right = Math.max(...rs.map((r) => r.x + r.w));
+    return { left, right, w: right - left };
+  };
+
+  it("siatka poziomów ma najwyżej MENU_MAX_W i stoi na środku", () => {
+    const s = span(menuLayout(W, H, LEVELS.length));
+    expect(s.w).toBeLessThanOrEqual(MENU_MAX_W);
+    expect(Math.abs(s.left - (W - s.right))).toBeLessThan(1);
+  });
+
+  it("lista społeczności i jej nagłówki trzymają się tej samej kolumny", () => {
+    const l = communityLayout(W, H, [3, 5, 2], 0);
+    const s = span(l.tiles.map((t) => t.rect));
+    expect(s.w).toBeLessThanOrEqual(MENU_MAX_W);
+    expect(Math.abs(s.left - (W - s.right))).toBeLessThan(1);
+    expect(l.left).toBeCloseTo(s.left, 9);
+  });
+
+  it("zakładki stoją nad kolumną, nie przy ☰ i ⚙ na brzegach ekranu", () => {
+    const s = span(tabRects(W));
+    expect(s.w).toBeLessThanOrEqual(MENU_MAX_W);
+    expect(Math.abs(s.left - (W - s.right))).toBeLessThan(1);
+  });
+
+  it("na telefonie nic się nie zmienia: kolumna to cały ekran", () => {
+    expect(communityLayout(390, 844, [1], 0).left).toBe(16);
+    expect(span(menuLayout(390, 844, LEVELS.length)).left).toBe(16);
   });
 });
 
