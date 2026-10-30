@@ -16,8 +16,12 @@ export type EditorHandleRef =
 /** Odległość uchwytów strzału od piłki — jak klin wachlarza w grze (`SECTOR_REACH`). */
 export const SHOT_REACH = 0.4;
 
+/** Piłka i dołek zostają co najmniej 0.1 od brzegu planszy: przy piłce na ścianie uchwyty
+ *  strzału lądowałyby dokładnie na piłce i „najbliższy wygrywa" nie pozwalałby złapać każdego z nich. */
+export const EDITOR_POINT_LIMIT = 0.9;
+
 const clamp = (x: number, lo: number, hi: number): number => Math.min(Math.max(x, lo), hi);
-const inBoard = (p: Vec2): Vec2 => ({ x: clamp(p.x, -1, 1), y: clamp(p.y, -1, 1) });
+const inPointLimit = (p: Vec2): Vec2 => ({ x: clamp(p.x, -EDITOR_POINT_LIMIT, EDITOR_POINT_LIMIT), y: clamp(p.y, -EDITOR_POINT_LIMIT, EDITOR_POINT_LIMIT) });
 const wrap = (x: number): number => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
 
 /** Punkt w odległości co najwyżej `max` od `from` w kierunku `angle`, ale nie za brzegiem
@@ -79,8 +83,8 @@ function snapTargetsFor(s: EditorState, ref: { target: "element" | "przeszkoda";
 /** Przeciągnięcie uchwytu do punktu świata `to`. Uchwyty kształtów przez `applyDrag` z gry
  *  (te same reguły: plansza, minimalne odległości), ogniska przyskakują w promieniu `snap`. */
 export function applyEditorDrag(s: EditorState, ref: EditorHandleRef, to: Vec2, snap: number): EditorState {
-  if (ref.target === "pilka") return { ...s, ball: inBoard(to) };
-  if (ref.target === "dolek") return { ...s, hole: inBoard(to) };
+  if (ref.target === "pilka") return { ...s, ball: inPointLimit(to) };
+  if (ref.target === "dolek") return { ...s, hole: inPointLimit(to) };
   if (ref.target === "kierunek") {
     if (s.shot.kind === "360") return s;
     const center = Math.atan2(to.y - s.ball.y, to.x - s.ball.x);

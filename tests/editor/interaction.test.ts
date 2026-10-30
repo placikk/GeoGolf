@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { dist, vec } from "../../src/core/vec";
 import { SNAP_RADIUS } from "../../src/levels";
+import { shapeToPiece } from "../../src/levels/shape";
+import { piecePolyline } from "../../src/render/shapes";
 import { addObstacle, addPiece, cycleShot, newEditor } from "../../src/editor/model";
 import { SHOT_REACH, applyEditorDrag, editorHandles, pickEditorHandle, selectAt } from "../../src/editor/interaction";
 
@@ -38,9 +40,17 @@ describe("uchwyty edytora", () => {
 });
 
 describe("przeciąganie w edytorze", () => {
-  it("piłka i dołek idą za palcem, ale nie za planszę", () => {
+  it("piłka i dołek idą za palcem, ale nie bliżej ściany niż 0.1", () => {
     expect(applyEditorDrag(e0, { target: "pilka" }, vec(0.2, 0.3), SNAP_RADIUS).ball).toEqual(vec(0.2, 0.3));
-    expect(applyEditorDrag(e0, { target: "dolek" }, vec(1.5, -2), SNAP_RADIUS).hole).toEqual(vec(1, -1));
+    expect(applyEditorDrag(e0, { target: "dolek" }, vec(1.5, -2), SNAP_RADIUS).hole).toEqual(vec(0.9, -0.9));
+  });
+
+  it("piłka przy ścianie: każdy uchwyt da się złapać", () => {
+    for (const [to, expected] of [[vec(1, 1), vec(0.9, 0.9)], [vec(0, 1), vec(0, 0.9)]] as const) {
+      const s = applyEditorDrag(cycleShot(e0), { target: "pilka" }, to, SNAP_RADIUS);
+      expect(s.ball).toEqual(expected);
+      for (const h of editorHandles(s)) expect(pickEditorHandle(s, h.pos, 0.01), h.ref.target).toEqual(h.ref);
+    }
   });
 
   it("kierunek strzału: kąt od piłki do palca", () => {
@@ -72,6 +82,15 @@ describe("przeciąganie w edytorze", () => {
     expect(e2.kind === "elipsa" && e2.f2).toEqual(vec(0.3, 0));
   });
 
+  it("ognisko nie przyskakuje do drugiego ogniska tego samego kształtu", () => {
+    let s = addPiece(e0, "elipsa"); // ogniska (−0.3, 0) i (0.3, 0)
+    s = applyEditorDrag(s, { target: "pilka" }, vec(-0.9, 0.9), SNAP_RADIUS);
+    s = applyEditorDrag(s, { target: "dolek" }, vec(0.9, 0.9), SNAP_RADIUS);
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "ognisko2" }, vec(-0.28, 0.01), SNAP_RADIUS);
+    const e = s.pieces[0].shape;
+    expect(e.kind === "elipsa" && e.f2).not.toEqual(e.kind === "elipsa" && e.f1);
+  });
+
   it("zablokowane uchwyty w edytorze dalej się przesuwa — blokada działa dopiero w grze", () => {
     let s = addPiece(e0, "odcinek");
     s = { ...s, pieces: [{ ...s.pieces[0], locked: ["koniec1"] }] };
@@ -93,5 +112,17 @@ describe("zaznaczanie stuknięciem", () => {
   it("pełna elipsa łapie się także w miejscu, gdzie łamana się zamyka", () => {
     const s = addPiece(e0, "elipsa"); // a = 0.45, wierzchołek osi w (0.45, 0) — tam zaczyna się łamana
     expect(selectAt(s, vec(0.449, -0.002), 0.01)).toEqual({ kind: "element", index: 0 });
+  });
+
+  it("parabola łapie się przy wierzchołku", () => {
+    const s = addPiece(e0, "parabola");
+    expect(selectAt(s, vec(-0.3, 0.005), 0.02)).toEqual({ kind: "element", index: 0 });
+  });
+
+  it("hiperbola łapie się na widocznej gałęzi", () => {
+    const s = addPiece(e0, "hiperbola");
+    const pts = piecePolyline(shapeToPiece(s.pieces[0].shape));
+    const m = pts[Math.floor(pts.length / 2)];
+    expect(selectAt(s, vec(m.x, m.y + 0.005), 0.02)).toEqual({ kind: "element", index: 0 });
   });
 });
