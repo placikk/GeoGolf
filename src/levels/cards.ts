@@ -1,7 +1,7 @@
 import { Vec2, fromAngle, vec } from "../core/vec";
 import { TraceResult, trace } from "../core/trace";
-import { HOLE_RADIUS, Shape } from "./types";
-import { BOARD_WALLS, arcEllipse, ellipse, hyperbola, parabola, segment, shapeToPiece } from "./shape";
+import { HOLE_RADIUS, Level, Shape } from "./types";
+import { BOARD_WALLS, arcEllipse, ellipse, hyperbola, isCircle, parabola, segment, shapeToPiece } from "./shape";
 
 /** Jeden strzał miniscenki: skąd i pod jakim kątem. Zwykle wszystkie z jednej piłki
  *  (wachlarz), ale scena hiperboli strzela z kilku miejsc naraz w jeden punkt. */
@@ -140,4 +140,20 @@ export function cardFor(ids: readonly string[], index: number): Card | undefined
     }
   }
   return found;
+}
+
+/** Plansza dla poziomu spoza listy twórców (społeczność): najtrudniejsza mechanika obecna
+ *  w poziomie — elementy gracza i przeszkody razem — pierwsza pasująca z listy: hiperbola,
+ *  parabola, kaskada (co najmniej dwie elipsy niebędące okręgami), łuk, elipsa, a przy samych
+ *  odcinkach i okręgach — odbicie. Poziomy twórców mają swoją kolejność (`cardFor`). */
+export function mechanicCard(level: Level): Card | undefined {
+  const shapes: Shape[] = [...level.pieces.map((p) => p.start), ...level.obstacles];
+  const ellipses = shapes.filter((s) => s.kind === "elipsa" && !isCircle(s));
+  const id = shapes.some((s) => s.kind === "hiperbola") ? "hiperbola"
+    : shapes.some((s) => s.kind === "parabola") ? "parabola"
+    : ellipses.length >= 2 ? "kaskada"
+    : ellipses.some((s) => s.kind === "elipsa" && s.arc !== undefined) ? "luk"
+    : ellipses.length === 1 ? "elipsa"
+    : "odbicie";
+  return CARDS.find((c) => c.id === id);
 }
