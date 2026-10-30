@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { arcEllipse, circle, ellipse, hyperbola, parabola, segment, shapeConic, shapeToPiece } from "../../src/levels";
+import { MIN_ARC_LENGTH, Shape, arcEllipse, circle, ellipse, hyperbola, parabola, segment, shapeConic, shapeToPiece } from "../../src/levels";
+import { perimeter } from "../../src/levels/arc";
 import {
   HYPERBOLA_SPAN, MAX_OBSTACLES, MAX_PIECES, PARABOLA_SPAN, SharedLevel, cleanTitle, decodeLevel, encodeLevel, round4,
   roundShared,
@@ -146,13 +147,33 @@ describe("kodek poziomu — odrzucanie złych kodów", () => {
     rejects(withWire((w) => { w.o = Array.from({ length: MAX_OBSTACLES + 1 }, () => ["o", -0.9, -0.9, -0.5, -0.9]); }));
   });
 
-  it("blokady: nieistniejący uchwyt, powtórzona, przesunięty zablokowany uchwyt", () => {
+  it("limity liczby elementów i przeszkód sprawdzane przed odczytem kształtów", () => {
+    const reason = (code: string) => { const d = decodeLevel(code); return d.ok ? "przyjęty" : d.reason; };
+    // śmieci zamiast kształtów: przy limicie sprawdzanym najpierw powodem jest liczba, nie zły kształt
+    expect(reason(withWire((w) => { w.p = Array.from({ length: MAX_PIECES + 1 }, () => "x"); }))).toBe("liczba elementów");
+    expect(reason(withWire((w) => { w.o = Array.from({ length: MAX_OBSTACLES + 1 }, () => "x"); }))).toBe("liczba przeszkód");
+  });
+
+  it("blokady: nieistniejący uchwyt i powtórzona odpadają", () => {
     const e = ["e", -0.5, 0, 0.5, 0, 0.8];
-    const moved = ["e", -0.4, 0, 0.5, 0, 0.8];
     rejects(withWire((w) => { w.p = [[e, e, ["ognisko"]]]; }));            // parabola ma „ognisko", elipsa nie
     rejects(withWire((w) => { w.p = [[e, e, ["rozmiar", "rozmiar"]]]; }));
-    rejects(withWire((w) => { w.p = [[e, moved, ["ognisko1"]]]; }));
-    expect(decodeLevel(withWire((w) => { w.p = [[e, moved, ["ognisko2"]]]; })).ok).toBe(true);
+  });
+
+  // W grze blokada zabrania tylko ŁAPANIA uchwytu — kształt i tak zmienia się przez inne
+  // uchwyty, więc wartości zablokowanego uchwytu w rozwiązaniu mogą być inne niż w starcie.
+  it("blokady: rozwiązanie z innymi wartościami zablokowanego uchwytu jest przyjmowane", () => {
+    const e = ["e", -0.5, 0, 0.5, 0, 0.8];
+    const moved = ["e", -0.4, 0, 0.5, 0, 0.8];
+    const accepts = (piece: unknown[]) => expect(decodeLevel(withWire((w) => { w.p = [piece]; })).ok).toBe(true);
+    accepts([e, moved, ["ognisko1"]]);
+    accepts([e, moved, ["ognisko2"]]);
+    // zablokowany rozmiar, ogniska rozsunięte: gra podnosi a do c + odstęp
+    accepts([e, ["e", -0.9, 0, 0.9, 0, 0.901], ["rozmiar"]]);
+    // zablokowany środek odcinka, przesunięty jeden koniec
+    accepts([["o", -0.3, 0, 0.3, 0], ["o", -0.3, 0, 0.3, 0.4], ["srodek"]]);
+    // zablokowany początek łuku, przesunięty koniec
+    accepts([[...e, 0, 1], [...e, 0.2, 1.4], ["poczatek"]]);
   });
 
   it("start i rozwiązanie różnych rodzajów albo łuk tylko po jednej stronie", () => {
@@ -217,6 +238,36 @@ describe("kodek poziomu — odrzucanie złych kodów", () => {
     // większość zmian psuje JSON albo walidację; część (np. zmieniona cyfra) daje inny poprawny poziom
     expect(accepted).toBeLessThan(total);
     expect(accepted).toBeGreaterThan(0);
+  });
+});
+
+describe("kodek — zaokrąglenie nie psuje kształtów z edytora", () => {
+  const level = (shape: Shape): SharedLevel => ({ ...SAMPLES[0], pieces: [{ start: shape, solution: shape, locked: [] }] });
+
+  it("łuk dłuższy niż obwód − MIN_ARC_LENGTH (po zmniejszeniu elipsy) jest przycinany jak w grze", () => {
+    const duzy = arcEllipse(vec(-0.5, 0), vec(0.5, 0), 0.8, 0, 2 * Math.PI - 0.06);
+    const maly: Shape = { ...duzy, a: 0.52 }; // ta sama długość łuku, a obwód znacznie mniejszy
+    expect(maly.kind === "elipsa" && maly.arc !== undefined && maly.arc.length > perimeter(maly) - MIN_ARC_LENGTH).toBe(true);
+    const d = decodeLevel(encodeLevel(level(maly)));
+    if (!d.ok) throw new Error(`odrzucony: ${d.reason}`);
+    const got = d.level.pieces[0].start;
+    if (got.kind !== "elipsa" || got.arc === undefined) throw new Error("brak łuku");
+    expect(got.arc.length).toBeLessThanOrEqual(perimeter(got) - MIN_ARC_LENGTH);
+    expect(got.arc.length).toBeGreaterThan(perimeter(got) - MIN_ARC_LENGTH - 2e-4);
+  });
+
+  it("łuk krótszy niż MIN_ARC_LENGTH jest wydłużany do minimum", () => {
+    const krotki = arcEllipse(vec(-0.5, 0), vec(0.5, 0), 0.8, 0, 0.03);
+    const d = decodeLevel(encodeLevel(level(krotki)));
+    if (!d.ok) throw new Error(`odrzucony: ${d.reason}`);
+    const got = d.level.pieces[0].start;
+    expect(got.kind === "elipsa" && got.arc?.length).toBe(MIN_ARC_LENGTH);
+  });
+
+  it("parabola z ogniskiem dokładnie MIN_GAP od wierzchołka przechodzi zaokrąglenie", () => {
+    const k = 0.001 / Math.SQRT2; // ognisko po skosie: po zaokrągleniu odległość spada poniżej 1e-3
+    const p = parabola(vec(k, k), vec(0, 0), PARABOLA_SPAN);
+    expect(decodeLevel(encodeLevel(level(p))).ok).toBe(true);
   });
 });
 

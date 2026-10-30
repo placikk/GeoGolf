@@ -1,7 +1,6 @@
-import { Vec2, add, dist, scale } from "../core/vec";
+import { Vec2, dist } from "../core/vec";
 import {
-  ArcRange, EllipseShape, HyperbolaShape, Handle, MIN_ARC_LENGTH, MovableShape, ParabolaShape, PlayerPiece, SegmentShape,
-  Shape, Span,
+  ArcRange, EllipseShape, HyperbolaShape, Handle, MIN_ARC_LENGTH, ParabolaShape, PlayerPiece, SegmentShape, Shape, Span,
 } from "../levels/types";
 import { perimeter } from "../levels/arc";
 import { shapeConic } from "../levels/shape";
@@ -39,6 +38,22 @@ const VERSION = 1;
 export const round4 = (x: number): number => Math.round(x * 1e4) / 1e4 + 0;
 const rp = (p: Vec2): Vec2 => ({ x: round4(p.x), y: round4(p.y) });
 
+/** Długość łuku zaokrąglona i zaciśnięta do [MIN_ARC_LENGTH, obwód − MIN_ARC_LENGTH] obwodu
+ *  JUŻ zaokrąglonej elipsy — tego samego, który policzy odczyt. Zmniejszenie elipsy uchwytem
+ *  rozmiaru zostawia łuk dłuższy niż ta granica; gra rysuje go wtedy przyciętego
+ *  (`arcParams` w `src/levels/arc.ts`), więc zacisk zapisuje dokładnie to, co gracz widzi.
+ *  Górna granica zaokrąglona W DÓŁ, dolna W GÓRĘ — wynik ma 4 miejsca i mieści się w zakresie
+ *  sprawdzanym przy odczycie. Elipsa za mała na jakikolwiek łuk (obwód < 2·MIN_ARC_LENGTH)
+ *  daje pusty zakres; wtedy wychodzi dolna granica, którą odczyt odrzuci. */
+function roundArcLength(e: EllipseShape, length: number): number {
+  const lo = Math.ceil(MIN_ARC_LENGTH * 1e4) / 1e4;
+  const max = perimeter(e) - MIN_ARC_LENGTH;
+  let hi = Math.floor(max * 1e4) / 1e4;
+  // iloczyn `max * 1e4` bywa zaokrąglony w górę do pełnej liczby — wtedy o krok niżej
+  if (hi > max) hi = round4(hi - 1e-4);
+  return Math.max(lo, Math.min(round4(length), hi));
+}
+
 function roundShape(s: Shape): Shape {
   if (s.kind === "odcinek") return { kind: "odcinek", from: rp(s.from), to: rp(s.to) };
   if (s.kind === "parabola") return { kind: "parabola", focus: rp(s.focus), vertex: rp(s.vertex), span: PARABOLA_SPAN };
@@ -46,7 +61,7 @@ function roundShape(s: Shape): Shape {
     return { kind: "hiperbola", f1: rp(s.f1), f2: rp(s.f2), a: round4(s.a), branch: 1, span: HYPERBOLA_SPAN };
   }
   const base: EllipseShape = { kind: "elipsa", f1: rp(s.f1), f2: rp(s.f2), a: round4(s.a) };
-  return s.arc === undefined ? base : { ...base, arc: { mid: round4(s.arc.mid), length: round4(s.arc.length) } };
+  return s.arc === undefined ? base : { ...base, arc: { mid: round4(s.arc.mid), length: roundArcLength(base, s.arc.length) } };
 }
 
 function roundShot(s: SharedShot): SharedShot {
@@ -171,7 +186,10 @@ function wireToShapeRaw(x: unknown): Shape {
   if (kind === "p") {
     if (w.length !== 5) fail("parabola");
     const s: ParabolaShape = { kind: "parabola", focus: point(w, 1), vertex: point(w, 3), span: PARABOLA_SPAN };
-    if (dist(s.focus, s.vertex) < 1e-3) fail("parabola bez ogniskowej");
+    // gra trzyma ognisko co najmniej MIN_GAP = 1e-3 od wierzchołka, ale zaokrąglenie obu
+    // punktów do 4 miejsc potrafi zjeść z tego do ok. 1,4e-4 — próg 5e-4 to zapas na nie.
+    // Stożkowa przy takiej ogniskowej jest skończona (`checkConic` i tak to sprawdza).
+    if (dist(s.focus, s.vertex) < 5e-4) fail("parabola bez ogniskowej");
     return s;
   }
   if (kind === "h") {
@@ -206,23 +224,6 @@ function wireToShot(x: unknown): SharedShot {
   return fail("strzał");
 }
 
-/** Liczby, które zablokowany uchwyt trzyma w miejscu — muszą być takie same w starcie
- *  i rozwiązaniu, inaczej poziom byłby po cichu nie do wygrania (gracz nie ruszy uchwytu). */
-export function lockedValues(s: MovableShape, h: Handle): number[] {
-  const p = (v: Vec2): number[] => [v.x, v.y];
-  if (s.kind === "odcinek") {
-    if (h === "koniec1") return p(s.from);
-    if (h === "koniec2") return p(s.to);
-    return p(scale(add(s.from, s.to), 0.5));
-  }
-  if (s.kind === "parabola") return h === "ognisko" ? p(s.focus) : p(s.vertex);
-  if (h === "ognisko1") return p(s.f1);
-  if (h === "ognisko2") return p(s.f2);
-  if (h === "rozmiar") return [s.a];
-  // początek i koniec łuku: łuk opisany środkiem i długością, więc cały łuk
-  return s.kind === "elipsa" && s.arc !== undefined ? [s.arc.mid, s.arc.length] : [];
-}
-
 function wireToPiece(x: unknown): PlayerPiece {
   const w = arr(x);
   if (w.length !== 3) fail("element");
@@ -238,15 +239,17 @@ function wireToPiece(x: unknown): PlayerPiece {
     return id ?? fail("blokada nieistniejącego uchwytu");
   });
   if (new Set(locked).size !== locked.length) fail("powtórzona blokada");
-  for (const h of locked) {
-    const a = lockedValues(start, h);
-    const b = lockedValues(solution, h);
-    if (a.some((v, i) => Math.abs(v - b[i]) > 1e-9)) fail("zablokowany uchwyt przesunięty");
-  }
+  // Sprawdzamy tylko identyfikatory blokad, nie wartości: w grze blokada zabrania jedynie
+  // łapania uchwytu, a kształt dalej zmienia się przez pozostałe (rozsunięte ogniska
+  // podnoszą zablokowany rozmiar, koniec odcinka przesuwa zablokowany środek). Rozwiązanie
+  // autora powstaje z prawdziwej gry pod tymi samymi blokadami, więc jest osiągalne; ręcznie
+  // spreparowany link z rozwiązaniem nieosiągalnym da w najgorszym razie poziom nie do
+  // wygrania — niczego nie zepsuje.
   return { start, solution, locked };
 }
 
-/** Tytuł bez znaków sterujących, przycięty z brzegów; 1–40 znaków. */
+/** Tytuł bez znaków sterujących, przycięty z brzegów. Długości nie sprawdza — limit
+ *  1–`MAX_TITLE` znaków egzekwuje odczyt (`wireToLevel`), a okienko „Udostępnij" przycina. */
 export const cleanTitle = (t: string): string => t.replace(/[\u0000-\u001f\u007f]/g, "").trim();
 
 function wireToLevel(x: unknown, minPieces: number): SharedLevel {
@@ -258,10 +261,13 @@ function wireToLevel(x: unknown, minPieces: number): SharedLevel {
   const b = arr(o.b);
   const h = arr(o.h);
   if (b.length !== 2 || h.length !== 2) fail("piłka lub dołek");
-  const pieces = arr(o.p).map(wireToPiece);
-  const obstacles = arr(o.o).map(wireToShape);
-  if (pieces.length < minPieces || pieces.length > MAX_PIECES) fail("liczba elementów");
-  if (obstacles.length > MAX_OBSTACLES) fail("liczba przeszkód");
+  // limity przed odczytem kształtów: obcy kod z tysiącem elementów odpada od razu
+  const rawPieces = arr(o.p);
+  const rawObstacles = arr(o.o);
+  if (rawPieces.length < minPieces || rawPieces.length > MAX_PIECES) fail("liczba elementów");
+  if (rawObstacles.length > MAX_OBSTACLES) fail("liczba przeszkód");
+  const pieces = rawPieces.map(wireToPiece);
+  const obstacles = rawObstacles.map(wireToShape);
   return { title, ball: point(b, 0), hole: point(h, 0), shot: wireToShot(o.s), pieces, obstacles };
 }
 
