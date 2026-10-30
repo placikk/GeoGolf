@@ -1,7 +1,5 @@
 import { Vec2, vec } from "../core/vec";
-import {
-  Card, LEVELS, SNAP_RADIUS, Shape, autoCard, cardFor, sceneTraces, shapeFoci, shapeToPiece,
-} from "../levels";
+import { Card, LEVELS, Level, SNAP_RADIUS, Shape, sceneTraces, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera, rectCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, dashedPolyline, drawPiece, glowDot, glowPolyline, handleShape, holeMark,
@@ -13,28 +11,46 @@ import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  MENU_BUTTON, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand, menuLayout, playArea, resultBanner,
-  settingsButton, settingsLayout, TILE_LINE_H, TILE_NUMBER_Y, TILE_TITLE_Y, tileTitle, titleLineCount, winAction,
-  winLabels, wrapByWords,
+  MENU_BUTTON, MenuTab, SECTION_HEADER_H, cardLayout, clampScroll, communityLayout, editAction, helpButton, hitCommunity,
+  hitRect, hitTile, inActionBand, isTap, menuLayout, playArea, resultBanner, settingsButton, settingsLayout, tabRects,
+  TILE_LINE_H, TILE_NUMBER_Y, TILE_TITLE_Y, tileTitle, titleLineCount, winAction, winLabels, wrapByWords,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
+import { Playlist, autoCardIn, bannerLabel, current, helpCard, isLastIn, nextIn } from "./playlist";
+import { addLink, loadLinks, saveLinks } from "./collections";
+import { loadCatalog } from "../share/catalog";
+import { codeFromHash, openCode } from "../share/verify";
 
 const TRAIL = 0.35;
 const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
+const TOAST_S = 2.5;    // jak długo wisi komunikat na dole ekranu
+
+/** Sekcje zakładki „Społeczność" w kolejności rysowania. */
+const COMMUNITY_SECTIONS = ["katalog", "linki"] as const;
 
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
   const store = browserStore();
   let progress = loadProgress(store, LEVELS.map((l) => l.id));
   // brak zapisu (albo poziom, którego już nie ma) → -1 → pierwszy poziom
-  let levelIndex = Math.max(0, LEVELS.findIndex((l) => l.id === progress.lastId));
-  let game: GameState = newGame(LEVELS[levelIndex]);
+  let playlist: Playlist = {
+    section: "tworcy", levels: LEVELS, index: Math.max(0, LEVELS.findIndex((l) => l.id === progress.lastId)),
+  };
+  let game: GameState = newGame(current(playlist));
   let menuOpen = false;
+  let menuTab: MenuTab = "tworcy";
+  let communityScroll = 0;
+  /** palec położony na liście społeczności — przewijanie albo stuknięcie rozstrzyga `pointerup` */
+  let listPointer: { down: Vec2; scroll0: number } | null = null;
+  const catalog = loadCatalog();
+  let links = loadLinks(store);
+  /** komunikat na dole ekranu (np. o złym linku) i czas, do którego wisi */
+  let toast: { text: string; until: number } | null = null;
   let settings = loadSettings(store);
   let settingsOpen = false;
   /** otwarta plansza z zasadą; `null` — żadna */
-  let card: Card | null = autoCard(LEVELS[levelIndex].id, progress.solved) ?? null;
+  let card: Card | null = autoCardIn(playlist, progress.solved) ?? null;
   let dragging: HandleRef | null = null;
   let pointer: Vec2 | null = null;
   let consumedReset = false;
@@ -64,20 +80,61 @@ export function mount(canvas: HTMLCanvasElement): void {
   const viewW = () => canvas.width / dpr();
   const viewH = () => canvas.height / dpr();
 
-  const isLast = (): boolean => levelIndex === LEVELS.length - 1;
+  /** Poziomy z linków, odkodowane RAZ (odkodowanie to pełny dowód) — odświeżane tylko przy
+   *  dopisaniu linku, nie w każdej klatce rysowania. */
+  const decodeLinks = (): Level[] => links.flatMap((c) => { const o = openCode(c); return o.ok ? [o.level] : []; });
+  let linkLevels = decodeLinks();
+  const catalogLevels = catalog.map((c) => c.level);
+  const sectionLevels = (section: (typeof COMMUNITY_SECTIONS)[number]): Level[] =>
+    section === "katalog" ? catalogLevels : linkLevels;
 
-  function goTo(index: number): void {
-    levelIndex = index;
-    game = newGame(LEVELS[index]);
-    progress = { ...progress, lastId: LEVELS[index].id };
-    saveProgress(store, progress);
+  function play(next: Playlist): void {
+    playlist = next;
+    game = newGame(current(next));
+    // „ostatnio grany" dotyczy tylko listy twórców — poziomy społeczności nie mają numeru
+    if (next.section === "tworcy") {
+      progress = { ...progress, lastId: current(next).id };
+      saveProgress(store, progress);
+    }
     // pierwszy poziom nowej mechaniki, jeszcze niezaliczony: najpierw zasada
-    card = autoCard(LEVELS[index].id, progress.solved) ?? null;
+    card = autoCardIn(next, progress.solved) ?? null;
+  }
+
+  // zegar `performance.now`, nie `time` z klatki — `openFromHash` woła to przed pierwszą klatką
+  const say = (text: string): void => { toast = { text, until: performance.now() / 1000 + TOAST_S }; };
+
+  /** Link `…#poziom=<kod>`: poziom trafia do „Z linków" i od razu się otwiera (poziom
+   *  z katalogu otwiera się w katalogu); zły link — komunikat i zwykła gra. Końcówka adresu
+   *  znika, żeby odświeżenie strony nie otwierało poziomu drugi raz. */
+  function openFromHash(): void {
+    const code = codeFromHash(window.location.hash);
+    if (code === null) return;
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    // link wklejony w otwartej już karcie (`hashchange`) — menu i ustawienia nie mogą go zasłonić
+    menuOpen = false;
+    settingsOpen = false;
+    if (game.phase === "dowod") game = retry(game);
+    const o = openCode(code);
+    if (!o.ok) {
+      say("Ten link nie zawiera działającego poziomu");
+      return;
+    }
+    const inCatalog = catalog.findIndex((c) => c.level.id === o.level.id);
+    if (inCatalog >= 0) {
+      play({ section: "katalog", levels: catalogLevels, index: inCatalog });
+      return;
+    }
+    links = addLink(links, o.code);
+    saveLinks(store, links);
+    linkLevels = decodeLinks();
+    play({ section: "linki", levels: linkLevels, index: 0 });
   }
 
   function toggleMenu(): void {
     menuOpen = !menuOpen;
     settingsOpen = false;
+    // menu otwiera się na zakładce bieżącego poziomu
+    if (menuOpen) menuTab = playlist.section === "tworcy" ? "tworcy" : "spolecznosc";
     // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
     if (menuOpen && game.phase === "dowod") game = retry(game);
   }
@@ -89,7 +146,7 @@ export function mount(canvas: HTMLCanvasElement): void {
   /** „?" — plansza mechaniki bieżącego poziomu. Dowód nie może trwać, gdy „?" jest
    *  dotykalne (patrz `helpVisible`), więc nie ma czego przerywać. */
   function openHelp(): void {
-    card = cardFor(LEVELS.map((l) => l.id), levelIndex) ?? null;
+    card = helpCard(playlist) ?? null;
   }
 
   function toggleSettings(): void {
@@ -138,16 +195,28 @@ export function mount(canvas: HTMLCanvasElement): void {
       return;
     }
     if (menuOpen) {
+      consumedReset = true;
+      const tab = tabRects(viewW()).findIndex((r) => hitRect(r, p));
+      if (tab >= 0) {
+        menuTab = tab === 0 ? "tworcy" : "spolecznosc";
+        communityScroll = 0;
+        return;
+      }
+      if (menuTab === "spolecznosc") {
+        // przewinięcie czy stuknięcie — rozstrzyga `pointerup`
+        listPointer = { down: p, scroll0: communityScroll };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       // kafelek wybiera poziom (także ten sam — od nowa), tło po prostu zamyka menu
       const i = hitTile(menuLayout(viewW(), viewH(), LEVELS.length), p);
-      if (i !== null) goTo(i);
+      if (i !== null) play({ section: "tworcy", levels: LEVELS, index: i });
       menuOpen = false;
-      consumedReset = true;
       return;
     }
     if (game.phase === "wygrana") {
-      const action = winAction(p, viewW(), viewH(), isLast());
-      if (action === "nastepny") goTo(levelIndex + 1);
+      const action = winAction(p, viewW(), viewH(), isLastIn(playlist));
+      if (action === "nastepny") play(nextIn(playlist));
       if (action === "menu") menuOpen = true;
       if (action === "powtorz") game = retry(game);
       consumedReset = true;
@@ -175,7 +244,15 @@ export function mount(canvas: HTMLCanvasElement): void {
     canvas.setPointerCapture(e.pointerId);
   });
 
+  const communityCounts = (): number[] => COMMUNITY_SECTIONS.map((sec) => sectionLevels(sec).length);
+
   canvas.addEventListener("pointermove", (e) => {
+    if (listPointer !== null) {
+      const dy = toScreenPoint(e).y - listPointer.down.y;
+      const { maxScroll } = communityLayout(viewW(), viewH(), communityCounts(), 0);
+      communityScroll = clampScroll(listPointer.scroll0 - dy, maxScroll);
+      return;
+    }
     if (dragging === null) return;
     const w = toWorld(e);
     pointer = w;
@@ -191,7 +268,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     game = { ...game, pieces };
   });
 
-  const endDrag = (): void => { dragging = null; pointer = null; };
+  const endDrag = (): void => { dragging = null; pointer = null; listPointer = null; };
   canvas.addEventListener("pointercancel", endDrag);
 
   // JEDEN listener, nie dwa. Osobny `endDrag` zarejestrowany wcześniej wyzerowałby
@@ -199,7 +276,23 @@ export function mount(canvas: HTMLCanvasElement): void {
   // — więc puszczenie uchwytu w dolnym pasie ekranu uruchamiałoby dowód wbrew graczowi
   // i kasowało jego niedokończoną edycję. W pionie geometria kamery przypadkiem chroni
   // przed tym (plansza nie sięga pasa przycisku), ale nic nie wymusza pionu.
+  /** Stuknięcie w listę społeczności: kafelek otwiera poziom swojej sekcji, tło zamyka menu. */
+  function tapCommunity(p: Vec2): void {
+    const hit = hitCommunity(communityLayout(viewW(), viewH(), communityCounts(), communityScroll), p);
+    menuOpen = false;
+    if (hit === null) return;
+    const section = COMMUNITY_SECTIONS[hit.section];
+    play({ section, levels: sectionLevels(section), index: hit.index });
+  }
+
   canvas.addEventListener("pointerup", (e) => {
+    if (listPointer !== null) {
+      const up = toScreenPoint(e);
+      if (isTap(listPointer.down, up)) tapCommunity(up);
+      listPointer = null;
+      consumedReset = false;
+      return;
+    }
     const wasDragging = dragging !== null;
     const afterReset = consumedReset;
     consumedReset = false;
@@ -334,8 +427,8 @@ export function mount(canvas: HTMLCanvasElement): void {
           glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
         }
         // pod tytułem tylko dopisek ostatniego poziomu; na pozostałych — nic
-        const allSolved = LEVELS.every((l) => progress.solved.includes(l.id));
-        const { right, note } = winLabels(isLast(), allSolved);
+        const allSolved = playlist.levels.every((l) => progress.solved.includes(l.id));
+        const { right, note } = winLabels(isLastIn(playlist), allSolved);
         banner(resultBanner(game.proof.balls.length, 0).title, note ?? "", ["Jeszcze raz", right]);
       } else if (game.phase === "porazka") {
         const missed = game.proof.balls.filter((b) => !b.holed).length;
@@ -353,6 +446,23 @@ export function mount(canvas: HTMLCanvasElement): void {
     drawMenuButton();
     drawSettingsButton();
     if (helpVisible()) drawHelpButton();
+    if (toast !== null && time < toast.until) drawToast(toast.text);
+
+    /** Komunikat w pigułce nad dolnym pasem — znika sam po `TOAST_S` sekund. */
+    function drawToast(text: string): void {
+      const w = viewW();
+      const y = viewH() * 0.82;
+      ctx.font = "14px system-ui, sans-serif";
+      const tw = Math.min(w - 32, measure(text) + 32);
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.beginPath();
+      ctx.roundRect(w / 2 - tw / 2, y - 22, tw, 32, 16);
+      ctx.fill();
+      ctx.textAlign = "center";
+      ctx.fillStyle = PALETTE.text;
+      ctx.fillText(text, w / 2, y - 1);
+      ctx.textAlign = "left";
+    }
 
     function banner(title: string, hint: string, action: string | [string, string]): void {
       const w = viewW();
@@ -360,7 +470,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.textAlign = "center";
       ctx.fillStyle = PALETTE.muted;
       ctx.font = "12px system-ui, sans-serif";
-      ctx.fillText(`Poziom ${levelIndex + 1} / ${LEVELS.length}`, w / 2, 22);
+      ctx.fillText(bannerLabel(playlist), w / 2, 22);
       ctx.fillStyle = PALETTE.text;
       ctx.font = "600 18px system-ui, sans-serif";
       ctx.fillText(title, w / 2, 46);
@@ -402,7 +512,7 @@ export function mount(canvas: HTMLCanvasElement): void {
      *  Kółko liniami i „?" znakiem ASCII — nie polegamy na glifie ⓘ w czcionce telefonu. */
     function drawHelpButton(): void {
       ctx.font = "12px system-ui, sans-serif";
-      const tw = ctx.measureText(`Poziom ${levelIndex + 1} / ${LEVELS.length}`).width;
+      const tw = ctx.measureText(bannerLabel(playlist)).width;
       const cx = viewW() / 2 + tw / 2 + 14;
       ctx.strokeStyle = PALETTE.muted;
       ctx.lineWidth = 1.5;
@@ -499,10 +609,12 @@ export function mount(canvas: HTMLCanvasElement): void {
       const h = viewH();
       ctx.fillStyle = PALETTE.overlay;
       ctx.fillRect(0, 0, w, h);
-      ctx.textAlign = "center";
-      ctx.fillStyle = PALETTE.text;
-      ctx.font = "600 18px system-ui, sans-serif";
-      ctx.fillText("Poziomy", w / 2, 34);
+      drawTabs();
+      if (menuTab === "spolecznosc") {
+        drawCommunity();
+        return;
+      }
+      const levelIndex = playlist.section === "tworcy" ? playlist.index : -1;
       menuLayout(w, h, LEVELS.length).forEach((t, i) => {
         const lvl = LEVELS[i];
         ctx.beginPath();
@@ -534,9 +646,92 @@ export function mount(canvas: HTMLCanvasElement): void {
       });
       ctx.textAlign = "left";
     }
+
+    /** Zakładki „Od twórców | Społeczność": wybrana jaśniejsza i podkreślona. */
+    function drawTabs(): void {
+      const labels = ["Od twórców", "Społeczność"];
+      tabRects(viewW()).forEach((r, i) => {
+        const on = (i === 0) === (menuTab === "tworcy");
+        ctx.textAlign = "center";
+        // wąskie telefony: przy szerokości 320 px zakładka ma 104 px, więc napis zmniejszamy, aż się zmieści
+        const size = [16, 15, 14, 13].find((sz) => {
+          ctx.font = `600 ${sz}px system-ui, sans-serif`;
+          return measure(labels[i]) <= r.w - 16;
+        }) ?? 13;
+        ctx.font = `600 ${size}px system-ui, sans-serif`;
+        ctx.fillStyle = on ? PALETTE.text : PALETTE.muted;
+        ctx.fillText(labels[i], r.x + r.w / 2, r.y + r.h / 2 + 6);
+        if (on) {
+          ctx.fillStyle = PALETTE.curve;
+          ctx.fillRect(r.x + 12, r.y + r.h - 3, r.w - 24, 2);
+        }
+      });
+      ctx.textAlign = "left";
+    }
+
+    /** Zakładka „Społeczność": sekcje z nagłówkami, przewijane, przycięte do pasa listy. */
+    function drawCommunity(): void {
+      const layout = communityLayout(viewW(), viewH(), communityCounts(), communityScroll);
+      const v = layout.viewport;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(v.x, v.y, v.w, v.h);
+      ctx.clip();
+      const titles = { katalog: "Katalog", linki: "Z linków" };
+      const empty = {
+        katalog: "Na razie pusto — przyślij twórcy link do swojego poziomu.",
+        linki: "Tu trafią poziomy otwarte z linków.",
+      };
+      for (const head of layout.headers) {
+        const section = COMMUNITY_SECTIONS[head.section];
+        ctx.textAlign = "left";
+        ctx.font = "600 15px system-ui, sans-serif";
+        ctx.fillStyle = PALETTE.text;
+        ctx.fillText(titles[section], 16, head.y + 22);
+        if (sectionLevels(section).length === 0) {
+          ctx.font = "13px system-ui, sans-serif";
+          ctx.fillStyle = PALETTE.muted;
+          ctx.fillText(empty[section], 16, head.y + SECTION_HEADER_H + 24);
+        }
+      }
+      for (const t of layout.tiles) {
+        const section = COMMUNITY_SECTIONS[t.section];
+        const lvl = sectionLevels(section)[t.index];
+        const r = t.rect;
+        const here = playlist.section === section && playlist.index === t.index;
+        ctx.beginPath();
+        ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+        ctx.fillStyle = PALETTE.tile;
+        ctx.fill();
+        ctx.lineWidth = here ? 2 : 1;
+        ctx.strokeStyle = here ? PALETTE.curve : PALETTE.tileEdge;
+        ctx.stroke();
+        if (progress.solved.includes(lvl.id)) {
+          ctx.textAlign = "right";
+          ctx.font = "600 18px system-ui, sans-serif";
+          ctx.fillStyle = PALETTE.curve;
+          ctx.fillText("✓", r.x + r.w - 10, r.y + 24);
+        }
+        ctx.textAlign = "left";
+        ctx.fillStyle = PALETTE.text;
+        const title = tileTitle(lvl.title, r.w - 40, (size) => {
+          ctx.font = `600 ${size + 1}px system-ui, sans-serif`;
+          return measure;
+        }, 2);
+        ctx.font = `600 ${title.size + 1}px system-ui, sans-serif`;
+        title.lines.forEach((line, j) => ctx.fillText(line, r.x + 12, r.y + 24 + j * 17));
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.fillStyle = PALETTE.muted;
+        const note = section === "katalog" ? (catalog[t.index]?.author ?? "") : "z linku";
+        ctx.fillText(note, r.x + 12, r.y + r.h - 12);
+      }
+      ctx.restore();
+    }
   }
 
   window.addEventListener("resize", resize);
+  window.addEventListener("hashchange", openFromHash);
   resize();
+  openFromHash();
   requestAnimationFrame(frame);
 }
