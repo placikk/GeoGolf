@@ -67,6 +67,14 @@ describe("edytor — operacje", () => {
     expect(canToggleArc({ ...addPiece(e0, "elipsa"), selected: null })).toBe(false);
   });
 
+  it("łuk nie włącza się na elipsie za małej na łuk (obwód < 2·MIN_ARC_LENGTH z zapasem)", () => {
+    const s = addPiece(e0, "elipsa");
+    const malutka: EditorState = { ...s, pieces: [{ shape: ellipse(vec(0, 0), vec(0.002, 0), 0.006), locked: [] }] };
+    expect(canToggleArc(malutka)).toBe(false);
+    expect(toggleArc(malutka)).toBe(malutka);
+    expect(decodeLevel(draftCode(toggleArc(malutka)), { draft: true }).ok).toBe(true);
+  });
+
   it("strzał po kolei: 360° → wachlarz → jedna piłka (ten sam kierunek) → 360°", () => {
     const a = cycleShot(e0);
     expect(a.shot).toEqual({ kind: "wachlarz", center: Math.PI / 2, width: Math.PI / 2 });
@@ -110,6 +118,13 @@ describe("edytor — zapis, „Zagraj” i wygrana autora", () => {
   it("„wygrana”, która po zaokrągleniu nie wygrywa, nie daje kodu", () => {
     const t = prepareTest(fromSample(0));
     if (!t.ok) throw new Error(t.reason);
-    expect(acceptWin(t.shared, [ellipse(vec(-0.3, 0.2), vec(0.5, 0), 0.8)])).toEqual({ ok: false });
+    expect(acceptWin(t.shared, [ellipse(vec(-0.3, 0.2), vec(0.5, 0), 0.8)])).toEqual({ ok: false, reason: "nie wygrywa" });
+  });
+
+  it("wygrana, której kodu nie przyjmie odczyt linku, nie daje kodu", () => {
+    // tytuł dłuższy niż MAX_TITLE: dowód przechodzi, ale odczyt kodu by go odrzucił
+    const t = prepareTest(fromShared({ ...SAMPLES[0], title: "x".repeat(41) }));
+    if (!t.ok) throw new Error(t.reason);
+    expect(acceptWin(t.shared, SAMPLES[0].pieces.map((p) => p.solution))).toEqual({ ok: false, reason: "nie da się zapisać" });
   });
 });

@@ -1,9 +1,10 @@
 import { Vec2, vec } from "../core/vec";
-import { Handle, Level, MovableShape, Shape } from "../levels/types";
+import { EllipseShape, Handle, Level, MIN_ARC_LENGTH, MovableShape, Shape } from "../levels/types";
+import { perimeter } from "../levels/arc";
 import { arcEllipse, circle, ellipse, hyperbola, isCircle, parabola, segment } from "../levels/shape";
 import { handlePositions } from "../ui/handles";
 import {
-  HYPERBOLA_SPAN, MAX_OBSTACLES, MAX_PIECES, PARABOLA_SPAN, SharedLevel, SharedShot, encodeLevel, roundShared,
+  HYPERBOLA_SPAN, MAX_OBSTACLES, MAX_PIECES, PARABOLA_SPAN, SharedLevel, SharedShot, decodeLevel, encodeLevel, roundShared,
 } from "../share/codec";
 import { sharedToLevel, solvesLevel, verifyShared } from "../share/verify";
 
@@ -79,12 +80,18 @@ const keepLocks = (shape: MovableShape, locked: Handle[]): Handle[] => {
   return locked.filter((h) => ids.includes(h));
 };
 
-/** Czy „Łuk" ma co zrobić: zaznaczona jest elipsa, która nie jest okręgiem. */
+/** Czy na elipsie mieści się łuk, który da się zapisać: odczyt linku wymaga długości łuku
+ *  w [MIN_ARC_LENGTH, obwód − MIN_ARC_LENGTH], więc obwód musi przekraczać 2·MIN_ARC_LENGTH —
+ *  z zapasem 1e-3 na zaokrąglenie ognisk i `a` do 4 miejsc (zmienia obwód o mniej niż 1e-3). */
+export const arcFits = (e: EllipseShape): boolean => perimeter(e) >= 2 * MIN_ARC_LENGTH + 1e-3;
+
+/** Czy „Łuk" ma co zrobić: zaznaczona jest elipsa, która nie jest okręgiem — przy włączaniu
+ *  także dość duża na łuk (`arcFits`). */
 export function canToggleArc(s: EditorState): boolean {
   const sel = s.selected;
   if (sel === null) return false;
   const shape = sel.kind === "element" ? s.pieces[sel.index]?.shape : s.obstacles[sel.index];
-  return shape !== undefined && shape.kind === "elipsa" && !isCircle(shape);
+  return shape !== undefined && shape.kind === "elipsa" && !isCircle(shape) && (shape.arc !== undefined || arcFits(shape));
 }
 
 /** Zaznaczona elipsa (nie okrąg): pełna ↔ półelipsa od parametru 0 do π. */
@@ -93,6 +100,7 @@ export function toggleArc(s: EditorState): EditorState {
   if (sel === null) return s;
   const shape = sel.kind === "element" ? s.pieces[sel.index]?.shape : s.obstacles[sel.index];
   if (shape === undefined || shape.kind !== "elipsa" || isCircle(shape)) return s;
+  if (shape.arc === undefined && !arcFits(shape)) return s;
   const next: Shape = shape.arc === undefined ? arcEllipse(shape.f1, shape.f2, shape.a, 0, Math.PI) : ellipse(shape.f1, shape.f2, shape.a);
   return replaceShape(s, sel, next);
 }
@@ -148,11 +156,17 @@ export function prepareTest(s: EditorState): TestStart {
     : { ok: true, shared, level };
 }
 
+export type WinResult = { ok: true; code: string } | { ok: false; reason: "nie wygrywa" | "nie da się zapisać" };
+
 /** Autor wygrał: jego ustawienie, ZAOKRĄGLONE, musi przejść dowód jeszcze raz — zaokrąglenie
- *  mogło zepsuć wygraną na krawędzi. Wynik to gotowy kod do linku. */
-export function acceptWin(shared: SharedLevel, solution: MovableShape[]): { ok: true; code: string } | { ok: false } {
+ *  mogło zepsuć wygraną na krawędzi. Obrona w głąb: kod musi też przejść odczyt linku, inaczej
+ *  „Udostępnij" nie miałby czego wysłać, a projekt nie wczytałby się po odświeżeniu. Wynik to
+ *  gotowy kod do linku. */
+export function acceptWin(shared: SharedLevel, solution: MovableShape[]): WinResult {
   const withSolution = roundShared({
     ...shared, pieces: shared.pieces.map((p, i) => ({ ...p, solution: solution[i] ?? p.solution })),
   });
-  return verifyShared(withSolution).ok ? { ok: true, code: encodeLevel(withSolution) } : { ok: false };
+  if (!verifyShared(withSolution).ok) return { ok: false, reason: "nie wygrywa" };
+  const code = encodeLevel(withSolution);
+  return decodeLevel(code).ok ? { ok: true, code } : { ok: false, reason: "nie da się zapisać" };
 }

@@ -1,9 +1,9 @@
 import { Vec2, add, dist, dot, fromAngle, scale, sub } from "../core/vec";
 import { Handle, MovableShape } from "../levels/types";
-import { shapeFoci, shapeToPiece } from "../levels/shape";
+import { isCircle, shapeFoci, shapeToPiece } from "../levels/shape";
 import { piecePolyline } from "../render/shapes";
 import { applyDrag, handlePositions, snapTo } from "../ui/handles";
-import { EditorState, Selection, replaceShape } from "./model";
+import { EditorState, Selection, arcFits, replaceShape } from "./model";
 
 /** Co przeciąga palec w edytorze. W edytorze ruchome jest wszystko: piłka, dołek, kierunek
  *  i szerokość strzału, uchwyty elementów gracza (także zablokowane — blokada działa w grze,
@@ -80,8 +80,13 @@ function snapTargetsFor(s: EditorState, ref: { target: "element" | "przeszkoda";
   return [s.ball, s.hole, ...others.flatMap(shapeFoci)];
 }
 
+const inBoard = (p: Vec2): Vec2 => ({ x: clamp(p.x, -1, 1), y: clamp(p.y, -1, 1) });
+
 /** Przeciągnięcie uchwytu do punktu świata `to`. Uchwyty kształtów przez `applyDrag` z gry
- *  (te same reguły: plansza, minimalne odległości), ogniska przyskakują w promieniu `snap`. */
+ *  (te same reguły: plansza, minimalne odległości), ogniska przyskakują w promieniu `snap`.
+ *  Dwa wyjątki od gry: okrągła przeszkoda przesuwa się cała, a łuk nie maleje poniżej
+ *  rozmiaru, na którym da się go zapisać (`arcFits`) — przeciągnięcie, które by to zrobiło,
+ *  zostawia kształt bez zmian. */
 export function applyEditorDrag(s: EditorState, ref: EditorHandleRef, to: Vec2, snap: number): EditorState {
   if (ref.target === "pilka") return { ...s, ball: inPointLimit(to) };
   if (ref.target === "dolek") return { ...s, hole: inPointLimit(to) };
@@ -99,7 +104,17 @@ export function applyEditorDrag(s: EditorState, ref: EditorHandleRef, to: Vec2, 
   if (shape === undefined) return s;
   const target = isFocus(ref.id) ? snapTo(to, snapTargetsFor(s, ref), snap) : to;
   const sel: Selection = { kind: ref.target, index: ref.index };
-  return replaceShape(s, sel, applyDrag(shape, ref.id, target));
+  if (ref.target === "przeszkoda" && shape.kind === "elipsa" && isCircle(shape) && (ref.id === "ognisko1" || ref.id === "ognisko2")) {
+    // Okrąg ma oba ogniska w środku, remis „najbliższego uchwytu" wygrywa `ognisko2`, a gra
+    // rozsunęłaby ogniska w cienką elipsę. Okrągła przeszkoda (np. „Okrąg") przesuwa się więc
+    // cała: środek w punkcie palca (po przyskoczeniu, w planszy), ta sama wielkość i łuk.
+    // Tylko przeszkoda — elipsa gracza ze zlanymi ogniskami musi dać się z powrotem rozsunąć.
+    const c = inBoard(target);
+    return replaceShape(s, sel, { ...shape, f1: c, f2: c });
+  }
+  const next = applyDrag(shape, ref.id, target);
+  if (next.kind === "elipsa" && next.arc !== undefined && !arcFits(next)) return s;
+  return replaceShape(s, sel, next);
 }
 
 /** Odległość punktu od odcinka a–b. */

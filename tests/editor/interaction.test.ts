@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { dist, vec } from "../../src/core/vec";
-import { SNAP_RADIUS } from "../../src/levels";
-import { shapeToPiece } from "../../src/levels/shape";
+import { MIN_ARC_LENGTH, SNAP_RADIUS } from "../../src/levels";
+import { perimeter } from "../../src/levels/arc";
+import { isCircle, shapeToPiece } from "../../src/levels/shape";
 import { piecePolyline } from "../../src/render/shapes";
-import { addObstacle, addPiece, cycleShot, newEditor } from "../../src/editor/model";
+import { decodeLevel } from "../../src/share/codec";
+import { addObstacle, addPiece, cycleShot, draftCode, newEditor, toggleArc } from "../../src/editor/model";
 import { SHOT_REACH, applyEditorDrag, editorHandles, pickEditorHandle, selectAt } from "../../src/editor/interaction";
 
 const e0 = newEditor("Test");
@@ -98,6 +100,49 @@ describe("przeciąganie w edytorze", () => {
     const o = s.pieces[0].shape;
     expect(o.kind === "odcinek" && o.from).toEqual(vec(-0.6, 0.5));
     expect(s.pieces[0].locked).toEqual(["koniec1"]);
+  });
+});
+
+describe("przeciąganie okręgu i małych łuków", () => {
+  it("ognisko okrągłej przeszkody przesuwa cały okrąg — zostaje okręgiem tej samej wielkości", () => {
+    const s = addObstacle(e0, "okrag"); // środek (0, 0), promień 0.15
+    for (const id of ["ognisko1", "ognisko2"] as const) {
+      const o = applyEditorDrag(s, { target: "przeszkoda", index: 0, id }, vec(0.4, -0.3), SNAP_RADIUS).obstacles[0];
+      if (o.kind !== "elipsa") throw new Error("nie elipsa");
+      expect(isCircle(o), id).toBe(true);
+      expect(o.f1, id).toEqual(vec(0.4, -0.3));
+      expect(o.a, id).toBe(0.15);
+    }
+  });
+
+  it("okrąg przeciągnięty za brzeg zostaje środkiem w planszy", () => {
+    const s = addObstacle(e0, "okrag");
+    const o = applyEditorDrag(s, { target: "przeszkoda", index: 0, id: "ognisko2" }, vec(1.4, 0.2), SNAP_RADIUS).obstacles[0];
+    expect(o.kind === "elipsa" && o.f1).toEqual(vec(1, 0.2));
+    expect(decodeLevel(draftCode(applyEditorDrag(s, { target: "przeszkoda", index: 0, id: "ognisko2" }, vec(1.4, 0.2), SNAP_RADIUS)), { draft: true }).ok).toBe(true);
+  });
+
+  it("elipsa gracza ze zlanymi ogniskami nadal daje się rozsunąć", () => {
+    let s = addPiece(e0, "elipsa");
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "ognisko1" }, vec(-0.49, 0.01), SNAP_RADIUS); // na piłkę
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "ognisko2" }, vec(-0.49, 0.01), SNAP_RADIUS); // też na piłkę
+    const zlana = s.pieces[0].shape;
+    expect(zlana.kind === "elipsa" && isCircle(zlana)).toBe(true);
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "ognisko2" }, vec(0.2, 0.3), SNAP_RADIUS);
+    const e = s.pieces[0].shape;
+    expect(e.kind === "elipsa" && e.f1).toEqual(vec(-0.5, 0));
+    expect(e.kind === "elipsa" && e.f2).toEqual(vec(0.2, 0.3));
+  });
+
+  it("łuku nie da się zmniejszyć poniżej rozmiaru, na którym mieści się łuk — szkic zawsze się zapisuje", () => {
+    let s = toggleArc(addPiece(e0, "elipsa"));
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "ognisko1" }, vec(-0.49, 0.01), SNAP_RADIUS);
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "ognisko2" }, vec(-0.49, 0.01), SNAP_RADIUS);
+    s = applyEditorDrag(s, { target: "element", index: 0, id: "rozmiar" }, vec(-0.495, 0), SNAP_RADIUS);
+    const e = s.pieces[0].shape;
+    if (e.kind !== "elipsa" || e.arc === undefined) throw new Error("brak łuku");
+    expect(perimeter(e)).toBeGreaterThan(2 * MIN_ARC_LENGTH);
+    expect(decodeLevel(draftCode(s), { draft: true }).ok).toBe(true);
   });
 });
 
