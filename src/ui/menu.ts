@@ -215,9 +215,10 @@ export function cardLayout(width: number, height: number, count: number): Rect[]
 
 export type MenuTab = "tworcy" | "spolecznosc";
 
-/** Dwie zakładki u góry menu, między ☰ i ⚙ — każda co najmniej 44 px wysokości. */
+/** Dwie zakładki u góry menu, między ☰ i ⚙ — każda co najmniej 44 px wysokości. Odstęp od
+ *  brzegów: szerokość ☰ z marginesami (⚙ ma tę samą szerokość po prawej). */
 export function tabRects(width: number): [Rect, Rect] {
-  const x0 = 6 + 44 + 6;
+  const x0 = MENU_BUTTON.x + MENU_BUTTON.w + 6;
   const w = (width - 2 * x0) / 2;
   return [{ x: x0, y: 6, w, h: 44 }, { x: x0 + w, y: 6, w, h: 44 }];
 }

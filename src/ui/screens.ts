@@ -137,7 +137,6 @@ export function mount(canvas: HTMLCanvasElement): void {
     card = autoCardIn(next, progress.solved) ?? null;
   }
 
-  // zegar `performance.now`, nie `time` z klatki — `openFromHash` woła to przed pierwszą klatką
   /** Zapis projektu w pamięci przeglądarki — po każdej zmianie (bez przycisku „Zapisz"). */
   function saveProject(e: EditorSession): void {
     const list = upsertProject(projects, { key: e.key, code: e.code, ready: e.ready });
@@ -147,10 +146,18 @@ export function mount(canvas: HTMLCanvasElement): void {
   }
 
   /** Zmiana treści projektu: wraca do szkicu (trzeba go przejść jeszcze raz). `save: false`
-   *  w trakcie przeciągania — zapis dopiero po puszczeniu palca. */
+   *  w trakcie przeciągania — zapis dopiero po puszczeniu palca. Obrona w głąb: szkic, którego
+   *  odczyt by nie przyjął, zmienia tylko bieżącą sesję — zapis zostaje przy poprzednim kodzie,
+   *  bo `loadProjects` pominąłby zepsuty i projekt zniknąłby po odświeżeniu. */
   function editorChanged(next: EditorState, save = true): void {
     if (editor === null) return;
-    editor = { ...editor, state: next, ready: false, code: draftCode(next) };
+    const code = draftCode(next);
+    if (!decodeLevel(code, { draft: true }).ok) {
+      editor = { ...editor, state: next, ready: false };
+      say("Tego układu nie da się zapisać");
+      return;
+    }
+    editor = { ...editor, state: next, ready: false, code };
     if (save) saveProject(editor);
   }
 
@@ -190,8 +197,12 @@ export function mount(canvas: HTMLCanvasElement): void {
     card = null;
   }
 
+  /** „‹" i „Edytuj": powrót do edytora. Trwający dowód gry testowej zostaje przerwany — inaczej
+   *  dokończyłby się później jako zwykła gra i zaliczył poziom „edytor" w postępie. */
   const backToEditor = (): void => {
-    if (editor !== null) editor = { ...editor, testing: null };
+    if (editor === null) return;
+    editor = { ...editor, testing: null };
+    if (game.phase === "dowod") game = retry(game);
   };
 
   /** Autor wygrał: zaokrąglone ustawienie przechodzi dowód jeszcze raz i staje się rozwiązaniem. */
@@ -199,7 +210,9 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (editor === null || editor.testing === null) return;
     const r = acceptWin(editor.testing, game.pieces);
     if (!r.ok) {
-      say("Za blisko krawędzi — spróbuj jeszcze raz");
+      say(r.reason === "nie wygrywa"
+        ? "Za blisko krawędzi — spróbuj jeszcze raz"
+        : "Tego ustawienia nie da się zapisać — przestaw coś i spróbuj jeszcze raz");
       game = retry(game);
       return;
     }
@@ -220,6 +233,9 @@ export function mount(canvas: HTMLCanvasElement): void {
         projects = removeProject(projects, editor.key);
         saveProjects(store, projects);
         editor = null;
+        // pod edytorem mógł zostać poziom gry testowej usuniętego projektu — po zamknięciu menu
+        // gracz zobaczyłby go jako zwykły poziom; wracamy do bieżącej listy
+        game = newGame(current(playlist));
         menuOpen = true;
         menuTab = "spolecznosc";
       }
@@ -260,8 +276,20 @@ export function mount(canvas: HTMLCanvasElement): void {
     saveProject(editor);
     const link = linkFor(window.location.origin + window.location.pathname, code);
     if (typeof navigator.share === "function") {
-      navigator.share({ title, url: link }).catch(() => { /* gracz zamknął okno udostępniania */ });
-    } else if (navigator.clipboard !== undefined) {
+      navigator.share({ title, url: link }).catch((e: unknown) => {
+        // „AbortError" — gracz zamknął okno udostępniania; inny błąd (np. przeglądarka odmówiła)
+        // — link i tak musi do niego trafić, więc schowek albo okienko z linkiem
+        if (typeof e === "object" && e !== null && "name" in e && e.name === "AbortError") return;
+        copyLink(link);
+      });
+    } else {
+      copyLink(link);
+    }
+  }
+
+  /** Link do schowka, a gdy schowka nie ma albo odmówi — okienko z linkiem do skopiowania. */
+  function copyLink(link: string): void {
+    if (navigator.clipboard !== undefined) {
       navigator.clipboard.writeText(link).then(() => say("Skopiowano link"), () => window.prompt("Skopiuj link:", link));
     } else {
       window.prompt("Skopiuj link:", link);
@@ -269,6 +297,7 @@ export function mount(canvas: HTMLCanvasElement): void {
   }
   if (shareDialog instanceof HTMLDialogElement) shareDialog.addEventListener("close", finishShare);
 
+  // zegar `performance.now`, nie `time` z klatki — `openFromHash` woła to przed pierwszą klatką
   const say = (text: string): void => { toast = { text, until: performance.now() / 1000 + TOAST_S }; };
 
   /** Link `…#poziom=<kod>`: poziom trafia do „Z linków" i od razu się otwiera (poziom
@@ -314,8 +343,9 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (menuOpen && game.phase === "dowod") game = retry(game);
   }
 
-  /** „?" jest rysowane i dotykalne tylko poza menu, ustawieniami i dowodem (wtedy napis
-   *  „Poziom N / M" obok niego też nie jest rysowany). */
+  /** „?" jest rysowane i dotykalne tylko poza menu, ustawieniami, dowodem (wtedy napis
+   *  „Poziom N / M" obok niego też nie jest rysowany) i ekranem edytora — edytor ma napis
+   *  „Edytor", ale nie ma planszy z zasadą. W grze testowej autora „?" jest. */
   const helpVisible = (): boolean => !menuOpen && !settingsOpen && game.phase !== "dowod" && !inEditor();
 
   /** „?" — plansza mechaniki bieżącego poziomu. Dowód nie może trwać, gdy „?" jest
@@ -477,9 +507,12 @@ export function mount(canvas: HTMLCanvasElement): void {
   /** Puszczenie uchwytu: po przeciągnięciu — zapis; po stuknięciu — zaznaczenie właściciela
    *  uchwytu, a stuknięcie w uchwyt JUŻ zaznaczonego elementu gracza przełącza jego blokadę. */
   function editorUp(): void {
-    if (editor === null || editorDrag === null) return;
-    const { ref, moved } = editorDrag;
+    const drag = editorDrag;
+    // zerowane przed każdym wyjściem: link otwarty w trakcie przeciągania (`hashchange`) zamyka
+    // edytor, a pozostawione `editorDrag` przechwytywałoby potem każde puszczenie palca
     editorDrag = null;
+    if (editor === null || drag === null) return;
+    const { ref, moved } = drag;
     if (moved) {
       saveProject(editor);
       return;
@@ -580,7 +613,8 @@ export function mount(canvas: HTMLCanvasElement): void {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     time = now / 1000;
-    if (!menuOpen && !settingsOpen && card === null) {
+    // pod ekranem edytora gra stoi — `game` to tam najwyżej porzucony poziom testowy
+    if (!menuOpen && !settingsOpen && card === null && !inEditor()) {
       const before = game.phase;
       game = advance(game, dt);
       if (before === "dowod" && game.phase === "wygrana") {
@@ -732,6 +766,8 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (settingsOpen) drawSettings();
     if (card !== null) {
       drawCard(card);
+      // komunikat nad planszą — np. o złym linku u kogoś, kto wchodzi pierwszy raz i widzi zasadę
+      if (toast !== null && time < toast.until) drawToast(toast.text);
       return;
     }
     drawMenuButton();
