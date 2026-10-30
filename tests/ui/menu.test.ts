@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
-  ACTION_BAND, MENU_BUTTON, Rect, TOP_BAND, cardLayout, editAction, helpButton, hitRect, hitTile, inActionBand,
+  ACTION_BAND, COMMUNITY_TILE_H, MENU_BUTTON, Rect, SECTION_HEADER_H, TOP_BAND, cardLayout, clampScroll, communityLayout,
+  editAction, helpButton, hitCommunity, hitRect, hitTile, inActionBand, isTap, tabRects,
   menuLayout, playArea, resultBanner, settingsButton, settingsLayout, TILE_DESCENT, TILE_LINE_H, TILE_TITLE_Y, tileTitle, titleLineCount, winAction,
   winLabels, wrapByWords,
 } from "../../src/ui/menu";
@@ -332,4 +333,72 @@ describe("tileTitle — tytuł w kafelku menu", () => {
       });
     });
   }
+});
+
+describe("zakładki menu", () => {
+  for (const w of [320, 390, 844]) {
+    it(`szerokość ${w}: dwie zakładki ≥ 44 px, obok siebie, bez ☰ i ⚙`, () => {
+      const [a, b] = tabRects(w);
+      for (const t of [a, b]) {
+        expect(Math.min(t.w, t.h)).toBeGreaterThanOrEqual(44);
+        expect(overlap(t, MENU_BUTTON)).toBe(false);
+        expect(overlap(t, settingsButton(w))).toBe(false);
+        expect(t.y + t.h).toBeLessThanOrEqual(72);
+      }
+      expect(overlap(a, b)).toBe(false);
+      expect(a.x).toBeLessThan(b.x);
+    });
+  }
+});
+
+describe("lista społeczności", () => {
+  const W = 390, H = 844;
+
+  it("sekcje jedna pod drugą, kafelki ≥ 44 px, w pasie listy i bez nakładania", () => {
+    const l = communityLayout(W, H, [3, 5, 2], 0);
+    expect(l.headers.map((h) => h.section)).toEqual([0, 1, 2]);
+    expect(l.headers[0].y).toBeLessThan(l.headers[1].y);
+    expect(l.tiles).toHaveLength(10);
+    l.tiles.forEach((t, i) => {
+      expect(Math.min(t.rect.w, t.rect.h), `kafelek ${i}`).toBeGreaterThanOrEqual(44);
+      expect(t.rect.x >= 0 && t.rect.x + t.rect.w <= W).toBe(true);
+      l.tiles.slice(i + 1).forEach((u) => expect(overlap(t.rect, u.rect)).toBe(false));
+      // kafelek sekcji leży pod jej nagłówkiem i nad nagłówkiem następnej
+      const head = l.headers[t.section];
+      expect(t.rect.y).toBeGreaterThanOrEqual(head.y + SECTION_HEADER_H);
+      const next = l.headers[t.section + 1];
+      if (next !== undefined) expect(t.rect.y + t.rect.h).toBeLessThanOrEqual(next.y);
+    });
+  });
+
+  it("pusta sekcja zostawia miejsce na napis", () => {
+    const l = communityLayout(W, H, [0, 1], 0);
+    expect(l.headers[1].y - l.headers[0].y).toBeGreaterThanOrEqual(SECTION_HEADER_H + COMMUNITY_TILE_H);
+  });
+
+  it("przewijanie: wszystko przesuwa się o tyle samo, granice przewinięcia", () => {
+    const a = communityLayout(W, H, [20, 20, 30], 0);
+    const b = communityLayout(W, H, [20, 20, 30], 100);
+    expect(b.tiles[5].rect.y).toBeCloseTo(a.tiles[5].rect.y - 100, 9);
+    expect(a.maxScroll).toBeGreaterThan(0);
+    expect(communityLayout(W, H, [1], 0).maxScroll).toBe(0);
+    expect(clampScroll(-5, 50)).toBe(0);
+    expect(clampScroll(70, 50)).toBe(50);
+    expect(clampScroll(20, 50)).toBe(20);
+  });
+
+  it("dotknięcie trafia w kafelek tylko w pasie listy", () => {
+    const l = communityLayout(W, H, [4], 0);
+    const t = l.tiles[1];
+    expect(hitCommunity(l, vec(t.rect.x + 5, t.rect.y + 5))).toEqual(t);
+    const przewiniety = communityLayout(W, H, [4], 60);
+    const pod = przewiniety.tiles[0];   // wjechał pod zakładki
+    expect(pod.rect.y).toBeLessThan(przewiniety.viewport.y);
+    expect(hitCommunity(przewiniety, vec(pod.rect.x + 5, pod.rect.y + 2))).toBeNull();
+  });
+
+  it("dotknięcie a przeciągnięcie", () => {
+    expect(isTap(vec(10, 10), vec(14, 13))).toBe(true);
+    expect(isTap(vec(10, 10), vec(10, 30))).toBe(false);
+  });
 });
