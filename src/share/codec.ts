@@ -132,8 +132,8 @@ function fail(reason: string): never {
 }
 
 /** Każda liczba w kodzie musi być już zaokrąglona do 4 miejsc (`round4(x) === x`) — nasz zapis
- *  zawsze taki jest. Obcy kod z `1e-300` albo `0.123456789` odpada, a kod jest kanoniczny:
- *  `encodeLevel(decodeLevel(c))` daje `c`. */
+ *  zawsze taki jest. Obcy kod z `1e-300` albo `0.123456789` odpada, a odczytany poziom jest już
+ *  zaokrąglony: `roundShared` niczego w nim nie zmienia. */
 const num = (x: unknown): number => {
   if (typeof x !== "number" || !Number.isFinite(x)) return fail("liczba");
   return round4(x) === x ? x : fail("liczba ma więcej niż 4 miejsca po przecinku");
