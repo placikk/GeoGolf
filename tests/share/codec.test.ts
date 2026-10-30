@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { vec } from "../../src/core/vec";
-import { arcEllipse, circle, ellipse, hyperbola, parabola, segment } from "../../src/levels";
+import { arcEllipse, circle, ellipse, hyperbola, parabola, segment, shapeConic, shapeToPiece } from "../../src/levels";
 import {
   HYPERBOLA_SPAN, MAX_OBSTACLES, MAX_PIECES, PARABOLA_SPAN, SharedLevel, cleanTitle, decodeLevel, encodeLevel, round4,
   roundShared,
@@ -122,6 +122,13 @@ describe("kodek poziomu — odrzucanie złych kodów", () => {
     rejects(one(["e", -0.5, 0, 0.5]));                  // za mało liczb
   });
 
+  it("liczby z więcej niż 4 miejscami po przecinku i niemal zerowe są odrzucane", () => {
+    const one = (shape: unknown) => withWire((w) => { w.p = [[shape, shape, []]]; });
+    rejects(one(["h", -0.5, 0, 0.5, 0, 1e-300]));        // a > 0, ale 1/a² to nieskończoność
+    rejects(one(["e", -0.123456789, 0, 0.5, 0, 0.8]));   // za dużo miejsc po przecinku
+    rejects(withWire((w) => { w.b = [0.123456789, 0]; }));
+  });
+
   it("szkic może nie mieć elementów gracza — poziom do linku musi mieć co najmniej jeden", () => {
     const pusty = withWire((w) => { w.p = []; });
     expect(decodeLevel(pusty).ok).toBe(false);
@@ -162,25 +169,54 @@ describe("kodek poziomu — odrzucanie złych kodów", () => {
   });
 
   // Kod przychodzi od obcych: nic, co da się wpisać w adres, nie może wywrócić gry.
-  it("tysiące losowo popsutych kodów: odczyt nigdy nie rzuca, a przyjęty kod daje się zapisać", () => {
+  it("tysiące losowo popsutych kodów: odczyt nigdy nie rzuca, a przyjęty poziom da się zbudować", () => {
     const next = rng(20261030);
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const edge = [0, -0, 1, -1, 1e-300, 1e300, 0.5, 1e-4, 0.12345, 2];
+    // zamienia jedną losową liczbę (gdziekolwiek w zagnieżdżonych tablicach) na wartość brzegową
+    const numberPaths: (string | number)[][] = [];
+    const collect = (v: unknown, path: (string | number)[]) => {
+      if (typeof v === "number") numberPaths.push(path);
+      else if (Array.isArray(v)) v.forEach((x, i) => collect(x, [...path, i]));
+      else if (typeof v === "object" && v !== null) Object.entries(v).forEach(([k, x]) => collect(x, [...path, k]));
+    };
+    const mutateNumber = (sample: SharedLevel): string => {
+      const w = toWire(sample);
+      numberPaths.length = 0;
+      collect(w, []);
+      const path = numberPaths[Math.floor(next() * numberPaths.length)];
+      let node: unknown = w;
+      for (const key of path.slice(0, -1)) {
+        node = (node as Record<string | number, unknown>)[key];
+      }
+      (node as Record<string | number, unknown>)[path[path.length - 1]] = edge[Math.floor(next() * edge.length)];
+      return fromWire(w);
+    };
+    const total = 4000;
     let accepted = 0;
-    for (let i = 0; i < 3000; i++) {
-      const code = encodeLevel(SAMPLES[i % SAMPLES.length]);
+    for (let i = 0; i < total; i++) {
+      const sample = SAMPLES[i % SAMPLES.length];
+      const code = encodeLevel(sample);
       const at = Math.floor(next() * code.length);
-      const variant = i % 3;
+      const variant = i % 4;
       const broken = variant === 0 ? code.slice(0, at)
         : variant === 1 ? code.slice(0, at) + alphabet[Math.floor(next() * alphabet.length)] + code.slice(at + 1)
-        : code.slice(0, at) + code.slice(at + 1);
+        : variant === 2 ? code.slice(0, at) + code.slice(at + 1)
+        : mutateNumber(sample);
       const d = decodeLevel(broken);
       if (d.ok) {
         accepted++;
         expect(() => encodeLevel(d.level)).not.toThrow();
+        const shapes = [...d.level.pieces.flatMap((p) => [p.start, p.solution]), ...d.level.obstacles];
+        for (const shape of shapes) {
+          expect(() => shapeToPiece(shape)).not.toThrow();
+          for (const v of Object.values(shapeConic(shape))) expect(Number.isFinite(v)).toBe(true);
+        }
       }
     }
     // większość zmian psuje JSON albo walidację; część (np. zmieniona cyfra) daje inny poprawny poziom
-    expect(accepted).toBeLessThan(3000);
+    expect(accepted).toBeLessThan(total);
+    expect(accepted).toBeGreaterThan(0);
   });
 });
 

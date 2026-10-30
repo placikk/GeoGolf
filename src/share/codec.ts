@@ -4,6 +4,7 @@ import {
   Shape, Span,
 } from "../levels/types";
 import { perimeter } from "../levels/arc";
+import { shapeConic } from "../levels/shape";
 import { MIN_SEGMENT_LENGTH, handlePositions } from "../ui/handles";
 
 /** Kierunek strzału poziomu gracza — to on wyznacza liczbę piłek, dołek i limit odbić
@@ -130,15 +131,35 @@ function fail(reason: string): never {
   throw new Invalid(reason);
 }
 
-const num = (x: unknown): number => (typeof x === "number" && Number.isFinite(x) ? x : fail("liczba"));
+/** Każda liczba w kodzie musi być już zaokrąglona do 4 miejsc (`round4(x) === x`) — nasz zapis
+ *  zawsze taki jest. Obcy kod z `1e-300` albo `0.123456789` odpada, a kod jest kanoniczny:
+ *  `encodeLevel(decodeLevel(c))` daje `c`. */
+const num = (x: unknown): number => {
+  if (typeof x !== "number" || !Number.isFinite(x)) return fail("liczba");
+  return round4(x) === x ? x : fail("liczba ma więcej niż 4 miejsca po przecinku");
+};
 const inBoard = (p: Vec2): Vec2 => (Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 ? p : fail("punkt poza planszą"));
 const point = (xs: unknown[], i: number): Vec2 => inBoard({ x: num(xs[i]), y: num(xs[i + 1]) });
 const arr = (x: unknown): unknown[] => (Array.isArray(x) ? x : fail("tablica"));
 
-/** Długość odcinka w danych: tolerancja na zaokrąglenie do 4 miejsc (0.2 → 0.19998). */
+/** Długość odcinka w danych: tolerancja 1e-3 na zaokrąglenie do 4 miejsc — z zapasem;
+ *  krótszy odcinek i tak nie powstanie w edytorze. */
 const MIN_SEGMENT_IN_DATA = MIN_SEGMENT_LENGTH - 1e-3;
 
-function wireToShape(x: unknown): Shape {
+/** Obrona w głąb: kształt, z którego rdzeń nie policzyłby skończonej krzywej, odpada. */
+function checkConic(s: Shape): Shape {
+  let ok: boolean;
+  try {
+    ok = Object.values(shapeConic(s)).every(Number.isFinite);
+  } catch {
+    ok = false;
+  }
+  return ok ? s : fail("kształt bez skończonych współczynników");
+}
+
+const wireToShape = (x: unknown): Shape => checkConic(wireToShapeRaw(x));
+
+function wireToShapeRaw(x: unknown): Shape {
   const w = arr(x);
   const kind = w[0];
   if (kind === "o") {
