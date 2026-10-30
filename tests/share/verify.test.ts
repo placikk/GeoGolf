@@ -55,6 +55,13 @@ describe("identyfikator, link, otwieranie", () => {
     expect(codeFromHash("")).toBeNull();
   });
 
+  it("końcówka adresu: kod to najdłuższy przedrostek ze znaków base64url (link wklejony z kropką czy nawiasem)", () => {
+    expect(codeFromHash("#poziom=abc.")).toBe("abc");
+    expect(codeFromHash("#poziom=abc)x")).toBe("abc");
+    expect(codeFromHash("#poziom=a-b_C9")).toBe("a-b_C9");
+    expect(codeFromHash("#poziom=.")).toBeNull();
+  });
+
   it("otwarcie kodu: poziom grywalny, identyfikator z kodu kanonicznego", () => {
     for (const s of SAMPLES) {
       const code = encodeLevel(s);

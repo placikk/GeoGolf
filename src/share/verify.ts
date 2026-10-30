@@ -52,8 +52,11 @@ export function verifyShared(l: SharedLevel): Verdict {
   return { ok: true };
 }
 
-/** FNV-1a 32 bity: krótki, deterministyczny skrót kodu. Kolizje przy kilkudziesięciu poziomach
- *  są praktycznie wykluczone, a identyfikator i tak służy tylko do zapisu postępu. */
+/** FNV-1a 32 bity: krótki, deterministyczny skrót kodu. Identyfikator trzyma postęp (`solved`),
+ *  usuwa powtórzone linki (`src/ui/collections.ts`) i rozpoznaje link do poziomu z katalogu
+ *  (`openFromHash`). Kolizja przy kilkudziesięciu poziomach jest bardzo mało prawdopodobna,
+ *  a w najgorszym razie połączy postęp dwóch poziomów, odrzuci jeden z linków jako duplikat
+ *  albo zamiast poziomu z linku otworzy poziom z katalogu — widoczny błąd, ale niczego nie psuje. */
 export function levelId(code: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < code.length; i++) {
@@ -68,9 +71,15 @@ const HASH_KEY = "#poziom=";
 /** Link do poziomu pod podanym adresem gry (bez końcówki `#…`). */
 export const linkFor = (base: string, code: string): string => `${base}${HASH_KEY}${code}`;
 
-/** Kod poziomu z końcówki adresu (`location.hash`) albo `null`. */
-export const codeFromHash = (hash: string): string | null =>
-  hash.startsWith(HASH_KEY) && hash.length > HASH_KEY.length ? hash.slice(HASH_KEY.length) : null;
+/** Kod poziomu z końcówki adresu (`location.hash`) albo `null`. Kod to najdłuższy przedrostek
+ *  ze znaków base64url po `#poziom=` — link wklejony razem z kropką czy nawiasem z końca zdania
+ *  dalej działa. Pusty przedrostek — `null`. */
+export function codeFromHash(hash: string): string | null {
+  if (!hash.startsWith(HASH_KEY)) return null;
+  const m = /^[A-Za-z0-9_-]*/.exec(hash.slice(HASH_KEY.length));
+  const code = m === null ? "" : m[0];
+  return code.length > 0 ? code : null;
+}
 
 export type Opened =
   | { ok: true; code: string; shared: SharedLevel; level: Level }
