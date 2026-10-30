@@ -276,3 +276,36 @@ export function hitCommunity(layout: CommunityLayout, p: Vec2): CommunityTile | 
 
 /** Dotknięcie, a nie przeciągnięcie: palec przesunął się o mniej niż 8 px. */
 export const isTap = (down: Vec2, up: Vec2): boolean => Math.hypot(up.x - down.x, up.y - down.y) < 8;
+
+// ── edytor: dolny pas i okno „Dodaj" ────────────────────────────────────────────────────
+
+/** Przyciski dolnego pasa edytora, od lewej. Ostatni to „Zagraj", a gdy projekt przeszedł
+ *  weryfikację — „Udostępnij". */
+export const EDITOR_ACTIONS = ["Dodaj", "Usuń", "Łuk", "Kierunek", "Zagraj"] as const;
+
+/** Pięć równych pól w dolnym pasie — na 320 px po 64 px, więc każde ≥ 44 px. */
+export function editorBar(width: number, height: number): Rect[] {
+  const top = height * ACTION_BAND;
+  const w = width / EDITOR_ACTIONS.length;
+  return EDITOR_ACTIONS.map((_, i) => ({ x: i * w, y: top, w, h: height - top }));
+}
+
+/** Indeks przycisku pasa edytora pod palcem albo `null`. */
+export function editorBarHit(p: Vec2, width: number, height: number): number | null {
+  const i = editorBar(width, height).findIndex((r) => hitRect(r, p));
+  return i < 0 ? null : i;
+}
+
+/** Okno „Dodaj": rząd elementów gracza (4) i rząd stałych (5), kafelki ≥ 44 px, wyśrodkowane
+ *  w pionie; nad każdym rzędem miejsce na podpis. */
+export function addSheetLayout(width: number, height: number): { players: Rect[]; fixed: Rect[] } {
+  const size = Math.min(72, (width - 2 * SIDE - 4 * GAP) / 5);
+  const row = (n: number, y: number): Rect[] => {
+    const total = n * size + (n - 1) * GAP;
+    return Array.from({ length: n }, (_, i) => ({ x: (width - total) / 2 + i * (size + GAP), y, w: size, h: size }));
+  };
+  const label = 28;
+  const block = 2 * (label + size) + GAP;
+  const top = Math.max(TOP, (height - block) / 2);
+  return { players: row(4, top + label), fixed: row(5, top + label + size + GAP + label) };
+}

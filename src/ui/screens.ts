@@ -1,5 +1,5 @@
 import { Vec2, vec } from "../core/vec";
-import { Card, LEVELS, Level, SNAP_RADIUS, Shape, sceneTraces, shapeFoci, shapeToPiece } from "../levels";
+import { Card, LEVELS, Level, SNAP_RADIUS, Shape, mechanicCard, sceneTraces, shapeFoci, shapeToPiece } from "../levels";
 import { makeCamera, rectCamera } from "../render/camera";
 import {
   PALETTE, SECTOR_REACH, boardFrame, dashedPolyline, drawPiece, glowDot, glowPolyline, handleShape, holeMark,
@@ -11,23 +11,53 @@ import { positionAt, trailSegment } from "../render/trails";
 import { HandleRef, applyDrag, handlePositions, lockedSize, pickHandle, snapTargets, snapTo } from "./handles";
 import { BALL_SPEED, GameState, advance, newGame, preview, retry, startProof } from "./game";
 import {
-  MENU_BUTTON, MenuTab, SECTION_HEADER_H, cardLayout, clampScroll, communityLayout, editAction, helpButton, hitCommunity,
+  EDITOR_ACTIONS, MENU_BUTTON, MenuTab, SECTION_HEADER_H, addSheetLayout, cardLayout, editorBar, editorBarHit, clampScroll, communityLayout, editAction, helpButton, hitCommunity,
   hitRect, hitTile, inActionBand, isTap, menuLayout, playArea, resultBanner, settingsButton, settingsLayout, tabRects,
   TILE_LINE_H, TILE_NUMBER_Y, TILE_TITLE_Y, tileTitle, titleLineCount, winAction, winLabels, wrapByWords,
 } from "./menu";
 import { SETTING_ROWS, loadSettings, saveSettings, toggleSetting } from "./settings";
 import { browserStore, loadProgress, markSolved, saveProgress } from "./progress";
 import { Playlist, autoCardIn, bannerLabel, current, helpCard, isLastIn, nextIn } from "./playlist";
-import { addLink, loadLinks, saveLinks } from "./collections";
+import {
+  MAX_PROJECTS, Project, addLink, loadLinks, loadProjects, removeProject, saveLinks, saveProjects, upsertProject,
+} from "./collections";
 import { loadCatalog } from "../share/catalog";
-import { codeFromHash, openCode } from "../share/verify";
+import { MAX_TITLE, SharedLevel, cleanTitle, decodeLevel, encodeLevel } from "../share/codec";
+import { codeFromHash, linkFor, openCode } from "../share/verify";
+import {
+  EditorState, ObstacleKind, PieceKind, acceptWin, addObstacle, addPiece, canAddObstacle, canAddPiece, canToggleArc,
+  cycleShot, draftCode, fromShared, newEditor, prepareTest, removeSelected, toggleArc, toggleLock,
+} from "../editor/model";
+import { EditorHandleRef, applyEditorDrag, editorHandles, pickEditorHandle, selectAt } from "../editor/interaction";
 
 const TRAIL = 0.35;
 const HANDLE_PX = 22;   // 44 px CSS średnicy — minimalny cel dotykowy
 const TOAST_S = 2.5;    // jak długo wisi komunikat na dole ekranu
 
 /** Sekcje zakładki „Społeczność" w kolejności rysowania. */
-const COMMUNITY_SECTIONS = ["katalog", "linki"] as const;
+const COMMUNITY_SECTIONS = ["katalog", "moje", "linki"] as const;
+type CommunitySection = (typeof COMMUNITY_SECTIONS)[number];
+
+/** Kafelki okna „Dodaj" — w tej samej kolejności co `addSheetLayout`. */
+const PIECE_KINDS: { kind: PieceKind; label: string }[] = [
+  { kind: "elipsa", label: "Elipsa" }, { kind: "parabola", label: "Parabola" },
+  { kind: "hiperbola", label: "Hiperbola" }, { kind: "odcinek", label: "Lustro" },
+];
+const OBSTACLE_KINDS: { kind: ObstacleKind; label: string }[] = [
+  { kind: "okrag", label: "Okrąg" }, { kind: "banda", label: "Banda" }, { kind: "elipsa", label: "Elipsa" },
+  { kind: "parabola", label: "Parabola" }, { kind: "hiperbola", label: "Hiperbola" },
+];
+
+/** Projekt otwarty w edytorze. `code` — zapis do pamięci (szkic albo, gdy `ready`, gotowy kod
+ *  linku z rozwiązaniem autora); `testing` — poziom, który autor właśnie przechodzi. */
+interface EditorSession {
+  key: string;
+  state: EditorState;
+  ready: boolean;
+  code: string;
+  testing: SharedLevel | null;
+  addOpen: boolean;
+}
 
 export function mount(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d")!;
@@ -47,6 +77,12 @@ export function mount(canvas: HTMLCanvasElement): void {
   let links = loadLinks(store);
   /** komunikat na dole ekranu (np. o złym linku) i czas, do którego wisi */
   let toast: { text: string; until: number } | null = null;
+  let projects: Project[] = loadProjects(store);
+  let editor: EditorSession | null = null;
+  /** uchwyt przeciągany w edytorze; `moved` — palec ruszył się dalej niż stuknięcie */
+  let editorDrag: { ref: EditorHandleRef; down: Vec2; moved: boolean } | null = null;
+  const inEditor = (): boolean => editor !== null && editor.testing === null;
+  const inTest = (): boolean => editor !== null && editor.testing !== null;
   let settings = loadSettings(store);
   let settingsOpen = false;
   /** otwarta plansza z zasadą; `null` — żadna */
@@ -85,10 +121,11 @@ export function mount(canvas: HTMLCanvasElement): void {
   const decodeLinks = (): Level[] => links.flatMap((c) => { const o = openCode(c); return o.ok ? [o.level] : []; });
   let linkLevels = decodeLinks();
   const catalogLevels = catalog.map((c) => c.level);
-  const sectionLevels = (section: (typeof COMMUNITY_SECTIONS)[number]): Level[] =>
-    section === "katalog" ? catalogLevels : linkLevels;
+  const sectionLevels = (section: "katalog" | "linki"): Level[] => (section === "katalog" ? catalogLevels : linkLevels);
 
   function play(next: Playlist): void {
+    // zwykła gra zamyka edytor — projekt jest już zapisany (każda zmiana zapisuje się sama)
+    editor = null;
     playlist = next;
     game = newGame(current(next));
     // „ostatnio grany" dotyczy tylko listy twórców — poziomy społeczności nie mają numeru
@@ -101,6 +138,137 @@ export function mount(canvas: HTMLCanvasElement): void {
   }
 
   // zegar `performance.now`, nie `time` z klatki — `openFromHash` woła to przed pierwszą klatką
+  /** Zapis projektu w pamięci przeglądarki — po każdej zmianie (bez przycisku „Zapisz"). */
+  function saveProject(e: EditorSession): void {
+    const list = upsertProject(projects, { key: e.key, code: e.code, ready: e.ready });
+    if (list === null) return;
+    projects = list;
+    saveProjects(store, projects);
+  }
+
+  /** Zmiana treści projektu: wraca do szkicu (trzeba go przejść jeszcze raz). `save: false`
+   *  w trakcie przeciągania — zapis dopiero po puszczeniu palca. */
+  function editorChanged(next: EditorState, save = true): void {
+    if (editor === null) return;
+    editor = { ...editor, state: next, ready: false, code: draftCode(next) };
+    if (save) saveProject(editor);
+  }
+
+  /** Samo zaznaczenie nie zmienia treści — gotowy projekt zostaje gotowy. */
+  function editorSelect(next: EditorState["selected"]): void {
+    if (editor !== null) editor = { ...editor, state: { ...editor.state, selected: next } };
+  }
+
+  function newProject(): void {
+    menuOpen = false;
+    if (projects.length >= MAX_PROJECTS) {
+      say(`Najwyżej ${MAX_PROJECTS} projektów — usuń któryś`);
+      return;
+    }
+    const state = newEditor(`Mój poziom ${projects.length + 1}`);
+    editor = { key: `moj-${Date.now().toString(36)}`, state, ready: false, code: draftCode(state), testing: null, addOpen: false };
+    saveProject(editor);
+  }
+
+  function openProject(p: Project): void {
+    menuOpen = false;
+    const d = decodeLevel(p.code, { draft: true });
+    if (!d.ok) return;
+    editor = { key: p.key, state: fromShared(d.level), ready: p.ready, code: p.code, testing: null, addOpen: false };
+  }
+
+  /** „Zagraj": autor przechodzi swój poziom zwykłą grą. */
+  function startTest(): void {
+    if (editor === null) return;
+    const t = prepareTest(editor.state);
+    if (!t.ok) {
+      say(t.reason === "brak elementów" ? "Dodaj co najmniej jeden element gracza" : "Start już wygrywa — przestaw coś");
+      return;
+    }
+    editor = { ...editor, testing: t.shared };
+    game = newGame(t.level);
+    card = null;
+  }
+
+  const backToEditor = (): void => {
+    if (editor !== null) editor = { ...editor, testing: null };
+  };
+
+  /** Autor wygrał: zaokrąglone ustawienie przechodzi dowód jeszcze raz i staje się rozwiązaniem. */
+  function acceptAuthorWin(): void {
+    if (editor === null || editor.testing === null) return;
+    const r = acceptWin(editor.testing, game.pieces);
+    if (!r.ok) {
+      say("Za blisko krawędzi — spróbuj jeszcze raz");
+      game = retry(game);
+      return;
+    }
+    editor = { ...editor, ready: true, code: r.code };
+    saveProject(editor);
+    say("Przeszedłeś swój poziom — możesz go udostępnić");
+  }
+
+  /** Akcje dolnego pasa edytora (`EDITOR_ACTIONS`). */
+  function editorAction(i: number): void {
+    if (editor === null) return;
+    const st = editor.state;
+    if (i === 0) {
+      editor = { ...editor, addOpen: true };
+    } else if (i === 1) {
+      if (st.selected !== null) editorChanged(removeSelected(st));
+      else if (window.confirm(`Usunąć cały projekt „${st.title}"?`)) {
+        projects = removeProject(projects, editor.key);
+        saveProjects(store, projects);
+        editor = null;
+        menuOpen = true;
+        menuTab = "spolecznosc";
+      }
+    } else if (i === 2) {
+      if (canToggleArc(st)) editorChanged(toggleArc(st));
+    } else if (i === 3) {
+      editorChanged(cycleShot(st));
+    } else if (editor.ready) {
+      share();
+    } else {
+      startTest();
+    }
+  }
+
+  // ── „Udostępnij": okienko z tytułem (HTML nad płótnem — działa klawiatura telefonu) ──────
+  const shareDialog = document.getElementById("udostepnij");
+  const titleInput = document.getElementById("tytul");
+
+  function share(): void {
+    if (editor === null || !editor.ready) return;
+    if (!(shareDialog instanceof HTMLDialogElement) || !(titleInput instanceof HTMLInputElement)) return;
+    titleInput.value = editor.state.title;
+    shareDialog.returnValue = "";
+    shareDialog.showModal();
+  }
+
+  /** Okienko zamknięte: przy „Udostępnij" — nowy tytuł do kodu (dowodu to nie zmienia), zapis
+   *  projektu i link do systemowego udostępniania albo do schowka. */
+  function finishShare(): void {
+    if (editor === null || !(shareDialog instanceof HTMLDialogElement) || !(titleInput instanceof HTMLInputElement)) return;
+    if (shareDialog.returnValue !== "ok") return;
+    const typed = [...cleanTitle(titleInput.value)].slice(0, MAX_TITLE).join("");
+    const title = typed.length > 0 ? typed : editor.state.title;
+    const d = decodeLevel(editor.code);
+    if (!d.ok) return;
+    const code = encodeLevel({ ...d.level, title });
+    editor = { ...editor, code, state: { ...editor.state, title } };
+    saveProject(editor);
+    const link = linkFor(window.location.origin + window.location.pathname, code);
+    if (typeof navigator.share === "function") {
+      navigator.share({ title, url: link }).catch(() => { /* gracz zamknął okno udostępniania */ });
+    } else if (navigator.clipboard !== undefined) {
+      navigator.clipboard.writeText(link).then(() => say("Skopiowano link"), () => window.prompt("Skopiuj link:", link));
+    } else {
+      window.prompt("Skopiuj link:", link);
+    }
+  }
+  if (shareDialog instanceof HTMLDialogElement) shareDialog.addEventListener("close", finishShare);
+
   const say = (text: string): void => { toast = { text, until: performance.now() / 1000 + TOAST_S }; };
 
   /** Link `…#poziom=<kod>`: poziom trafia do „Z linków" i od razu się otwiera (poziom
@@ -148,12 +316,13 @@ export function mount(canvas: HTMLCanvasElement): void {
 
   /** „?" jest rysowane i dotykalne tylko poza menu, ustawieniami i dowodem (wtedy napis
    *  „Poziom N / M" obok niego też nie jest rysowany). */
-  const helpVisible = (): boolean => !menuOpen && !settingsOpen && game.phase !== "dowod";
+  const helpVisible = (): boolean => !menuOpen && !settingsOpen && game.phase !== "dowod" && !inEditor();
 
   /** „?" — plansza mechaniki bieżącego poziomu. Dowód nie może trwać, gdy „?" jest
    *  dotykalne (patrz `helpVisible`), więc nie ma czego przerywać. */
   function openHelp(): void {
-    card = helpCard(playlist) ?? null;
+    // w grze testowej autora — plansza według mechaniki, jak dla poziomów społeczności
+    card = (inTest() ? mechanicCard(game.level) : helpCard(playlist)) ?? null;
   }
 
   function toggleSettings(): void {
@@ -177,6 +346,12 @@ export function mount(canvas: HTMLCanvasElement): void {
     }
     if (helpVisible() && hitRect(helpButton(viewW()), p)) {
       openHelp();
+      consumedReset = true;
+      return;
+    }
+    if (hitRect(MENU_BUTTON, p) && inTest() && !menuOpen && !settingsOpen) {
+      // w grze testowej przycisk w lewym górnym rogu to „‹" — powrót do edytora
+      backToEditor();
       consumedReset = true;
       return;
     }
@@ -221,6 +396,19 @@ export function mount(canvas: HTMLCanvasElement): void {
       menuOpen = false;
       return;
     }
+    if (editor !== null && editor.testing === null) {
+      editorDown(e, p);
+      consumedReset = true;
+      return;
+    }
+    if (game.phase === "wygrana" && inTest()) {
+      // wygrana autora: „Edytuj" wraca do edytora, prawa połowa udostępnia
+      const action = winAction(p, viewW(), viewH(), true);
+      if (action === "powtorz") backToEditor();
+      else if (action !== null) share();
+      consumedReset = true;
+      return;
+    }
     if (game.phase === "wygrana") {
       const action = winAction(p, viewW(), viewH(), isLastIn(playlist));
       if (action === "nastepny") play(nextIn(playlist));
@@ -251,9 +439,71 @@ export function mount(canvas: HTMLCanvasElement): void {
     canvas.setPointerCapture(e.pointerId);
   });
 
-  const communityCounts = (): number[] => COMMUNITY_SECTIONS.map((sec) => sectionLevels(sec).length);
+  const countOf = (sec: CommunitySection): number => (sec === "moje" ? projects.length + 1 : sectionLevels(sec).length);
+  const communityCounts = (): number[] => COMMUNITY_SECTIONS.map(countOf);
+
+  /** Dotknięcie w edytorze: okno „Dodaj", dolny pas, uchwyt (przeciąganie albo stuknięcie —
+   *  rozstrzyga `pointerup`) albo zaznaczenie krzywej. */
+  function editorDown(e: PointerEvent, p: Vec2): void {
+    if (editor === null) return;
+    const w = viewW();
+    const h = viewH();
+    if (editor.addOpen) {
+      const sheet = addSheetLayout(w, h);
+      const i = sheet.players.findIndex((r) => hitRect(r, p));
+      const j = sheet.fixed.findIndex((r) => hitRect(r, p));
+      const st = editor.state;
+      editor = { ...editor, addOpen: false };
+      if (i >= 0 && canAddPiece(st)) editorChanged(addPiece(st, PIECE_KINDS[i].kind));
+      if (j >= 0 && canAddObstacle(st)) editorChanged(addObstacle(st, OBSTACLE_KINDS[j].kind));
+      return;
+    }
+    const bar = editorBarHit(p, w, h);
+    if (bar !== null) {
+      editorAction(bar);
+      return;
+    }
+    const world = toWorld(e);
+    const radius = (HANDLE_PX * 1.5) / cam().scale;
+    const ref = pickEditorHandle(editor.state, world, radius);
+    if (ref !== null) {
+      editorDrag = { ref, down: p, moved: false };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    editorSelect(selectAt(editor.state, world, radius));
+  }
+
+  /** Puszczenie uchwytu: po przeciągnięciu — zapis; po stuknięciu — zaznaczenie właściciela
+   *  uchwytu, a stuknięcie w uchwyt JUŻ zaznaczonego elementu gracza przełącza jego blokadę. */
+  function editorUp(): void {
+    if (editor === null || editorDrag === null) return;
+    const { ref, moved } = editorDrag;
+    editorDrag = null;
+    if (moved) {
+      saveProject(editor);
+      return;
+    }
+    const sel = editor.state.selected;
+    if (ref.target === "element") {
+      if (sel !== null && sel.kind === "element" && sel.index === ref.index) {
+        editorChanged(toggleLock(editor.state, ref.index, ref.id));
+      } else {
+        editorSelect({ kind: "element", index: ref.index });
+      }
+    } else if (ref.target === "przeszkoda") {
+      editorSelect({ kind: "przeszkoda", index: ref.index });
+    }
+  }
 
   canvas.addEventListener("pointermove", (e) => {
+    if (editorDrag !== null && editor !== null) {
+      const sp = toScreenPoint(e);
+      if (!editorDrag.moved && isTap(editorDrag.down, sp)) return;
+      editorDrag = { ...editorDrag, moved: true };
+      editorChanged(applyEditorDrag(editor.state, editorDrag.ref, toWorld(e), SNAP_RADIUS), false);
+      return;
+    }
     if (listPointer !== null) {
       const dy = toScreenPoint(e).y - listPointer.down.y;
       const { maxScroll } = communityLayout(viewW(), viewH(), communityCounts(), 0);
@@ -275,15 +525,21 @@ export function mount(canvas: HTMLCanvasElement): void {
     game = { ...game, pieces };
   });
 
-  const endDrag = (): void => { dragging = null; pointer = null; listPointer = null; };
+  const endDrag = (): void => { dragging = null; pointer = null; listPointer = null; editorDrag = null; };
   canvas.addEventListener("pointercancel", endDrag);
 
-  /** Stuknięcie w listę społeczności: kafelek otwiera poziom swojej sekcji, tło zamyka menu. */
+  /** Stuknięcie w listę społeczności: kafelek otwiera poziom swojej sekcji (w „Twoich
+   *  poziomach" — edytor albo nowy projekt), tło zamyka menu. */
   function tapCommunity(p: Vec2): void {
     const hit = hitCommunity(communityLayout(viewW(), viewH(), communityCounts(), communityScroll), p);
     menuOpen = false;
     if (hit === null) return;
     const section = COMMUNITY_SECTIONS[hit.section];
+    if (section === "moje") {
+      if (hit.index === 0) newProject();
+      else openProject(projects[hit.index - 1]);
+      return;
+    }
     play({ section, levels: sectionLevels(section), index: hit.index });
   }
 
@@ -293,6 +549,11 @@ export function mount(canvas: HTMLCanvasElement): void {
   // i kasowało jego niedokończoną edycję. W pionie geometria kamery przypadkiem chroni
   // przed tym (plansza nie sięga pasa przycisku), ale nic nie wymusza pionu.
   canvas.addEventListener("pointerup", (e) => {
+    if (editorDrag !== null) {
+      editorUp();
+      consumedReset = false;
+      return;
+    }
     if (listPointer !== null) {
       const up = toScreenPoint(e);
       if (isTap(listPointer.down, up)) tapCommunity(up);
@@ -319,8 +580,11 @@ export function mount(canvas: HTMLCanvasElement): void {
       const before = game.phase;
       game = advance(game, dt);
       if (before === "dowod" && game.phase === "wygrana") {
-        progress = markSolved(progress, game.level.id);
-        saveProgress(store, progress);
+        if (inTest()) acceptAuthorWin();
+        else {
+          progress = markSolved(progress, game.level.id);
+          saveProgress(store, progress);
+        }
       }
     }
     draw();
@@ -335,6 +599,16 @@ export function mount(canvas: HTMLCanvasElement): void {
 
     // brzeg planszy jest ścianą: jaśniejsze tło planszy i stonowana ramka
     boardFrame(ctx, c, PALETTE.board, PALETTE.frame, PALETTE.frameGlow, 1);
+
+    if (editor !== null && editor.testing === null) {
+      drawEditor(editor);
+      if (menuOpen) drawMenu();
+      if (settingsOpen) drawSettings();
+      drawMenuButton();
+      drawSettingsButton();
+      if (toast !== null && time < toast.until) drawToast(toast.text);
+      return;
+    }
 
     // wachlarz tylko w edycji i tylko gdy poziom go ma — bez niego łuk „nie tam,
     // gdzie lecą piłki" wyglądałby na błąd gry; klin jest mały i przycięty do planszy,
@@ -429,12 +703,17 @@ export function mount(canvas: HTMLCanvasElement): void {
         glowPolyline(ctx, c, trailSegment(b.path, s, TRAIL), color, PALETTE.trailGlow, 2);
         glowDot(ctx, c, positionAt(b.path, s), PALETTE.ball, PALETTE.ballGlow, 4);
       }
-      if (game.phase === "wygrana") {
+      if (game.phase === "wygrana" && inTest()) {
+        for (const b of game.proof.balls) {
+          glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
+        }
+        banner(resultBanner(game.proof.balls.length, 0).title, "", ["Edytuj", "Udostępnij"]);
+      } else if (game.phase === "wygrana") {
         for (const b of game.proof.balls) {
           glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
         }
         // pod tytułem tylko dopisek ostatniego poziomu; na pozostałych — nic
-        // „wszystkie ukończone" dotyczy tylko listy twórców — lista społeczności nie ma kompletu
+        // „wszystkie ukończone" tylko dla listy twórców — to ona jest kompletem gry; listy społeczności rosną
         const allSolved = playlist.section === "tworcy" && playlist.levels.every((l) => progress.solved.includes(l.id));
         const { right, note } = winLabels(isLastIn(playlist), allSolved);
         banner(resultBanner(game.proof.balls.length, 0).title, note ?? "", ["Jeszcze raz", right]);
@@ -478,7 +757,7 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.textAlign = "center";
       ctx.fillStyle = PALETTE.muted;
       ctx.font = "12px system-ui, sans-serif";
-      ctx.fillText(bannerLabel(playlist), w / 2, 22);
+      ctx.fillText(topLabel(), w / 2, 22);
       ctx.fillStyle = PALETTE.text;
       ctx.font = "600 18px system-ui, sans-serif";
       ctx.fillText(title, w / 2, 46);
@@ -508,8 +787,25 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.textAlign = "left";
     }
 
+    /** Pierwsza linia banera: numer albo „Społeczność", w edytorze „Edytor", w grze autora „Test". */
+    function topLabel(): string {
+      if (editor === null) return bannerLabel(playlist);
+      return editor.testing === null ? "Edytor" : "Test";
+    }
+
     function drawMenuButton(): void {
       const b = MENU_BUTTON;
+      if (inTest() && !menuOpen && !settingsOpen) {
+        // „‹" — w grze testowej ten przycisk wraca do edytora
+        ctx.strokeStyle = PALETTE.text;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(b.x + b.w / 2 + 5, b.y + b.h / 2 - 10);
+        ctx.lineTo(b.x + b.w / 2 - 5, b.y + b.h / 2);
+        ctx.lineTo(b.x + b.w / 2 + 5, b.y + b.h / 2 + 10);
+        ctx.stroke();
+        return;
+      }
       ctx.fillStyle = menuOpen ? PALETTE.curve : PALETTE.text;
       for (let i = -1; i <= 1; i++) {
         ctx.fillRect(b.x + b.w / 2 - 10, b.y + b.h / 2 + i * 6 - 1, 20, 2);
@@ -520,7 +816,7 @@ export function mount(canvas: HTMLCanvasElement): void {
      *  Kółko liniami i „?" znakiem ASCII — nie polegamy na glifie ⓘ w czcionce telefonu. */
     function drawHelpButton(): void {
       ctx.font = "12px system-ui, sans-serif";
-      const tw = ctx.measureText(bannerLabel(playlist)).width;
+      const tw = ctx.measureText(topLabel()).width;
       const cx = viewW() / 2 + tw / 2 + 14;
       ctx.strokeStyle = PALETTE.muted;
       ctx.lineWidth = 1.5;
@@ -562,6 +858,99 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.font = "600 16px system-ui, sans-serif";
       ctx.fillStyle = PALETTE.curve;
       ctx.fillText("Gram", w / 2, h * 0.93);
+      ctx.textAlign = "left";
+    }
+
+    /** Edytor: strzał, przeszkody, elementy gracza (zaznaczony z szerszą poświatą), piłka, dołek,
+     *  wszystkie uchwyty (zablokowany uchwyt elementu ma pełną kropkę w środku), baner
+     *  z podpowiedzią, dolny pas i okno „Dodaj". */
+    function drawEditor(ed: EditorSession): void {
+      const st = ed.state;
+      const w = viewW();
+      const h = viewH();
+      if (st.shot.kind === "wachlarz") {
+        sectorWedge(ctx, c, st.ball, { center: st.shot.center, width: st.shot.width }, SECTOR_REACH, PALETTE.sector);
+      } else if (st.shot.kind === "jedna") {
+        for (const linia of shotArrow(st.ball, st.shot.center, SECTOR_REACH)) {
+          glowPolyline(ctx, c, linia, PALETTE.shot, "rgba(0,0,0,0)", 1.5);
+        }
+      }
+      const sel = st.selected;
+      const drawShape = (shape: Shape, owner: "gracz" | "staly", selected: boolean) => {
+        const style = shapeStyle(shape, owner);
+        if (shape.kind === "parabola") dashedPolyline(ctx, c, parabolaAxis(shape), style.line, 1);
+        drawPiece(ctx, c, shapeToPiece(shape), style.line, selected ? "rgba(248,250,252,0.22)" : style.glow, selected ? 3 : 2);
+      };
+      st.obstacles.forEach((o, i) => drawShape(o, "staly", sel !== null && sel.kind === "przeszkoda" && sel.index === i));
+      st.pieces.forEach((q, i) => drawShape(q.shape, "gracz", sel !== null && sel.kind === "element" && sel.index === i));
+      holeMark(ctx, c, st.hole, PALETTE.hole, PALETTE.holeGlow, PALETTE.holeInside, 9);
+      glowDot(ctx, c, st.ball, PALETTE.ball, PALETTE.ballGlow, 6);
+      for (const hnd of editorHandles(st)) {
+        const ref = hnd.ref;
+        if (ref.target === "element") {
+          const piece = st.pieces[ref.index];
+          const style = shapeStyle(piece.shape, "gracz");
+          handleShape(ctx, c, hnd.pos, handleMark(ref.id), style.line, style.glow, 11);
+          if (piece.locked.includes(ref.id)) glowDot(ctx, c, hnd.pos, style.line, "rgba(0,0,0,0)", 4);
+        } else if (ref.target === "przeszkoda") {
+          const style = shapeStyle(st.obstacles[ref.index], "staly");
+          handleShape(ctx, c, hnd.pos, handleMark(ref.id), style.line, "rgba(0,0,0,0)", 9);
+        } else {
+          handleShape(ctx, c, hnd.pos, "kwadrat", PALETTE.muted, "rgba(0,0,0,0)", 9);
+        }
+      }
+      const hint = sel === null ? "Stuknij krzywą, żeby ją zaznaczyć. Uchwyty przeciągaj."
+        : sel.kind === "element" ? "Stuknij uchwyt zaznaczonego elementu, żeby go zablokować graczowi."
+        : "Zaznaczona przeszkoda: przeciągaj jej uchwyty albo ją usuń.";
+      banner(st.title, hint, ["", ""]);
+      // dolny pas: pięć przycisków; nieaktywne przygaszone
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.fillRect(0, h * 0.86, w, h * 0.14);
+      const enabled = [canAddPiece(st) || canAddObstacle(st), true, canToggleArc(st), true, true];
+      editorBar(w, h).forEach((r, i) => {
+        const label = i === EDITOR_ACTIONS.length - 1 && ed.ready ? "Udostępnij" : EDITOR_ACTIONS[i];
+        ctx.textAlign = "center";
+        ctx.font = "600 14px system-ui, sans-serif";
+        ctx.fillStyle = !enabled[i] ? PALETTE.muted : i === EDITOR_ACTIONS.length - 1 ? PALETTE.curve : PALETTE.text;
+        ctx.fillText(label, r.x + r.w / 2, h * 0.93);
+      });
+      ctx.textAlign = "left";
+      if (ed.addOpen) drawAddSheet(st);
+    }
+
+    function drawAddSheet(st: EditorState): void {
+      const w = viewW();
+      const h = viewH();
+      ctx.fillStyle = PALETTE.overlay;
+      ctx.fillRect(0, 0, w, h);
+      const { players, fixed } = addSheetLayout(w, h);
+      const rows = [
+        { title: "Twoje — tym rusza gracz", rects: players, labels: PIECE_KINDS.map((k) => k.label), on: canAddPiece(st) },
+        { title: "Stałe", rects: fixed, labels: OBSTACLE_KINDS.map((k) => k.label), on: canAddObstacle(st) },
+      ];
+      for (const row of rows) {
+        ctx.textAlign = "left";
+        ctx.font = "600 14px system-ui, sans-serif";
+        ctx.fillStyle = PALETTE.text;
+        ctx.fillText(row.title, row.rects[0].x, row.rects[0].y - 10);
+        row.rects.forEach((r, i) => {
+          ctx.beginPath();
+          ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+          ctx.fillStyle = PALETTE.tile;
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = PALETTE.tileEdge;
+          ctx.stroke();
+          ctx.textAlign = "center";
+          ctx.font = "11px system-ui, sans-serif";
+          ctx.fillStyle = row.on ? PALETTE.text : PALETTE.muted;
+          ctx.fillText(row.labels[i], r.x + r.w / 2, r.y + r.h / 2 + 4);
+        });
+      }
+      ctx.textAlign = "center";
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillStyle = PALETTE.muted;
+      ctx.fillText("Stuknij obok, żeby zamknąć.", w / 2, fixed[0].y + fixed[0].h + 32);
       ctx.textAlign = "left";
     }
 
@@ -685,9 +1074,10 @@ export function mount(canvas: HTMLCanvasElement): void {
       ctx.beginPath();
       ctx.rect(v.x, v.y, v.w, v.h);
       ctx.clip();
-      const titles = { katalog: "Katalog", linki: "Z linków" };
+      const titles = { katalog: "Katalog", moje: "Twoje poziomy", linki: "Z linków" };
       const empty = {
         katalog: "Na razie pusto — przyślij twórcy link do swojego poziomu.",
+        moje: "",
         linki: "Tu trafią poziomy otwarte z linków.",
       };
       for (const head of layout.headers) {
@@ -696,7 +1086,7 @@ export function mount(canvas: HTMLCanvasElement): void {
         ctx.font = "600 15px system-ui, sans-serif";
         ctx.fillStyle = PALETTE.text;
         ctx.fillText(titles[section], 16, head.y + 22);
-        if (sectionLevels(section).length === 0) {
+        if (countOf(section) === 0) {
           ctx.font = "13px system-ui, sans-serif";
           ctx.fillStyle = PALETTE.muted;
           wrapByWords(empty[section], viewW() - 32, measure)
@@ -705,8 +1095,12 @@ export function mount(canvas: HTMLCanvasElement): void {
       }
       for (const t of layout.tiles) {
         const section = COMMUNITY_SECTIONS[t.section];
-        const lvl = sectionLevels(section)[t.index];
         const r = t.rect;
+        if (section === "moje") {
+          drawProjectTile(r, t.index);
+          continue;
+        }
+        const lvl = sectionLevels(section)[t.index];
         const here = playlist.section === section && playlist.index === t.index;
         ctx.beginPath();
         ctx.roundRect(r.x, r.y, r.w, r.h, 10);
@@ -735,6 +1129,36 @@ export function mount(canvas: HTMLCanvasElement): void {
         ctx.fillText(note, r.x + 12, r.y + r.h - 12);
       }
       ctx.restore();
+    }
+
+    /** Kafelek „Twoich poziomów": pierwszy to „+ Nowy poziom", reszta — projekty ze stanem. */
+    function drawProjectTile(r: { x: number; y: number; w: number; h: number }, index: number): void {
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+      ctx.fillStyle = PALETTE.tile;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = PALETTE.tileEdge;
+      ctx.stroke();
+      ctx.textAlign = "left";
+      if (index === 0) {
+        ctx.font = "600 15px system-ui, sans-serif";
+        ctx.fillStyle = PALETTE.curve;
+        ctx.fillText("+ Nowy poziom", r.x + 12, r.y + r.h / 2 + 5);
+        return;
+      }
+      const p = projects[index - 1];
+      const d = decodeLevel(p.code, { draft: true });
+      ctx.fillStyle = PALETTE.text;
+      const title = tileTitle(d.ok ? d.level.title : "?", r.w - 24, (size) => {
+        ctx.font = `600 ${size + 1}px system-ui, sans-serif`;
+        return measure;
+      }, 2);
+      ctx.font = `600 ${title.size + 1}px system-ui, sans-serif`;
+      title.lines.forEach((line, j) => ctx.fillText(line, r.x + 12, r.y + 24 + j * 17));
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.fillStyle = p.ready ? PALETTE.curve : PALETTE.muted;
+      ctx.fillText(p.ready ? "gotowy" : "szkic", r.x + 12, r.y + r.h - 12);
     }
   }
 

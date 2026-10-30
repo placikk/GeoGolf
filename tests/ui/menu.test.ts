@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { vec } from "../../src/core/vec";
 import {
-  ACTION_BAND, COMMUNITY_TILE_H, MENU_BUTTON, Rect, SECTION_HEADER_H, TOP_BAND, cardLayout, clampScroll, communityLayout,
+  ACTION_BAND, COMMUNITY_TILE_H, EDITOR_ACTIONS, MENU_BUTTON, addSheetLayout, editorBar, editorBarHit, Rect, SECTION_HEADER_H, TOP_BAND, cardLayout, clampScroll, communityLayout,
   editAction, helpButton, hitCommunity, hitRect, hitTile, inActionBand, isTap, tabRects,
   menuLayout, playArea, resultBanner, settingsButton, settingsLayout, TILE_DESCENT, TILE_LINE_H, TILE_TITLE_Y, tileTitle, titleLineCount, winAction,
   winLabels, wrapByWords,
@@ -401,4 +401,32 @@ describe("lista społeczności", () => {
     expect(isTap(vec(10, 10), vec(14, 13))).toBe(true);
     expect(isTap(vec(10, 10), vec(10, 30))).toBe(false);
   });
+});
+
+describe("edytor: dolny pas i okno „Dodaj”", () => {
+  for (const [w, h] of [[320, 568], [390, 844], [844, 390]] as const) {
+    it(`${w}×${h}: pięć przycisków w dolnym pasie, każdy ≥ 44 px`, () => {
+      const bar = editorBar(w, h);
+      expect(bar).toHaveLength(EDITOR_ACTIONS.length);
+      for (const r of bar) {
+        expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(44);
+        expect(r.y).toBeGreaterThanOrEqual(h * ACTION_BAND);
+      }
+      expect(editorBarHit(vec(bar[3].x + 5, bar[3].y + 5), w, h)).toBe(3);
+      expect(editorBarHit(vec(w / 2, h / 2), w, h)).toBeNull();
+    });
+
+    it(`${w}×${h}: okno „Dodaj” — 4 + 5 kafelków ≥ 44 px, na ekranie, bez nakładania`, () => {
+      const { players, fixed } = addSheetLayout(w, h);
+      expect(players).toHaveLength(4);
+      expect(fixed).toHaveLength(5);
+      const all = [...players, ...fixed];
+      all.forEach((r, i) => {
+        expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(44);
+        expect(r.x >= 0 && r.x + r.w <= w && r.y >= 0 && r.y + r.h <= h * ACTION_BAND).toBe(true);
+        all.slice(i + 1).forEach((u) => expect(overlap(r, u)).toBe(false));
+      });
+      expect(fixed[0].y).toBeGreaterThan(players[0].y + players[0].h);
+    });
+  }
 });

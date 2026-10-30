@@ -79,6 +79,14 @@ const keepLocks = (shape: MovableShape, locked: Handle[]): Handle[] => {
   return locked.filter((h) => ids.includes(h));
 };
 
+/** Czy „Łuk" ma co zrobić: zaznaczona jest elipsa, która nie jest okręgiem. */
+export function canToggleArc(s: EditorState): boolean {
+  const sel = s.selected;
+  if (sel === null) return false;
+  const shape = sel.kind === "element" ? s.pieces[sel.index]?.shape : s.obstacles[sel.index];
+  return shape !== undefined && shape.kind === "elipsa" && !isCircle(shape);
+}
+
 /** Zaznaczona elipsa (nie okrąg): pełna ↔ półelipsa od parametru 0 do π. */
 export function toggleArc(s: EditorState): EditorState {
   const sel = s.selected;

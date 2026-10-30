@@ -4,7 +4,7 @@ import { ellipse } from "../../src/levels";
 import { MAX_OBSTACLES, MAX_PIECES, decodeLevel, roundShared } from "../../src/share/codec";
 import { openCode } from "../../src/share/verify";
 import {
-  EditorState, acceptWin, addObstacle, addPiece, cycleShot, draftCode, fromShared, newEditor, prepareTest, removeSelected,
+  EditorState, acceptWin, addObstacle, addPiece, canToggleArc, cycleShot, draftCode, fromShared, newEditor, prepareTest, removeSelected,
   toShared, toggleArc, toggleLock,
 } from "../../src/editor/model";
 import { SAMPLES } from "../share/samples";
@@ -61,6 +61,10 @@ describe("edytor — operacje", () => {
     expect(s.pieces[0].locked).toEqual([]);
     const okrag = addObstacle(e0, "okrag");
     expect(toggleArc(okrag)).toBe(okrag);
+    expect(canToggleArc(okrag)).toBe(false);
+    expect(canToggleArc(addPiece(e0, "elipsa"))).toBe(true);
+    expect(canToggleArc(addPiece(e0, "parabola"))).toBe(false);
+    expect(canToggleArc({ ...addPiece(e0, "elipsa"), selected: null })).toBe(false);
   });
 
   it("strzał po kolei: 360° → wachlarz → jedna piłka (ten sam kierunek) → 360°", () => {
