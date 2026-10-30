@@ -210,3 +210,103 @@ export function cardLayout(width: number, height: number, count: number): Rect[]
       : { x: area.x + (area.w - size) / 2, y: area.y + offset, w: size, h: size };
   });
 }
+
+// ── menu poziomów: zakładki i lista społeczności ───────────────────────────────────────
+
+export type MenuTab = "tworcy" | "spolecznosc";
+
+/** Dwie zakładki u góry menu, między ☰ i ⚙ — każda co najmniej 44 px wysokości. Odstęp od
+ *  brzegów: szerokość ☰ z marginesami (⚙ ma tę samą szerokość po prawej). */
+export function tabRects(width: number): [Rect, Rect] {
+  const x0 = MENU_BUTTON.x + MENU_BUTTON.w + 6;
+  const w = (width - 2 * x0) / 2;
+  return [{ x: x0, y: 6, w, h: 44 }, { x: x0 + w, y: 6, w, h: 44 }];
+}
+
+/** Wysokość nagłówka sekcji i kafelka listy społeczności. Kafelek mieści tytuł w dwóch
+ *  liniach i dopisek (autor albo stan projektu). */
+export const SECTION_HEADER_H = 32;
+export const COMMUNITY_TILE_H = 76;
+
+export interface CommunityTile { section: number; index: number; rect: Rect }
+export interface CommunityLayout {
+  headers: { section: number; y: number }[];
+  tiles: CommunityTile[];
+  /** pas listy na ekranie — rysujemy i łapiemy dotknięcia tylko w nim */
+  viewport: Rect;
+  maxScroll: number;
+}
+
+/** Lista społeczności: sekcje jedna pod drugą (nagłówek, potem kafelki w siatce — w pionie 2
+ *  kolumny, w poziomie 4), przesunięte o `scroll` pikseli w górę. Pusta sekcja zajmuje jeden
+ *  rząd na napis „Na razie pusto". `counts[i]` — liczba kafelków sekcji `i`. */
+export function communityLayout(width: number, height: number, counts: number[], scroll: number): CommunityLayout {
+  const cols = width >= height ? 4 : 2;
+  const w = (width - 2 * SIDE - (cols - 1) * GAP) / cols;
+  const viewport = { x: 0, y: TOP, w: width, h: Math.max(0, height - TOP - SIDE) };
+  const headers: { section: number; y: number }[] = [];
+  const tiles: CommunityTile[] = [];
+  let y = 0;
+  counts.forEach((count, section) => {
+    headers.push({ section, y: viewport.y + y - scroll });
+    y += SECTION_HEADER_H;
+    const rows = Math.max(1, Math.ceil(count / cols));
+    for (let index = 0; index < count; index++) {
+      tiles.push({
+        section, index,
+        rect: {
+          x: SIDE + (index % cols) * (w + GAP),
+          y: viewport.y + y + Math.floor(index / cols) * (COMMUNITY_TILE_H + GAP) - scroll,
+          w, h: COMMUNITY_TILE_H,
+        },
+      });
+    }
+    y += rows * COMMUNITY_TILE_H + (rows - 1) * GAP + GAP;
+  });
+  return { headers, tiles, viewport, maxScroll: Math.max(0, y - viewport.h) };
+}
+
+/** Przewinięcie przycięte do [0, maxScroll] — lista nie odjeżdża za swój początek ani koniec. */
+export const clampScroll = (scroll: number, maxScroll: number): number => Math.min(Math.max(scroll, 0), maxScroll);
+
+/** Kafelek pod palcem — tylko w pasie listy (kafelek przewinięty pod zakładki się nie liczy). */
+export function hitCommunity(layout: CommunityLayout, p: Vec2): CommunityTile | null {
+  if (!hitRect(layout.viewport, p)) return null;
+  return layout.tiles.find((t) => hitRect(t.rect, p)) ?? null;
+}
+
+/** Dotknięcie, a nie przeciągnięcie: palec przesunął się o mniej niż 8 px. */
+export const isTap = (down: Vec2, up: Vec2): boolean => Math.hypot(up.x - down.x, up.y - down.y) < 8;
+
+// ── edytor: dolny pas i okno „Dodaj" ────────────────────────────────────────────────────
+
+/** Przyciski dolnego pasa edytora, od lewej. Ostatni to „Zagraj", a gdy projekt przeszedł
+ *  weryfikację — „Udostępnij". */
+export const EDITOR_ACTIONS = ["Dodaj", "Usuń", "Łuk", "Kierunek", "Zagraj"] as const;
+
+/** Pięć równych pól w dolnym pasie — na 320 px po 64 px, więc każde ≥ 44 px. */
+export function editorBar(width: number, height: number): Rect[] {
+  const top = height * ACTION_BAND;
+  const w = width / EDITOR_ACTIONS.length;
+  return EDITOR_ACTIONS.map((_, i) => ({ x: i * w, y: top, w, h: height - top }));
+}
+
+/** Indeks przycisku pasa edytora pod palcem albo `null`. */
+export function editorBarHit(p: Vec2, width: number, height: number): number | null {
+  const i = editorBar(width, height).findIndex((r) => hitRect(r, p));
+  return i < 0 ? null : i;
+}
+
+/** Okno „Dodaj": rząd elementów gracza (4) i rząd stałych (5), kafelki ≥ 44 px, wyśrodkowane
+ *  w pionie; nad każdym rzędem miejsce na podpis. */
+export function addSheetLayout(width: number, height: number): { players: Rect[]; fixed: Rect[] } {
+  const size = Math.min(72, (width - 2 * SIDE - 4 * GAP) / 5);
+  const row = (n: number, y: number): Rect[] => {
+    const total = n * size + (n - 1) * GAP;
+    return Array.from({ length: n }, (_, i) => ({ x: (width - total) / 2 + i * (size + GAP), y, w: size, h: size }));
+  };
+  const label = 28;
+  const block = 2 * (label + size) + GAP;
+  const top = Math.max(TOP, (height - block) / 2);
+  return { players: row(4, top + label), fixed: row(5, top + label + size + GAP + label) };
+}

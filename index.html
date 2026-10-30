@@ -10,10 +10,31 @@
     <style>
       html, body { margin: 0; height: 100%; background: #0b0f14; overflow: hidden; }
       canvas { display: block; touch-action: none; }
+      /* okienko „Udostępnij" — jedyny element HTML nad płótnem (pole tekstowe = klawiatura telefonu) */
+      dialog { background: #10161e; color: #cbd5e1; border: 1px solid #64748b; border-radius: 12px;
+        font: 16px system-ui, sans-serif; width: min(320px, 86vw); }
+      dialog::backdrop { background: rgba(11, 15, 20, 0.8); }
+      dialog label { display: block; margin-bottom: 16px; }
+      dialog input { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; padding: 10px;
+        font: inherit; color: inherit; background: #0b0f14; border: 1px solid #64748b; border-radius: 8px; }
+      dialog menu { display: flex; flex-direction: row-reverse; justify-content: space-between; gap: 12px; margin: 0; padding: 0; }
+      dialog button { flex: 1; min-height: 44px; font: 600 16px system-ui, sans-serif; border-radius: 8px;
+        border: 1px solid #64748b; background: transparent; color: #cbd5e1; }
+      dialog button[value="ok"] { color: #0b0f14; background: #5eead4; border-color: #5eead4; }
     </style>
   </head>
   <body>
     <canvas id="plansza"></canvas>
+    <dialog id="udostepnij">
+      <form method="dialog">
+        <label>Tytuł poziomu<input id="tytul" maxlength="40" autocomplete="off" /></label>
+        <menu>
+          <!-- „Udostępnij" pierwszy w kodzie: Enter w polu tytułu wysyła pierwszy przycisk formularza -->
+          <button value="ok">Udostępnij</button>
+          <button value="anuluj">Anuluj</button>
+        </menu>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

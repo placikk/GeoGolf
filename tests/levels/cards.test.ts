@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Vec2, dot, norm, sub } from "../../src/core/vec";
-import { CARDS, LEVELS, autoCard, cardFor, introCard, sceneTraces } from "../../src/levels";
+import { CARDS, LEVELS, autoCard, cardFor, introCard, mechanicCard, sceneTraces } from "../../src/levels";
 
 const IDS = LEVELS.map((l) => l.id);
 /** Kierunek ostatniego odcinka toru — dokąd piłka leci po ostatnim odbiciu. */
@@ -120,5 +120,27 @@ describe("sceny plansz pokazują to, co mówi zdanie", () => {
       expect(t.holed).toBe(true);
       expect(t.path.length - 2).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+describe("plansza dla poziomu społeczności (według mechaniki)", () => {
+  const byId = (id: string) => {
+    const l = LEVELS.find((x) => x.id === id);
+    if (l === undefined) throw new Error(id);
+    return l;
+  };
+
+  it("najtrudniejsza obecna mechanika wygrywa", () => {
+    expect(mechanicCard(byId("zwienczenie-3"))?.id).toBe("hiperbola");     // parabole i hiperbola
+    expect(mechanicCard(byId("teleskop"))?.id).toBe("parabola");
+    expect(mechanicCard(byId("kaskada"))?.id).toBe("kaskada");             // dwa łuki elips
+    expect(mechanicCard(byId("polelipsa"))?.id).toBe("luk");
+    expect(mechanicCard(byId("przeszkoda"))?.id).toBe("elipsa");           // okrąg się nie liczy
+    expect(mechanicCard(byId("za-rogiem"))?.id).toBe("odbicie");           // same odcinki
+  });
+
+  it("liczy też przeszkody, nie tylko elementy gracza", () => {
+    // „druga-strona": gracz ma hiperbolę, ale „wspolne-ognisko" ma ją jako przeszkodę
+    expect(mechanicCard(byId("wspolne-ognisko"))?.id).toBe("hiperbola");
   });
 });
