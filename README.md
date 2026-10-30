@@ -45,7 +45,7 @@ The first level of each new mechanic opens with a one-sentence rule card. Its sm
 
 ## Make your own level
 
-Open the menu, switch to **Community** and tap **+ New level**. Place mirrors and obstacles, lock the handles the player must not move, pick the shot direction, then tap **Play** and solve your own level. Only then does **Share** appear: the whole level, including your winning setup as proof, is packed into the link itself (`…/GeoGolf/#poziom=…`), so no server is involved. Whoever opens the link gets the level only if that proof still holds — the solution must win and the starting position must not.
+Open the menu, switch to **Community** („Społeczność") and tap **+ New level** („+ Nowy poziom"). Place mirrors and obstacles, lock the handles the player must not grab, pick the shot direction, then tap **Play** („Zagraj") and solve your own level. Only then does **Share** („Udostępnij") appear: the whole level, including your winning setup as proof, is packed into the link itself (`…/GeoGolf/#poziom=…`), so no server is involved. Whoever opens the link gets the level only if that proof still holds — the solution must win and the starting position must not.
 
 **Adding a level to the community catalog** (maintainers): paste the code after `#poziom=` into [`src/levels/community.ts`](src/levels/community.ts) together with the author's name and run `npm test`. The catalog test decodes every entry and replays the proof; CI runs the same tests before every deploy, so a broken entry never reaches the site.
 
@@ -69,12 +69,12 @@ The game is a small exact ray tracer for conic sections. There is no physics eng
 ## Engineering
 
 - **Zero runtime dependencies.** TypeScript in strict mode, Canvas 2D, Vite. The production bundle is about 24 KB gzipped.
-- **795 tests** in Vitest (33 files), including:
+- **808 tests** in Vitest (34 files), including:
   - **property tests** of the math itself, e.g. for 300 random ellipses and random directions, the path focus → mirror → focus must be exactly `2a`, and the reflected ray must aim at the other focus;
   - **level tests:** for every level, the stored solution must solve it, the starting position must not, and a focus nudged off target by the snap radius must fail (so the hole tolerance can't pass sloppy solutions);
   - **a bundle budget:** the test builds the production bundle, fails above **100 KB gzip**, and checks that the build registers the service worker;
   - **architecture rules:** a layering test makes sure `src/core` imports nothing outside itself, and another test bans `shadowBlur`, which is slow on phones (the glow is drawn as two strokes instead).
-- **Layered design:** `core/` (pure geometry, runs in Node) → `levels/` (levels are data, not code) → `share/` (the link format and its proof) → `editor/` (the editor model) → `render/` → `ui/`.
+- **Layered design:** `core/` (pure geometry, runs in Node) → `levels/` (levels are data, not code) → `render/` → `ui/`. Beside them, `share/` (the link format and its proof) and `editor/` (the editor model, built on `share/`) sit on `core/` and `levels/` and also use the pure handle math from `ui/handles.ts` (the editor also reuses the pure curve polyline from `render/shapes.ts`); neither touches the DOM.
 - **Offline PWA** with a hand-written service worker: network-first for the page so updates arrive immediately, cache-first for hashed assets. All paths are relative, so the same build works at `/` and at `/GeoGolf/`.
 - **CI/CD:** GitHub Actions runs the tests, builds the game and deploys it to GitHub Pages on every push to `master` ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
 

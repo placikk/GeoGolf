@@ -95,12 +95,59 @@ ludzie wrzucali tylko działające poziomy) oraz pozycja 4 mapy etapów (edytor,
   (`pointercancel`) zapisuje projekt**; pas rysowany od `ACTION_BAND` zamiast liczby 0,86. Koszt,
   jeśli źle: kilka linii więcej.
 
-## 4. Pomiary (stan końcowy, HEAD e4a6d08)
+### 3.3 Poprawki po przeglądzie końcowym
+
+Przegląd całej gałęzi (opus) dał werdykt „z poprawkami": jedna krytyczna, trzy ważne i kilka
+tanich drobnych. Wszystkie zrobione w jednej fali (raport:
+`.superpowers/sdd/2026-10-30-golf-etap-4-edytor-spolecznosc/fala-koncowa-report.md`).
+
+- **C1 — edytor dawał kody, których własny odczyt nie przyjmował** (zablokowany rozmiar → wygrana
+  → „Udostępnij" nic nie robił, a projekt znikał po odświeżeniu). Trzy przyczyny:
+  - **(a) Odczyt nie porównuje wartości zablokowanych uchwytów, tylko ich identyfikatory**
+    (istniejący uchwyt, bez powtórzeń); `lockedValues` usunięte. W grze blokada zabrania tylko
+    łapania uchwytu — rozsunięte ogniska podnoszą zablokowany rozmiar, koniec odcinka przesuwa
+    zablokowany środek. Rozwiązanie autora pochodzi z prawdziwej gry pod tymi blokadami, a ręcznie
+    spreparowany link z nieosiągalnym rozwiązaniem da najwyżej poziom nie do wygrania.
+    **Odstępstwo od specyfikacji §1.3** („zablokowane uchwyty takie same w starcie i rozwiązaniu").
+  - **(b) Zaokrąglenie zaciska długość łuku** do [MIN_ARC_LENGTH, obwód − MIN_ARC_LENGTH] obwodu
+    zaokrąglonej elipsy (górna granica w dół, dolna w górę) — dokładnie to, co gra rysuje po
+    zmniejszeniu elipsy (`arcParams`).
+  - **(c) Próg ogniskowej paraboli w odczycie 5e-4** zamiast 1e-3 — zapas na zaokrąglenie do
+    4 miejsc ognisko w odległości MIN_GAP od wierzchołka; stożkowa zostaje skończona.
+  - **Obrona w głąb:** `acceptWin` wymaga też, by kod przeszedł odczyt (powody „nie wygrywa" /
+    „nie da się zapisać", osobne komunikaty); zmiana szkicu, którego odczyt by nie przyjął,
+    zmienia tylko sesję i nie nadpisuje zapisu.
+  - **Dodatkowo (znalezione przy tej poprawce): łuk w edytorze nie maleje poniżej rozmiaru, na
+    którym da się go zapisać** (`arcFits`: obwód ≥ 2·MIN_ARC_LENGTH + 1e-3), a „Łuk" nie włącza się
+    na za małej elipsie. Inaczej elipsa z łukiem ze zlanymi ogniskami, zmniejszona uchwytem
+    rozmiaru, dawała szkic odrzucany przez odczyt (pusty zakres długości). W grze testowej takie
+    ustawienie kończy się komunikatem „nie da się zapisać". Koszt, jeśli źle: autor nie zrobi łuku
+    o obwodzie poniżej ok. 0,1.
+  - **Test właściwości** `tests/editor/roundtrip.test.ts`: 3000 losowych kroków edytora; po każdym
+    szkic przechodzi odczyt, a co 50 kroków rozwiązanie zagrane pod blokadami (jak w grze) też.
+- **I1 — „Okrąg" dawał się tylko rozciągnąć w elipsę.** Ognisko okrągłej PRZESZKODY przesuwa cały
+  okrąg (środek w punkcie palca po przyskoczeniu, w planszy; ta sama wielkość, łuk zachowany).
+  Tylko przeszkoda: elipsa gracza ze zlanymi ogniskami musi dać się rozsunąć jak w grze.
+- **I2 — gra testowa wyciekała do zwykłej gry.** Usunięcie projektu wraca do bieżącego poziomu
+  listy (wcześniej po zamknięciu menu był grywalny usunięty projekt); „‹" przerywa trwający dowód,
+  a pod edytorem gra nie jest posuwana — poziom „edytor" nie trafia już do postępu.
+- **I3 — fałszywe komentarze:** komentarz o zegarze `performance.now` nad `say`; `levelId` służy też
+  deduplikacji linków i rozpoznaniu katalogu; `helpVisible` opisuje edytor; README: warstwy
+  `share/` i `editor/` opisane zgodnie z importami.
+- **Drobne:** komunikat rysowany też nad planszą z zasadą (pierwsze wejście ze złym linkiem
+  pokazywało samą zasadę); błąd `navigator.share` inny niż anulowanie → schowek albo okienko;
+  `editorUp` zeruje przeciąganie przed każdym wyjściem (dobry link otwarty w trakcie przeciągania
+  blokował potem przyciski gry); limity elementów i przeszkód przed odczytem kształtów;
+  `codeFromHash` bierze najdłuższy przedrostek base64url (link z kropką czy nawiasem z końca zdania
+  działa); `tabRects` z `MENU_BUTTON`; prawdziwy komentarz `cleanTitle` (długość sprawdza odczyt);
+  README z polskimi nazwami przycisków.
+
+## 4. Pomiary (stan końcowy, po poprawkach przeglądu końcowego)
 
 ```
 npx tsc --noEmit        -> bez błędów
-npx vitest run          -> Test Files 33 passed (33); Tests 795 passed (795)
-npm run build           -> dist/assets/index-DtaiekUL.js 69.32 kB, gzip 24.05 kB (budżet < 100 KB)
+npx vitest run          -> Test Files 34 passed (34); Tests 808 passed (808)
+npm run build           -> dist/assets/index-DmRx5o91.js 69.92 kB, gzip 24.23 kB (budżet < 100 KB)
 ls docs/superpowers/...  -> 8 specyfikacji, 8 planów, 5 dokumentów decyzji (z tym)
 ```
 
@@ -135,6 +182,8 @@ Na telefonie i na komputerze:
 
 - [ ] Zbudować i przejść poziom każdego rodzaju: elipsa, parabola, hiperbola, lustro z jedną piłką;
       po wygranej „Udostępnij".
+- [ ] Zablokować rozmiar elipsy, w grze testowej rozsunąć ogniska na piłkę i dołek, wygrać —
+      „Udostępnij" daje link, projekt zostaje po odświeżeniu.
 - [ ] Otworzyć udostępniony link w innej przeglądarce — poziom się otwiera i da się go przejść.
 - [ ] Zepsuć link ręcznie (usunąć/zmienić znaki) — pojawia się komunikat, gra nie pada.
 - [ ] Wkleić link w już otwartej karcie z otwartym menu — menu się zamyka, poziom się otwiera.
@@ -148,10 +197,9 @@ Na telefonie i na komputerze:
 
 Z ledgera (`minor (deferred)`), pogrupowane:
 
-- **Format i odczyt linku (zad. 1–3):** zablokowany „rozmiar" na elipsie z łukiem porównuje tylko `a`;
-  `cleanTitle` nie usuwa znaków bidi/zero-width (nieszkodliwe dla `fillText`); limity elementów po
-  sparsowaniu wszystkich; `codeFromHash` nie dekoduje `%XX` i nie tnie na „&" (link zepsuty przez
-  komunikator jest odrzucany, nie naprawiany); `openCode` bez testu powodu innego niż „zły zapis";
+- **Format i odczyt linku (zad. 1–3):** `cleanTitle` nie usuwa znaków bidi/zero-width (nieszkodliwe
+  dla `fillText`); `codeFromHash` nie dekoduje `%XX` (link zepsuty przez komunikator jest
+  odrzucany, nie naprawiany); `openCode` bez testu powodu innego niż „zły zapis";
   kolizja FNV (32 bity) między katalogiem a linkiem niewykrywana; limity 30/20 i deduplikacja przy
   odczycie nietestowane; `loadLinks` liczy dowód dla każdego wpisu przed obcięciem; gotowy projekt
   odkodowywany dwa razy.
@@ -164,10 +212,9 @@ Z ledgera (`minor (deferred)`), pogrupowane:
   wachlarzu 0,2 i piłce w rogu uchwyty kierunku i szerokości ok. 0,01 od siebie; poziom wczytany
   z piłką poza ±0,9 nie jest przycinany; linia 150 znaków w `interaction.ts:24`; przeciągnięcie
   uchwytu nie zaznacza jego elementu.
-- **Menu i zakładki (zad. 7):** `tabRects` liczy 6 + 44 + 6 zamiast z `MENU_BUTTON`; zakładki bez
-  przerwy; lista testowana tylko w pionie 390; brak testu osiągalności ostatniego rzędu; kwadratowy
+- **Menu i zakładki (zad. 7):** zakładki bez przerwy; lista testowana tylko w pionie 390; brak testu osiągalności ostatniego rzędu; kwadratowy
   ekran → 4 kolumny; `isTap` bez testu granicy 8 px.
-- **Ekrany (zad. 8, 9):** komunikat ukryty pod planszą z zasadą; `pointercancel` nie zeruje
+- **Ekrany (zad. 8, 9):** `pointercancel` nie zeruje
   `consumedReset`; nakładka menu prześwituje tytułem (sprzed zmiany); pigułka komunikatu słabo
   widoczna; koniec listy społeczności nie pokazuje „Wszystkie poziomy ukończone." (świadomie);
   `decodeLevel` kafelka projektu w każdej klatce; `h * 0.93` jako liczba w kodzie; „Udostępnij"
