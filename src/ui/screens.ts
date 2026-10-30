@@ -130,11 +130,18 @@ export function mount(canvas: HTMLCanvasElement): void {
     play({ section: "linki", levels: linkLevels, index: 0 });
   }
 
-  function toggleMenu(): void {
-    menuOpen = !menuOpen;
+  /** Otwiera menu na zakładce bieżącego poziomu — po wygranej i z przycisku ☰. */
+  function openMenu(): void {
+    menuOpen = true;
     settingsOpen = false;
-    // menu otwiera się na zakładce bieżącego poziomu
-    if (menuOpen) menuTab = playlist.section === "tworcy" ? "tworcy" : "spolecznosc";
+    menuTab = playlist.section === "tworcy" ? "tworcy" : "spolecznosc";
+  }
+
+  function toggleMenu(): void {
+    if (menuOpen) {
+      menuOpen = false;
+      settingsOpen = false;
+    } else openMenu();
     // Menu przerywa trwający dowód: po zamknięciu gracz wraca do edycji swoich elementów.
     if (menuOpen && game.phase === "dowod") game = retry(game);
   }
@@ -217,7 +224,7 @@ export function mount(canvas: HTMLCanvasElement): void {
     if (game.phase === "wygrana") {
       const action = winAction(p, viewW(), viewH(), isLastIn(playlist));
       if (action === "nastepny") play(nextIn(playlist));
-      if (action === "menu") menuOpen = true;
+      if (action === "menu") openMenu();
       if (action === "powtorz") game = retry(game);
       consumedReset = true;
       return;
@@ -271,11 +278,6 @@ export function mount(canvas: HTMLCanvasElement): void {
   const endDrag = (): void => { dragging = null; pointer = null; listPointer = null; };
   canvas.addEventListener("pointercancel", endDrag);
 
-  // JEDEN listener, nie dwa. Osobny `endDrag` zarejestrowany wcześniej wyzerowałby
-  // `dragging`, ZANIM drugi listener zdążyłby sprawdzić, czy właśnie trwało przeciąganie
-  // — więc puszczenie uchwytu w dolnym pasie ekranu uruchamiałoby dowód wbrew graczowi
-  // i kasowało jego niedokończoną edycję. W pionie geometria kamery przypadkiem chroni
-  // przed tym (plansza nie sięga pasa przycisku), ale nic nie wymusza pionu.
   /** Stuknięcie w listę społeczności: kafelek otwiera poziom swojej sekcji, tło zamyka menu. */
   function tapCommunity(p: Vec2): void {
     const hit = hitCommunity(communityLayout(viewW(), viewH(), communityCounts(), communityScroll), p);
@@ -285,6 +287,11 @@ export function mount(canvas: HTMLCanvasElement): void {
     play({ section, levels: sectionLevels(section), index: hit.index });
   }
 
+  // JEDEN listener, nie dwa. Osobny `endDrag` zarejestrowany wcześniej wyzerowałby
+  // `dragging`, ZANIM drugi listener zdążyłby sprawdzić, czy właśnie trwało przeciąganie
+  // — więc puszczenie uchwytu w dolnym pasie ekranu uruchamiałoby dowód wbrew graczowi
+  // i kasowało jego niedokończoną edycję. W pionie geometria kamery przypadkiem chroni
+  // przed tym (plansza nie sięga pasa przycisku), ale nic nie wymusza pionu.
   canvas.addEventListener("pointerup", (e) => {
     if (listPointer !== null) {
       const up = toScreenPoint(e);
@@ -427,7 +434,8 @@ export function mount(canvas: HTMLCanvasElement): void {
           glowPolyline(ctx, c, b.path, "rgba(253,230,138,0.35)", PALETTE.trailGlow, 1);
         }
         // pod tytułem tylko dopisek ostatniego poziomu; na pozostałych — nic
-        const allSolved = playlist.levels.every((l) => progress.solved.includes(l.id));
+        // „wszystkie ukończone" dotyczy tylko listy twórców — lista społeczności nie ma kompletu
+        const allSolved = playlist.section === "tworcy" && playlist.levels.every((l) => progress.solved.includes(l.id));
         const { right, note } = winLabels(isLastIn(playlist), allSolved);
         banner(resultBanner(game.proof.balls.length, 0).title, note ?? "", ["Jeszcze raz", right]);
       } else if (game.phase === "porazka") {
@@ -691,7 +699,8 @@ export function mount(canvas: HTMLCanvasElement): void {
         if (sectionLevels(section).length === 0) {
           ctx.font = "13px system-ui, sans-serif";
           ctx.fillStyle = PALETTE.muted;
-          ctx.fillText(empty[section], 16, head.y + SECTION_HEADER_H + 24);
+          wrapByWords(empty[section], viewW() - 32, measure)
+            .forEach((line, j) => ctx.fillText(line, 16, head.y + SECTION_HEADER_H + 24 + j * 16));
         }
       }
       for (const t of layout.tiles) {
